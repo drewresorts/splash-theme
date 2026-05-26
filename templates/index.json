@@ -40,7 +40,7 @@
             "placeholder": "your@email.com",
             "button_label": "Notify me",
             "success_message": "You're on the list. See you at launch.",
-            "lowercase_text": false
+            "lowercase_text": true
           }
         }
       },
