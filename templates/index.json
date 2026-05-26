@@ -36,7 +36,7 @@
             "position": "bottom",
             "heading": "",
             "text": "",
-            "form_label": "Get notified when we launch",
+            "form_label": "",
             "placeholder": "your@email.com",
             "button_label": "Notify me",
             "success_message": "You're on the list. See you at launch.",
