@@ -1,0 +1,701 @@
+{%- liquid
+  assign overlay_opacity = section.settings.overlay_opacity | default: 45
+  assign overlay_color = section.settings.overlay_color | default: '#5a7a9a'
+  assign accent = section.settings.accent_shop_color | default: '#e85d4c'
+  assign rail_title = section.settings.vertical_title | default: 'collections'
+  assign rail_color = section.settings.vertical_title_color | default: '#0a1f4a'
+  assign menu = section.settings.menu
+  assign nav_logo = section.settings.nav_logo
+  if nav_logo == blank
+    assign nav_logo = settings.splash_streams_logo
+  endif
+  assign logo_width = section.settings.nav_logo_width | default: 48
+  assign logo_src_width = logo_width | times: 2
+  assign stream_blocks = section.blocks | where: 'type', 'stream'
+  assign primary_stream = section.settings.youtube_url | strip
+
+  assign sorted_collections = collections
+
+  case section.settings.sort
+    when 'products_high', 'products_low'
+      assign sorted_collections = collections | sort: 'all_products_count'
+    when 'date', 'date_reversed'
+      assign sorted_collections = collections | sort: 'published_at'
+  endcase
+
+  if section.settings.sort == 'products_high' or section.settings.sort == 'date_reversed' or section.settings.sort == 'alphabetical_reversed'
+    assign sorted_collections = sorted_collections | reverse
+  endif
+
+  assign modulo_result = 28 | modulo: section.settings.columns_desktop
+  assign paginate_by = 30
+  if modulo_result == 0
+    assign paginate_by = 28
+  endif
+-%}
+
+<section
+  class="collections-live"
+  data-collections-live
+  id="CollectionsLive-{{ section.id }}"
+  style="
+    --cls-overlay: {{ overlay_color }};
+    --cls-overlay-opacity: {{ overlay_opacity | divided_by: 100.0 }};
+    --cls-accent: {{ accent }};
+    --cls-rail-title: {{ rail_color }};
+  "
+>
+  <div class="collections-live__bg" aria-hidden="true">
+    <div class="collections-live__player-shell">
+      <iframe
+        class="collections-live__player"
+        data-cls-iframe
+        title=""
+        frameborder="0"
+        allow="autoplay; encrypted-media"
+        referrerpolicy="strict-origin-when-cross-origin"
+        tabindex="-1"
+      ></iframe>
+    </div>
+    <div class="collections-live__overlay"></div>
+  </div>
+
+  {%- if section.settings.show_live_clock -%}
+    <div class="collections-live__corner" aria-hidden="true">
+      <span class="collections-live__weather" title="Live view">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.9"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.55"/>
+        </svg>
+      </span>
+      <span class="collections-live__clock" data-cls-clock></span>
+    </div>
+  {%- endif -%}
+
+  <div class="collections-live__grid">
+    <aside class="collections-live__nav" aria-label="{{ 'sections.collections_live.nav_label' | t }}">
+      <div class="collections-live__nav-panel">
+        {%- if nav_logo != blank -%}
+          <a href="{{ routes.root_url }}" class="collections-live__logo-link">
+            {{
+              nav_logo
+              | image_url: width: logo_src_width
+              | image_tag:
+                loading: 'eager',
+                decoding: 'async',
+                width: logo_width,
+                alt: shop.name,
+                class: 'collections-live__logo'
+            }}
+          </a>
+        {%- endif -%}
+        {%- if menu != blank and menu.links.size > 0 -%}
+          <ul class="collections-live__menu" role="list">
+            {%- for link in menu.links -%}
+              <li class="collections-live__menu-item">
+                <a
+                  href="{{ link.url }}"
+                  class="collections-live__menu-link{% if forloop.first %} collections-live__menu-link--accent{% endif %}"
+                >
+                  {{- link.title | escape -}}
+                </a>
+                {%- if section.settings.show_second_link_decor and forloop.index == 2 -%}
+                  <span class="collections-live__menu-decor" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                      <rect x="1" y="1" width="16" height="16" rx="2" fill="#2563eb"/>
+                      <path d="M5 9l2.5 2.5L13 6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M12 12l2 2M14 10l2 2" stroke="#fff" stroke-width="1.2" stroke-linecap="round" opacity="0.9"/>
+                    </svg>
+                  </span>
+                {%- endif -%}
+              </li>
+            {%- endfor -%}
+          </ul>
+        {%- else -%}
+          <p class="collections-live__menu-empty">{{ 'sections.collections_live.menu_empty' | t }}</p>
+        {%- endif -%}
+      </div>
+    </aside>
+
+    <div class="collections-live__main">
+      <h1 class="collections-live__visually-hidden">{{ rail_title | escape }}</h1>
+      {%- paginate sorted_collections by paginate_by -%}
+        <ul
+          class="collections-live__tiles"
+          style="--cls-cols: {{ section.settings.columns_desktop }}; --cls-cols-m: {{ section.settings.columns_mobile }};"
+          role="list"
+        >
+          {%- for collection in sorted_collections -%}
+            <li class="collections-live__tile-item">
+              <a href="{{ collection.url }}" class="collections-live__tile">
+                <span class="collections-live__tile-label">{{ collection.title | escape }}</span>
+                <div class="collections-live__tile-media">
+                  {%- if collection.featured_image != blank -%}
+                    {{
+                      collection.featured_image
+                      | image_url: width: 800
+                      | image_tag:
+                        loading: 'lazy',
+                        decoding: 'async',
+                        widths: '200, 300, 400, 500, 600, 700, 800',
+                        sizes: '(max-width: 749px) 45vw, 22vw',
+                        alt: '',
+                        class: 'collections-live__tile-img'
+                    }}
+                  {%- else -%}
+                    <div class="collections-live__tile-placeholder"></div>
+                  {%- endif -%}
+                </div>
+              </a>
+            </li>
+          {%- endfor -%}
+        </ul>
+
+        {%- if paginate.pages > 1 -%}
+          <nav class="collections-live__pagination" aria-label="{{ 'general.pagination.label' | t }}">
+            {%- if paginate.previous -%}
+              <a href="{{ paginate.previous.url }}" class="collections-live__page-link">{{ 'general.pagination.previous' | t }}</a>
+            {%- endif -%}
+            <span class="collections-live__page-meta">{{ paginate.current_page }} / {{ paginate.pages }}</span>
+            {%- if paginate.next -%}
+              <a href="{{ paginate.next.url }}" class="collections-live__page-link">{{ 'general.pagination.next' | t }}</a>
+            {%- endif -%}
+          </nav>
+        {%- endif -%}
+      {%- endpaginate -%}
+    </div>
+
+    <div class="collections-live__rail" aria-hidden="true">
+      <span class="collections-live__rail-text">{{ rail_title | escape }}</span>
+    </div>
+  </div>
+
+  <template data-cls-streams>
+    [
+      {%- liquid
+        assign cls_first_stream = true
+      -%}
+      {%- if primary_stream != blank -%}
+        { "url": {{ primary_stream | json }} }
+        {%- assign cls_first_stream = false -%}
+      {%- endif -%}
+      {%- for block in stream_blocks -%}
+        {%- assign raw = block.settings.youtube_url | strip -%}
+        {%- if raw != blank -%}
+          {%- unless cls_first_stream -%},{%- endunless -%}
+          { "url": {{ raw | json }} }
+          {%- assign cls_first_stream = false -%}
+        {%- endif -%}
+      {%- endfor -%}
+    ]
+  </template>
+</section>
+
+{% stylesheet %}
+  .collections-live {
+    position: relative;
+    min-height: 100svh;
+    width: 100%;
+    overflow: hidden;
+    isolation: isolate;
+    background: #0a0a0c;
+    color: #fff;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .collections-live__visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .collections-live__bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .collections-live__player-shell {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .collections-live__player {
+    position: absolute;
+    left: 50%;
+    top: 56%;
+    width: max(100vw, 177.78vh);
+    height: max(56.25vw, 100vh);
+    transform: translate(-50%, -50%) scale(1.32);
+    transform-origin: center center;
+    border: 0;
+    pointer-events: none;
+  }
+
+  .collections-live__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: var(--cls-overlay);
+    opacity: var(--cls-overlay-opacity);
+    pointer-events: none;
+  }
+
+  .collections-live__corner {
+    position: absolute;
+    top: max(0.75rem, env(safe-area-inset-top));
+    right: max(0.75rem, env(safe-area-inset-right));
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+  }
+
+  .collections-live__grid {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr) minmax(2.5rem, 4.5rem);
+    gap: clamp(0.75rem, 2.5vw, 2rem);
+    align-items: stretch;
+    min-height: 100svh;
+    padding: max(1rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+      max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    max-width: 1480px;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 989px) {
+    .collections-live__grid {
+      grid-template-columns: 1fr;
+    }
+
+    .collections-live__rail {
+      display: none;
+    }
+  }
+
+  .collections-live__nav-panel {
+    padding: 1rem 1rem 1rem 0;
+    background: rgba(0, 40, 90, 0.35);
+    border-radius: 0.5rem;
+    align-self: center;
+  }
+
+  @media (max-width: 989px) {
+    .collections-live__nav-panel {
+      padding: 0.75rem 1rem;
+    }
+  }
+
+  .collections-live__logo-link {
+    display: inline-block;
+    margin-bottom: 1rem;
+    line-height: 0;
+  }
+
+  .collections-live__logo {
+    height: auto;
+    max-width: 100%;
+    display: block;
+  }
+
+  .collections-live__menu {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .collections-live__menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .collections-live__menu-link {
+    color: #fff;
+    text-decoration: none;
+    text-transform: lowercase;
+    font-size: clamp(1rem, 2.2vw, 1.15rem);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .collections-live__menu-link:hover,
+  .collections-live__menu-link:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .collections-live__menu-link--accent {
+    color: var(--cls-accent);
+  }
+
+  .collections-live__menu-decor {
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  .collections-live__menu-empty {
+    margin: 0;
+    font-size: 0.85rem;
+    opacity: 0.75;
+  }
+
+  .collections-live__main {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    padding: 0.5rem 0;
+  }
+
+  .collections-live__tiles {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--cls-cols, 3), minmax(0, 1fr));
+    gap: clamp(1rem, 2.5vw, 1.75rem);
+  }
+
+  @media (max-width: 749px) {
+    .collections-live__tiles {
+      grid-template-columns: repeat(var(--cls-cols-m, 2), minmax(0, 1fr));
+    }
+  }
+
+  .collections-live__tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    text-decoration: none;
+    color: #fff;
+    gap: 0.65rem;
+  }
+
+  .collections-live__tile:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 4px;
+    border-radius: 0.25rem;
+  }
+
+  .collections-live__tile-label {
+    font-size: clamp(0.95rem, 1.8vw, 1.1rem);
+    font-weight: 600;
+    text-transform: lowercase;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+  }
+
+  .collections-live__tile-media {
+    width: 100%;
+    max-width: 220px;
+    margin: 0 auto;
+  }
+
+  .collections-live__tile-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.4));
+  }
+
+  .collections-live__tile-placeholder {
+    aspect-ratio: 1;
+    width: 100%;
+    background: #f5f5f5;
+    border-radius: 0.2rem;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
+
+  .collections-live__pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .collections-live__page-link {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .collections-live__page-meta {
+    opacity: 0.85;
+  }
+
+  .collections-live__rail {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    padding: 0.25rem 0;
+  }
+
+  .collections-live__rail-text {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: clamp(2.5rem, 5.5vw, 4.5rem);
+    font-weight: 800;
+    color: var(--cls-rail-title);
+    text-transform: lowercase;
+    letter-spacing: 0.03em;
+    line-height: 1;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+{% endstylesheet %}
+
+{% javascript %}
+  (function () {
+    function parseYouTubeId(raw) {
+      if (!raw) return '';
+      var s = String(raw).trim();
+      var m = s.match(/(?:v=|\/embed\/|\.be\/)([A-Za-z0-9_-]{6,})/);
+      return m ? m[1] : '';
+    }
+
+    function buildEmbedUrl(videoId) {
+      var id = String(videoId).trim();
+      var q = [
+        'autoplay=1',
+        'mute=1',
+        'loop=1',
+        'playlist=' + encodeURIComponent(id),
+        'controls=0',
+        'showinfo=0',
+        'rel=0',
+        'iv_load_policy=3',
+        'modestbranding=1',
+        'playsinline=1',
+        'fs=0',
+        'disablekb=1',
+      ].join('&');
+      return 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?' + q;
+    }
+
+    function initStream(root) {
+      var tpl = root.querySelector('[data-cls-streams]');
+      var iframe = root.querySelector('[data-cls-iframe]');
+      if (!tpl || !iframe) return;
+      var urls = [];
+      try {
+        urls = JSON.parse(tpl.innerHTML.trim());
+      } catch (e) {
+        return;
+      }
+      var first = urls.find(function (u) {
+        return u && u.url;
+      });
+      if (!first) return;
+      var vid = parseYouTubeId(first.url);
+      if (!vid) return;
+      iframe.src = buildEmbedUrl(vid);
+    }
+
+    function initClock(root) {
+      var el = root.querySelector('[data-cls-clock]');
+      if (!el) return;
+      function tick() {
+        var now = new Date();
+        var opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+        el.textContent = now.toLocaleString(undefined, opts);
+      }
+      tick();
+      setInterval(tick, 30000);
+    }
+
+    document.querySelectorAll('[data-collections-live]').forEach(function (root) {
+      initStream(root);
+      initClock(root);
+    });
+  })();
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "t:sections.collections_live.name",
+  "tag": "section",
+  "class": "section-collections-live",
+  "enabled_on": {
+    "templates": ["list-collections"]
+  },
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "t:sections.collections_live.settings.intro.content"
+    },
+    {
+      "type": "link_list",
+      "id": "menu",
+      "label": "t:sections.collections_live.settings.menu.label",
+      "default": "main-menu"
+    },
+    {
+      "type": "image_picker",
+      "id": "nav_logo",
+      "label": "t:sections.collections_live.settings.nav_logo.label",
+      "info": "t:sections.collections_live.settings.nav_logo.info"
+    },
+    {
+      "type": "range",
+      "id": "nav_logo_width",
+      "min": 32,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "label": "t:sections.collections_live.settings.nav_logo_width.label",
+      "default": 48
+    },
+    {
+      "type": "checkbox",
+      "id": "show_second_link_decor",
+      "label": "t:sections.collections_live.settings.show_second_link_decor.label",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "vertical_title",
+      "label": "t:sections.collections_live.settings.vertical_title.label",
+      "default": "collections"
+    },
+    {
+      "type": "color",
+      "id": "vertical_title_color",
+      "label": "t:sections.collections_live.settings.vertical_title_color.label",
+      "default": "#0a1f4a"
+    },
+    {
+      "type": "text",
+      "id": "youtube_url",
+      "label": "t:sections.collections_live.settings.youtube_url.label",
+      "default": "https://www.youtube.com/watch?v=erBoOFKTH4E",
+      "info": "t:sections.collections_live.settings.youtube_url.info"
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "t:sections.collections_live.settings.overlay_color.label",
+      "default": "#5a7a9a"
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "min": 20,
+      "max": 75,
+      "step": 5,
+      "unit": "%",
+      "label": "t:sections.collections_live.settings.overlay_opacity.label",
+      "default": 45
+    },
+    {
+      "type": "color",
+      "id": "accent_shop_color",
+      "label": "t:sections.collections_live.settings.accent_shop_color.label",
+      "default": "#e85d4c"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_live_clock",
+      "label": "t:sections.collections_live.settings.show_live_clock.label",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "sort",
+      "label": "t:sections.collections_live.settings.sort.label",
+      "options": [
+        {
+          "value": "alphabetical",
+          "label": "t:sections.main-list-collections.settings.sort.options__1.label"
+        },
+        {
+          "value": "alphabetical_reversed",
+          "label": "t:sections.main-list-collections.settings.sort.options__2.label"
+        },
+        {
+          "value": "date_reversed",
+          "label": "t:sections.main-list-collections.settings.sort.options__3.label"
+        },
+        {
+          "value": "date",
+          "label": "t:sections.main-list-collections.settings.sort.options__4.label"
+        },
+        {
+          "value": "products_high",
+          "label": "t:sections.main-list-collections.settings.sort.options__5.label"
+        },
+        {
+          "value": "products_low",
+          "label": "t:sections.main-list-collections.settings.sort.options__6.label"
+        }
+      ],
+      "default": "alphabetical"
+    },
+    {
+      "type": "range",
+      "id": "columns_desktop",
+      "min": 2,
+      "max": 4,
+      "step": 1,
+      "label": "t:sections.collections_live.settings.columns_desktop.label",
+      "default": 3
+    },
+    {
+      "type": "select",
+      "id": "columns_mobile",
+      "options": [
+        {
+          "value": "1",
+          "label": "t:sections.main-list-collections.settings.columns_mobile.options__1.label"
+        },
+        {
+          "value": "2",
+          "label": "t:sections.main-list-collections.settings.columns_mobile.options__2.label"
+        }
+      ],
+      "default": "2",
+      "label": "t:sections.main-list-collections.settings.columns_mobile.label"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "stream",
+      "name": "t:sections.collections_live.blocks.stream.name",
+      "settings": [
+        {
+          "type": "text",
+          "id": "youtube_url",
+          "label": "t:sections.collections_live.blocks.stream.settings.youtube_url.label",
+          "default": "https://www.youtube.com/watch?v=bY9Xyjr7nvU"
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

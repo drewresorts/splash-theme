@@ -1,0 +1,133 @@
+{
+  "name": "Misc / gallery",
+  "sections": {
+    "main": {
+      "type": "main-page",
+      "settings": {
+        "padding_top": 36,
+        "padding_bottom": 16
+      }
+    },
+    "intro": {
+      "type": "rich-text",
+      "blocks": {
+        "intro_heading": {
+          "type": "heading",
+          "settings": {
+            "heading": "Portfolio & gallery",
+            "heading_size": "h1"
+          }
+        },
+        "intro_text": {
+          "type": "text",
+          "settings": {
+            "text": "<p>Use images in the collage below for a visual grid, and the columns for project blurbs or links. Page content above is edited in the Shopify admin page editor.</p>"
+          }
+        }
+      },
+      "block_order": [
+        "intro_heading",
+        "intro_text"
+      ],
+      "settings": {
+        "desktop_content_position": "center",
+        "content_alignment": "center",
+        "color_scheme": "scheme-1",
+        "full_width": true,
+        "padding_top": 28,
+        "padding_bottom": 28
+      }
+    },
+    "gallery": {
+      "type": "collage",
+      "blocks": {
+        "tile_1": {
+          "type": "image",
+          "settings": {}
+        },
+        "tile_2": {
+          "type": "image",
+          "settings": {}
+        },
+        "tile_3": {
+          "type": "image",
+          "settings": {}
+        }
+      },
+      "block_order": [
+        "tile_1",
+        "tile_2",
+        "tile_3"
+      ],
+      "settings": {
+        "heading": "Gallery",
+        "heading_size": "h1",
+        "desktop_layout": "left",
+        "mobile_layout": "collage",
+        "card_styles": "none",
+        "color_scheme": "scheme-1",
+        "padding_top": 36,
+        "padding_bottom": 36
+      }
+    },
+    "projects": {
+      "type": "multicolumn",
+      "blocks": {
+        "project_1": {
+          "type": "column",
+          "settings": {
+            "title": "Project one",
+            "text": "<p>Add an image and short description. Optional link below.</p>",
+            "link_label": "View details",
+            "link": ""
+          }
+        },
+        "project_2": {
+          "type": "column",
+          "settings": {
+            "title": "Project two",
+            "text": "<p>Duplicate or remove columns in the theme editor to match your work.</p>",
+            "link_label": "View details",
+            "link": ""
+          }
+        },
+        "project_3": {
+          "type": "column",
+          "settings": {
+            "title": "Project three",
+            "text": "<p>Mix photography, products, or case studies in this row.</p>",
+            "link_label": "View details",
+            "link": ""
+          }
+        }
+      },
+      "block_order": [
+        "project_1",
+        "project_2",
+        "project_3"
+      ],
+      "settings": {
+        "title": "Featured work",
+        "heading_size": "h2",
+        "image_width": "third",
+        "image_ratio": "square",
+        "columns_desktop": 3,
+        "column_alignment": "left",
+        "background_style": "none",
+        "button_label": "",
+        "button_link": "",
+        "swipe_on_mobile": true,
+        "color_scheme": "scheme-2",
+        "columns_mobile": "1",
+        "padding_top": 36,
+        "padding_bottom": 52
+      }
+    }
+  },
+  "order": [
+    "main",
+    "intro",
+    "gallery",
+    "projects"
+  ]
+}
