@@ -3,6 +3,8 @@
   assign menu_logo = section.settings.menu_logo
   assign logo_width = section.settings.logo_width | default: 240
   assign logo_src_width = logo_width | times: 2
+  assign overlay_opacity = section.settings.overlay_opacity | default: 55
+  assign overlay_color = section.settings.overlay_color | default: '#0b0b0f'
   assign stream_blocks = section.blocks | where: 'type', 'stream'
   assign email_blocks = section.blocks | where: 'type', 'email_signup'
   assign splash_menu = section.settings.menu
@@ -11,7 +13,11 @@
 <section
   class="splash-streams"
   data-splash-streams
-  style="--logo-width: {{ logo_width }}px;"
+  style="
+    --logo-width: {{ logo_width }}px;
+    --overlay-color: {{ overlay_color }};
+    --overlay-opacity: {{ overlay_opacity | divided_by: 100.0 }};
+  "
 >
   <div class="splash-streams__bg" aria-hidden="true">
     <div class="splash-streams__player-shell">
@@ -24,11 +30,7 @@
         referrerpolicy="strict-origin-when-cross-origin"
         tabindex="-1"
       ></iframe>
-      {%- for block in section.blocks -%}
-        {%- if block.type == 'video_overlay' and block.settings.placement == 'youtube' -%}
-          {%- render 'splash-video-overlay', block: block -%}
-        {%- endif -%}
-      {%- endfor -%}
+      <div class="splash-streams__overlay" aria-hidden="true"></div>
     </div>
     <div class="splash-streams__selfie-shell">
       <video
@@ -38,17 +40,8 @@
         muted
         autoplay
       ></video>
-      {%- for block in section.blocks -%}
-        {%- if block.type == 'video_overlay' and block.settings.placement == 'selfie' -%}
-          {%- render 'splash-video-overlay', block: block -%}
-        {%- endif -%}
-      {%- endfor -%}
+      <div class="splash-streams__overlay" aria-hidden="true"></div>
     </div>
-    {%- for block in section.blocks -%}
-      {%- if block.type == 'video_overlay' and block.settings.placement == 'full_screen' -%}
-        {%- render 'splash-video-overlay', block: block -%}
-      {%- endif -%}
-    {%- endfor -%}
   </div>
 
   <button
@@ -271,8 +264,8 @@
     transform: scaleX(-1);
   }
 
-  /* video_overlay blocks — same tint model as coming-soon (color + opacity). */
-  .splash-streams__video-overlay {
+  /* Same tint model as coming-soon — color + opacity on section CSS variables. */
+  .splash-streams__overlay {
     position: absolute;
     inset: 0;
     z-index: 2;
@@ -280,11 +273,6 @@
     transform: translateZ(2px);
     background-color: var(--overlay-color);
     opacity: var(--overlay-opacity);
-  }
-
-  .splash-streams__video-overlay--full_screen {
-    z-index: 5;
-    transform: translateZ(5px);
   }
 
   .splash-streams__camera-prompt {
@@ -1349,52 +1337,28 @@
       "unit": "px",
       "default": 260
     },
+    {
+      "type": "header",
+      "content": "t:coming_soon.section.headers.style"
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "t:coming_soon.section.settings.overlay_color.label",
+      "default": "#0b0b0f"
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "label": "t:coming_soon.section.settings.overlay_opacity.label",
+      "min": 0,
+      "max": 90,
+      "step": 5,
+      "unit": "%",
+      "default": 55
+    }
   ],
   "blocks": [
-    {
-      "type": "video_overlay",
-      "name": "t:splash_streams_page.section.blocks.video_overlay.name",
-      "limit": 3,
-      "settings": [
-        {
-          "type": "select",
-          "id": "placement",
-          "label": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.label",
-          "info": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.info",
-          "default": "full_screen",
-          "options": [
-            {
-              "value": "full_screen",
-              "label": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.options__1.label"
-            },
-            {
-              "value": "youtube",
-              "label": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.options__2.label"
-            },
-            {
-              "value": "selfie",
-              "label": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.options__3.label"
-            }
-          ]
-        },
-        {
-          "type": "color",
-          "id": "overlay_color",
-          "label": "t:coming_soon.section.settings.overlay_color.label",
-          "default": "#0b0b0f"
-        },
-        {
-          "type": "range",
-          "id": "overlay_opacity",
-          "label": "t:coming_soon.section.settings.overlay_opacity.label",
-          "min": 0,
-          "max": 90,
-          "step": 5,
-          "unit": "%",
-          "default": 55
-        }
-      ]
-    },
     {
       "type": "stream",
       "name": "YouTube stream",
@@ -1475,7 +1439,6 @@
     {
       "name": "Splash streams",
       "blocks": [
-        { "type": "video_overlay" },
         { "type": "stream" },
         { "type": "stream" },
         { "type": "email_signup" }

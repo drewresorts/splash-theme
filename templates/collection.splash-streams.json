@@ -15,21 +15,15 @@
           "settings": {
             "youtube_url": "https://www.youtube.com/watch?v=erBoOFKTH4E"
           }
-        },
-        "video_overlay": {
-          "type": "video_overlay",
-          "settings": {
-            "placement": "full_screen",
-            "overlay_color": "#0b0b0f",
-            "overlay_opacity": 50
-          }
         }
       },
-      "block_order": ["stream_a", "stream_b", "video_overlay"],
+      "block_order": ["stream_a", "stream_b"],
       "settings": {
         "menu": "main-menu",
         "menu_logo": "shopify://shop_images/duet_web_menu_star.png",
-        "logo_width": 400
+        "logo_width": 400,
+        "overlay_color": "#0b0b0f",
+        "overlay_opacity": 50
       }
     },
     "banner": {

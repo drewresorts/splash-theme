@@ -12,17 +12,11 @@
     "main": {
       "type": "splash-streams",
       "settings": {
-        "menu": "main-menu"
+        "menu": "main-menu",
+        "overlay_color": "#0b0b0f",
+        "overlay_opacity": 50
       },
       "blocks": {
-        "video_overlay": {
-          "type": "video_overlay",
-          "settings": {
-            "placement": "full_screen",
-            "overlay_color": "#0b0b0f",
-            "overlay_opacity": 50
-          }
-        },
         "stream-1": {
           "type": "stream",
           "settings": {
@@ -47,7 +41,7 @@
           }
         }
       },
-      "block_order": ["stream-1", "stream-2", "video_overlay", "email_signup"]
+      "block_order": ["stream-1", "stream-2", "email_signup"]
     }
   },
   "order": ["main"]

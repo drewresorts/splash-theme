@@ -3547,30 +3547,6 @@
         }
       },
       "blocks": {
-        "video_overlay": {
-          "name": "Video overlay",
-          "settings": {
-            "placement": {
-              "label": "Place over",
-              "info": "Entire background covers desktop YouTube and mobile camera. Use YouTube or Mobile only to target one stream.",
-              "options__1": {
-                "label": "Entire video background"
-              },
-              "options__2": {
-                "label": "YouTube stream only (desktop)"
-              },
-              "options__3": {
-                "label": "Mobile camera only"
-              }
-            },
-            "overlay_color": {
-              "label": "Overlay color"
-            },
-            "overlay_opacity": {
-              "label": "Overlay opacity"
-            }
-          }
-        },
         "email_signup": {
           "name": "Email signup",
           "settings": {
