@@ -8,11 +8,14 @@
   assign stream_blocks = section.blocks | where: 'type', 'stream'
   assign email_blocks = section.blocks | where: 'type', 'email_signup'
   assign splash_menu = section.settings.menu
+  assign menu_style = section.settings.menu_style | default: 'logo_overlay'
+  assign spread_lowercase = section.settings.spread_lowercase_links
 -%}
 
 <section
-  class="splash-streams"
+  class="splash-streams{% if menu_style == 'spread_header' %} splash-streams--menu-spread{% endif %}"
   data-splash-streams
+  data-menu-style="{{ menu_style }}"
   style="
     --logo-width: {{ logo_width }}px;
     --overlay-color: {{ overlay_color }};
@@ -54,6 +57,9 @@
   </button>
 
   <div class="splash-streams__chrome">
+    {%- if menu_style == 'spread_header' -%}
+      {%- render 'splash-streams-nav-spread', menu: splash_menu, lowercase_links: spread_lowercase -%}
+    {%- else -%}
     <button
       type="button"
       class="splash-streams__nav-backdrop"
@@ -155,6 +161,7 @@
       </ul>
       </nav>
     </div>
+    {%- endif -%}
 
     {%- for block in email_blocks -%}
       {%- if block.settings.position == 'below_logo' -%}
@@ -347,6 +354,115 @@
 
   .splash-streams__chrome > * {
     pointer-events: auto;
+  }
+
+  /* Spread header: top-level page links across the viewport (like a word-spaced header row). */
+  .splash-streams--menu-spread .splash-streams__chrome {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    place-self: stretch;
+    width: 100%;
+    max-width: none;
+    padding: max(0.85rem, env(safe-area-inset-top)) clamp(1rem, 3vw, 2.75rem) 0;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+
+  .splash-streams__spread-header {
+    width: 100%;
+    pointer-events: auto;
+  }
+
+  .splash-streams__nav-spread {
+    width: 100%;
+  }
+
+  .splash-streams__nav-spread-list {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: clamp(0.25rem, 1.5vw, 1.25rem);
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .splash-streams__nav-spread-item {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .splash-streams__nav-spread-link,
+  .splash-streams__nav-spread-empty {
+    display: block;
+    font-family: 'Roboto', ui-sans-serif, system-ui, sans-serif;
+    font-size: clamp(0.65rem, 2.35vw, 1.05rem);
+    font-weight: 700;
+    font-style: normal;
+    line-height: 1.15;
+    letter-spacing: 0.06em;
+    color: #fff;
+    text-decoration: none;
+    text-shadow:
+      0 0 10px #000,
+      0 1px 3px #000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .splash-streams__nav-spread-list--lowercase .splash-streams__nav-spread-link,
+  .splash-streams__nav-spread-list--lowercase .splash-streams__nav-spread-empty {
+    text-transform: lowercase;
+  }
+
+  .splash-streams__nav-spread-link:hover,
+  .splash-streams__nav-spread-link:focus-visible {
+    opacity: 0.85;
+    outline: none;
+  }
+
+  .splash-streams__nav-spread-link:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+  }
+
+  .splash-streams__nav-spread-item--empty {
+    flex: 1 1 100%;
+    text-align: center;
+  }
+
+  .splash-streams--menu-spread .splash-streams__signup--below-logo {
+    margin-top: clamp(0.5rem, 2vh, 1rem);
+  }
+
+  @media (max-width: 749px) {
+    .splash-streams__nav-spread-list {
+      flex-wrap: wrap;
+      justify-content: space-between;
+      row-gap: 0.45rem;
+    }
+
+    .splash-streams__nav-spread-item {
+      flex: 0 1 calc(50% - 0.5rem);
+      text-align: center;
+    }
+
+    .splash-streams__nav-spread-link,
+    .splash-streams__nav-spread-empty {
+      font-size: clamp(0.6rem, 3.2vw, 0.9rem);
+      text-align: center;
+    }
   }
 
   .splash-streams__nav-cluster {
@@ -1322,10 +1438,35 @@
       "info": "Same links as your storefront navigation (Online Store -> Navigation). Shows top-level items and one submenu level."
     },
     {
+      "type": "select",
+      "id": "menu_style",
+      "label": "t:splash_streams_page.section.settings.menu_style.label",
+      "info": "t:splash_streams_page.section.settings.menu_style.info",
+      "default": "logo_overlay",
+      "options": [
+        {
+          "value": "logo_overlay",
+          "label": "t:splash_streams_page.section.settings.menu_style.options__1.label"
+        },
+        {
+          "value": "spread_header",
+          "label": "t:splash_streams_page.section.settings.menu_style.options__2.label"
+        }
+      ]
+    },
+    {
+      "type": "checkbox",
+      "id": "spread_lowercase_links",
+      "label": "t:splash_streams_page.section.settings.spread_lowercase_links.label",
+      "default": true,
+      "visible_if": "{{ section.settings.menu_style == 'spread_header' }}"
+    },
+    {
       "type": "image_picker",
       "id": "menu_logo",
       "label": "Menu open logo",
-      "info": "When set along with the theme logo (Theme settings → Splash streams page → Center logo), this image is shown on the button while the menu is open. Leave blank to keep the same logo when open."
+      "info": "When set along with the theme logo (Theme settings → Splash streams page → Center logo), this image is shown on the button while the menu is open. Leave blank to keep the same logo when open.",
+      "visible_if": "{{ section.settings.menu_style == 'logo_overlay' }}"
     },
     {
       "type": "range",

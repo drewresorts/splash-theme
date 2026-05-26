@@ -546,6 +546,9 @@
   "splash_streams": {
     "email": {
       "error": "Please enter a valid email address."
+    },
+    "spread_nav": {
+      "empty": "Choose a menu in the theme editor."
     }
   },
   "catalog_splash": {

@@ -3655,6 +3655,19 @@
       "settings": {
         "logo_help": {
           "content": "Set the center logo in Theme settings → Splash streams page → Center logo (image library, not a URL)."
+        },
+        "menu_style": {
+          "label": "Menu style",
+          "info": "Spread header shows only top-level menu links in a row across the top of the screen. Center logo opens the full-screen menu.",
+          "options__1": {
+            "label": "Center logo (opens menu)"
+          },
+          "options__2": {
+            "label": "Spread header links"
+          }
+        },
+        "spread_lowercase_links": {
+          "label": "Lowercase spread header links"
         }
       },
       "blocks": {
