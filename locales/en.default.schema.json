@@ -373,7 +373,9 @@
     },
     "streaming": {
       "name": "Live stream",
-      "intro": "Set the origin of your live stream so the storefront can preconnect for faster playback. The full stream URL is configured per page in the Coming soon section.",
+      "intro": {
+        "content": "Set the origin of your live stream so the storefront can preconnect for faster playback. The full stream URL is configured per page in the Coming soon section."
+      },
       "origin": {
         "label": "Stream origin",
         "info": "Example: https://stream.your-domain.com"
@@ -381,7 +383,9 @@
     },
     "splash_streams": {
       "name": "Splash streams page",
-      "intro": "Logo for the Splash streams page template. Choose an image from your library (upload or select from files).",
+      "intro": {
+        "content": "Logo for the Splash streams page template. Choose an image from your library (upload or select from files)."
+      },
       "logo": {
         "label": "Center logo",
         "info": "Use Select image to open your library. This is not a URL field."
@@ -1122,7 +1126,7 @@
         },
         "logo_position": {
           "label": "Logo position",
-          "info": "Position of the logo in the header layout."
+          "info": "Position of the logo in the header layout.",
           "options__1": {
             "label": "Middle left"
           },
@@ -3475,6 +3479,112 @@
       "presets": {
         "name": "Collapsible content"
       }
+    },
+    "product_live_stream": {
+      "name": "Product live stream",
+      "settings": {
+        "intro": {
+          "content": "Full-viewport product page with a YouTube live stream background, left navigation, and buy box. Add stream blocks to rotate videos with arrow keys."
+        },
+        "menu": {
+          "label": "Navigation menu"
+        },
+        "nav_logo": {
+          "label": "Navigation logo",
+          "info": "Optional logo beside the menu. Leave blank to hide."
+        },
+        "nav_logo_width": {
+          "label": "Navigation logo width"
+        },
+        "youtube_url": {
+          "label": "Default YouTube URL",
+          "info": "Used when no stream blocks are added. Paste a watch or youtu.be link."
+        },
+        "overlay_color": {
+          "label": "Video overlay color"
+        },
+        "overlay_opacity": {
+          "label": "Video overlay opacity"
+        },
+        "accent_shop_color": {
+          "label": "Shop accent color"
+        },
+        "size_active_bg": {
+          "label": "Selected size background"
+        },
+        "show_live_clock": {
+          "label": "Show live clock"
+        }
+      },
+      "blocks": {
+        "stream": {
+          "name": "YouTube stream",
+          "settings": {
+            "youtube_url": {
+              "label": "YouTube URL"
+            }
+          }
+        }
+      }
+    },
+    "collections_live": {
+      "name": "Collections live stream",
+      "settings": {
+        "intro": {
+          "content": "List-collections template with a live YouTube background, left menu, and collection grid. Add stream blocks to rotate videos."
+        },
+        "menu": {
+          "label": "Navigation menu"
+        },
+        "nav_logo": {
+          "label": "Navigation logo",
+          "info": "Optional logo beside the menu. Leave blank to hide."
+        },
+        "nav_logo_width": {
+          "label": "Navigation logo width"
+        },
+        "show_second_link_decor": {
+          "label": "Show checkmark on second menu link"
+        },
+        "vertical_title": {
+          "label": "Vertical title (right edge)"
+        },
+        "vertical_title_color": {
+          "label": "Vertical title color"
+        },
+        "youtube_url": {
+          "label": "Default YouTube URL",
+          "info": "Used when no stream blocks are added."
+        },
+        "overlay_color": {
+          "label": "Video overlay color"
+        },
+        "overlay_opacity": {
+          "label": "Video overlay opacity"
+        },
+        "accent_shop_color": {
+          "label": "Shop accent color"
+        },
+        "show_live_clock": {
+          "label": "Show live clock"
+        },
+        "sort": {
+          "label": "Collection sort order"
+        },
+        "columns_desktop": {
+          "label": "Columns on desktop"
+        }
+      },
+      "blocks": {
+        "stream": {
+          "name": "YouTube stream",
+          "settings": {
+            "youtube_url": {
+              "label": "YouTube URL"
+            }
+          }
+        }
+      }
     }
   },
   "coming_soon": {
@@ -3541,6 +3651,7 @@
   },
   "splash_streams_page": {
     "section": {
+      "name": "Splash streams",
       "settings": {
         "logo_help": {
           "content": "Set the center logo in Theme settings → Splash streams page → Center logo (image library, not a URL)."
@@ -3644,11 +3755,17 @@
         },
         "quality": {
           "label": "Quality",
-          "options": {
-            "auto": "Auto",
-            "high": "High",
-            "medium": "Medium",
-            "low": "Low"
+          "options__auto": {
+            "label": "Auto"
+          },
+          "options__high": {
+            "label": "High"
+          },
+          "options__medium": {
+            "label": "Medium"
+          },
+          "options__low": {
+            "label": "Low"
           }
         },
         "enable_shadows": {
@@ -3668,7 +3785,9 @@
         "default": "Catalog splash grid"
       },
       "settings": {
-        "intro": "Full-viewport collections hub: tinted background, left menu, 3-column tile grid, and vertical title. Add tiles; link each to a collection or a custom URL.",
+        "intro": {
+          "content": "Full-viewport collections hub: tinted background, left menu, 3-column tile grid, and vertical title. Add tiles; link each to a collection or a custom URL."
+        },
         "background_image": {
           "label": "Background image"
         },
@@ -3723,7 +3842,9 @@
     "section": {
       "name": "Full-bleed product page",
       "settings": {
-        "intro": "Full-viewport product layout: background image, left navigation, hero product image, and right-side buy box. Assign a menu for the left column (first link uses the red accent).",
+        "intro": {
+          "content": "Full-viewport product layout: background image, left navigation, hero product image, and right-side buy box. Assign a menu for the left column (first link uses the red accent)."
+        },
         "background_image": {
           "label": "Background image"
         },

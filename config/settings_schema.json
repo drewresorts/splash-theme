@@ -1457,7 +1457,7 @@
     "settings": [
       {
         "type": "paragraph",
-        "content": "t:settings_schema.streaming.intro"
+        "content": "t:settings_schema.streaming.intro.content"
       },
       {
         "type": "url",
@@ -1472,7 +1472,7 @@
     "settings": [
       {
         "type": "paragraph",
-        "content": "t:settings_schema.splash_streams.intro"
+        "content": "t:settings_schema.splash_streams.intro.content"
       },
       {
         "type": "image_picker",
