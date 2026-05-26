@@ -1,0 +1,37 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "main": {
+      "type": "splash-streams",
+      "settings": {
+        "menu": "main-menu",
+        "overlay_color": "#0b0b0f",
+        "overlay_opacity": 50
+      },
+      "blocks": {
+        "stream-1": {
+          "type": "stream",
+          "settings": {
+            "youtube_url": "https://www.youtube.com/watch?v=erBoOFKTH4E"
+          }
+        },
+        "stream-2": {
+          "type": "stream",
+          "settings": {
+            "youtube_url": "https://www.youtube.com/watch?v=bY9Xyjr7nvU"
+          }
+        }
+      },
+      "block_order": ["stream-1", "stream-2"]
+    }
+  },
+  "order": ["main"]
+}

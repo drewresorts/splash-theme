@@ -1,0 +1,50 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-account",
+      "settings": {
+        "orders_per_page": 20,
+        "show_profile_email": true,
+        "show_continue_shopping": true,
+        "help_link": "",
+        "returns_link": "",
+        "padding_top": 36,
+        "padding_bottom": 28
+      }
+    },
+    "account_assist": {
+      "type": "rich-text",
+      "blocks": {
+        "account_assist_heading": {
+          "type": "heading",
+          "settings": {
+            "heading": "Need help with an order?",
+            "heading_size": "h2"
+          }
+        },
+        "account_assist_text": {
+          "type": "text",
+          "settings": {
+            "text": "<p>Add links to your help center and returns policy in the <strong>Account</strong> section settings. You can replace this text with store policies or support hours.</p>"
+          }
+        }
+      },
+      "block_order": [
+        "account_assist_heading",
+        "account_assist_text"
+      ],
+      "settings": {
+        "desktop_content_position": "center",
+        "content_alignment": "center",
+        "color_scheme": "scheme-2",
+        "full_width": true,
+        "padding_top": 28,
+        "padding_bottom": 52
+      }
+    }
+  },
+  "order": [
+    "main",
+    "account_assist"
+  ]
+}

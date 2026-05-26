@@ -1,0 +1,26 @@
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: webcam-mediamtx
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    environment:
+      MTX_LOGLEVEL: info
+
+  caddy:
+    image: caddy:2
+    container_name: webcam-caddy
+    restart: unless-stopped
+    depends_on:
+      - mediamtx
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

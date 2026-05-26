@@ -1,0 +1,24 @@
+stream.example.com {
+	encode zstd gzip
+
+	@hls path /cam/* /cam.m3u8
+	header @hls {
+		Cache-Control "no-store, no-transform"
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Headers "Origin, Range"
+		Access-Control-Expose-Headers "Content-Length, Content-Range"
+	}
+
+	header /cam/*.ts {
+		Cache-Control "public, max-age=10"
+	}
+
+	reverse_proxy localhost:8888
+
+	log {
+		output file /var/log/caddy/stream.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+	}
+}

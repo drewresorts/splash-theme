@@ -1,0 +1,57 @@
+{
+  "name": "Contact",
+  "sections": {
+    "intro": {
+      "type": "rich-text",
+      "blocks": {
+        "intro_heading": {
+          "type": "heading",
+          "settings": {
+            "heading": "Get in touch",
+            "heading_size": "h1"
+          }
+        },
+        "intro_text": {
+          "type": "text",
+          "settings": {
+            "text": "<p>Send a message using the form below. You can edit this text in the theme editor. The page title and any content in the admin page editor appear in the next section.</p>"
+          }
+        }
+      },
+      "block_order": [
+        "intro_heading",
+        "intro_text"
+      ],
+      "settings": {
+        "desktop_content_position": "center",
+        "content_alignment": "center",
+        "color_scheme": "scheme-1",
+        "full_width": true,
+        "padding_top": 40,
+        "padding_bottom": 28
+      }
+    },
+    "main": {
+      "type": "main-page",
+      "settings": {
+        "padding_top": 16,
+        "padding_bottom": 28
+      }
+    },
+    "form": {
+      "type": "contact-form",
+      "settings": {
+        "heading": "",
+        "heading_size": "h1",
+        "color_scheme": "scheme-1",
+        "padding_top": 28,
+        "padding_bottom": 52
+      }
+    }
+  },
+  "order": [
+    "intro",
+    "main",
+    "form"
+  ]
+}

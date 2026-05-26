@@ -1,0 +1,773 @@
+{%- liquid
+  assign overlay_opacity = section.settings.overlay_opacity | default: 45
+  assign overlay_color = section.settings.overlay_color | default: '#5a7a9a'
+  assign accent = section.settings.accent_shop_color | default: '#e85d4c'
+  assign size_active = section.settings.size_active_bg | default: '#7d7268'
+  assign menu = section.settings.menu
+  assign nav_logo = section.settings.nav_logo
+  if nav_logo == blank
+    assign nav_logo = settings.splash_streams_logo
+  endif
+  assign logo_width = section.settings.nav_logo_width | default: 48
+  assign logo_src_width = logo_width | times: 2
+  assign stream_blocks = section.blocks | where: 'type', 'stream'
+  assign primary_stream = section.settings.youtube_url | strip
+-%}
+
+{%- if product == blank -%}
+  <div class="product-live-stream product-live-stream--empty" style="padding:2rem;color:#fff;background:#111;">
+    {{ 'sections.product_live_stream.empty' | t }}
+  </div>
+{%- else -%}
+  <section
+    class="product-live-stream"
+    data-product-live-stream
+    id="ProductLive-{{ section.id }}"
+    style="
+      --pls-overlay: {{ overlay_color }};
+      --pls-overlay-opacity: {{ overlay_opacity | divided_by: 100.0 }};
+      --pls-accent: {{ accent }};
+      --pls-size-active: {{ size_active }};
+    "
+  >
+    <div class="product-live-stream__bg" aria-hidden="true">
+      <div class="product-live-stream__player-shell">
+        <iframe
+          class="product-live-stream__player"
+          data-pls-iframe
+          title=""
+          frameborder="0"
+          allow="autoplay; encrypted-media"
+          referrerpolicy="strict-origin-when-cross-origin"
+          tabindex="-1"
+        ></iframe>
+      </div>
+      <div class="product-live-stream__overlay"></div>
+    </div>
+
+    {%- if section.settings.show_live_clock -%}
+      <div class="product-live-stream__corner" aria-hidden="true">
+        <span class="product-live-stream__weather" title="Live view">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.9"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.55"/>
+          </svg>
+        </span>
+        <span class="product-live-stream__clock" data-pls-clock></span>
+      </div>
+    {%- endif -%}
+
+    <div class="product-live-stream__grid">
+      <aside class="product-live-stream__nav" aria-label="{{ 'sections.product_live_stream.nav_label' | t }}">
+        <div class="product-live-stream__nav-panel">
+          {%- if nav_logo != blank -%}
+            <a href="{{ routes.root_url }}" class="product-live-stream__logo-link">
+              {{
+                nav_logo
+                | image_url: width: logo_src_width
+                | image_tag:
+                  loading: 'eager',
+                  decoding: 'async',
+                  width: logo_width,
+                  alt: shop.name,
+                  class: 'product-live-stream__logo'
+              }}
+            </a>
+          {%- endif -%}
+          {%- if menu != blank and menu.links.size > 0 -%}
+            <ul class="product-live-stream__menu" role="list">
+              {%- for link in menu.links -%}
+                <li>
+                  <a
+                    href="{{ link.url }}"
+                    class="product-live-stream__menu-link{% if forloop.first %} product-live-stream__menu-link--accent{% endif %}"
+                  >
+                    {{- link.title | escape -}}
+                  </a>
+                </li>
+              {%- endfor -%}
+            </ul>
+          {%- else -%}
+            <p class="product-live-stream__menu-empty">{{ 'sections.product_live_stream.menu_empty' | t }}</p>
+          {%- endif -%}
+        </div>
+      </aside>
+
+      <div class="product-live-stream__media">
+        {%- assign current_variant = product.selected_or_first_available_variant -%}
+        {%- assign featured = current_variant.featured_image -%}
+        {%- if featured == blank -%}
+          {%- assign featured = product.featured_image -%}
+        {%- endif -%}
+        <div class="product-live-stream__media-frame" data-pls-media>
+          {%- if featured != blank -%}
+            {{
+              featured
+              | image_url: width: 1600
+              | image_tag:
+                loading: 'eager',
+                decoding: 'async',
+                widths: '400, 600, 800, 1000, 1200, 1400, 1600',
+                sizes: '(max-width: 749px) 90vw, 42vw',
+                alt: product.title,
+                class: 'product-live-stream__img',
+                data-pls-img: true
+            }}
+          {%- else -%}
+            <div class="product-live-stream__img-placeholder"></div>
+          {%- endif -%}
+        </div>
+      </div>
+
+      <div class="product-live-stream__detail">
+        <h1 class="product-live-stream__title">{{ product.title | escape }}</h1>
+        {%- if product.vendor != blank -%}
+          <p class="product-live-stream__vendor">{{ product.vendor | escape }}</p>
+        {%- endif -%}
+
+        <div class="product-live-stream__description rte">
+          {{ product.description }}
+        </div>
+
+        <p class="product-live-stream__price" data-pls-price>
+          {{ product.selected_or_first_available_variant.price | money }}
+        </p>
+
+        {%- assign product_form_id = 'product-live-form-' | append: section.id -%}
+        <product-form
+          class="product-live-stream__form-wrap"
+          data-section-id="{{ section.id }}"
+          data-hide-errors="false"
+        >
+          <div class="product-form__error-message-wrapper" role="alert" hidden>
+            <span class="svg-wrapper">
+              {{- 'icon-error.svg' | inline_asset_content -}}
+            </span>
+            <span class="product-form__error-message"></span>
+          </div>
+          {%- form 'product', product, id: product_form_id, class: 'product-live-stream__form', novalidate: 'novalidate', data-type: 'add-to-cart-form' -%}
+            <input
+              type="hidden"
+              name="id"
+              value="{{ product.selected_or_first_available_variant.id }}"
+              class="product-variant-id"
+              data-pls-variant-input
+              {% unless product.selected_or_first_available_variant.available %}
+                disabled
+              {% endunless %}
+            >
+
+            {%- unless product.has_only_default_variant -%}
+              <div class="product-live-stream__options" data-pls-options>
+                {%- for option in product.options_with_values -%}
+                  {%- assign opt_idx = forloop.index0 -%}
+                  <div class="product-live-stream__option">
+                    <div
+                      class="product-live-stream__option-row"
+                      role="group"
+                      aria-label="{{ option.name | escape }}"
+                      data-pls-option-row="{{ opt_idx }}"
+                    >
+                      {%- for value in option.values -%}
+                        <button
+                          type="button"
+                          class="product-live-stream__pill{% if option.selected_value == value %} is-active{% endif %}"
+                          data-pls-pill
+                          data-value="{{ value | escape }}"
+                        >
+                          {{ value | escape }}
+                        </button>
+                      {%- endfor -%}
+                    </div>
+                  </div>
+                {%- endfor -%}
+              </div>
+            {%- endunless -%}
+
+            <button
+              type="submit"
+              name="add"
+              class="product-live-stream__submit"
+              data-pls-submit
+              {% unless product.selected_or_first_available_variant.available %}
+                disabled
+              {% endunless %}
+            >
+              <span data-pls-submit-label>
+                {%- if product.selected_or_first_available_variant.available -%}
+                  {{ 'products.product.add_to_cart' | t }}
+                {%- else -%}
+                  {{ 'products.product.sold_out' | t }}
+                {%- endif -%}
+              </span>
+              {%- render 'loading-spinner' -%}
+            </button>
+          {%- endform -%}
+        </product-form>
+      </div>
+    </div>
+
+    <script type="application/json" data-pls-meta>
+      {
+        "sectionId": {{ section.id | json }},
+        "variants": [
+          {%- for v in product.variants -%}
+            {
+              "id": {{ v.id }},
+              "available": {{ v.available | json }},
+              "price": {{ v.price | json }},
+              "price_html": {{ v.price | money | json }},
+              "options": {{ v.options | json }},
+              "featured_image": {% if v.featured_image %}{{ v.featured_image | image_url: width: 1600 | json }}{% else %}null{% endif %}
+            }{% unless forloop.last %},{% endunless %}
+          {%- endfor -%}
+        ],
+        "initialVariantId": {{ product.selected_or_first_available_variant.id | json }},
+        "optionCount": {{ product.options.size | json }}
+      }
+    </script>
+
+    <template data-pls-streams>
+      [
+        {%- liquid
+          assign pls_first_stream = true
+        -%}
+        {%- if primary_stream != blank -%}
+          { "url": {{ primary_stream | json }} }
+          {%- assign pls_first_stream = false -%}
+        {%- endif -%}
+        {%- for block in stream_blocks -%}
+          {%- assign raw = block.settings.youtube_url | strip -%}
+          {%- if raw != blank -%}
+            {%- unless pls_first_stream -%},{%- endunless -%}
+            { "url": {{ raw | json }} }
+            {%- assign pls_first_stream = false -%}
+          {%- endif -%}
+        {%- endfor -%}
+      ]
+    </template>
+  </section>
+
+  {% stylesheet %}
+    .product-live-stream {
+      position: relative;
+      min-height: 100svh;
+      width: 100%;
+      overflow: hidden;
+      isolation: isolate;
+      background: #0a0a0c;
+      color: #fff;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .product-live-stream__bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .product-live-stream__player-shell {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .product-live-stream__player {
+      position: absolute;
+      left: 50%;
+      top: 56%;
+      width: max(100vw, 177.78vh);
+      height: max(56.25vw, 100vh);
+      transform: translate(-50%, -50%) scale(1.32);
+      transform-origin: center center;
+      border: 0;
+      pointer-events: none;
+    }
+
+    .product-live-stream__overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: var(--pls-overlay);
+      opacity: var(--pls-overlay-opacity);
+      pointer-events: none;
+    }
+
+    .product-live-stream__corner {
+      position: absolute;
+      top: max(0.75rem, env(safe-area-inset-top));
+      right: max(0.75rem, env(safe-area-inset-right));
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+    }
+
+    .product-live-stream__weather {
+      display: flex;
+      opacity: 0.95;
+    }
+
+    .product-live-stream__grid {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr) minmax(14rem, 22rem);
+      gap: clamp(1rem, 3vw, 2.5rem);
+      align-items: center;
+      min-height: 100svh;
+      padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+        max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 989px) {
+      .product-live-stream__grid {
+        grid-template-columns: 1fr;
+        align-items: start;
+        padding-top: 3rem;
+      }
+    }
+
+    .product-live-stream__nav-panel {
+      padding: 1rem 1rem 1rem 0;
+      background: rgba(0, 0, 0, 0.22);
+      border-radius: 0.5rem;
+    }
+
+    @media (max-width: 989px) {
+      .product-live-stream__nav-panel {
+        padding: 0.75rem 1rem;
+      }
+    }
+
+    .product-live-stream__logo-link {
+      display: inline-block;
+      margin-bottom: 1rem;
+      line-height: 0;
+    }
+
+    .product-live-stream__logo {
+      height: auto;
+      max-width: 100%;
+      display: block;
+    }
+
+    .product-live-stream__menu {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .product-live-stream__menu-link {
+      color: #fff;
+      text-decoration: none;
+      text-transform: lowercase;
+      font-size: clamp(1rem, 2.2vw, 1.15rem);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .product-live-stream__menu-link:hover,
+    .product-live-stream__menu-link:focus-visible {
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+
+    .product-live-stream__menu-link--accent {
+      color: var(--pls-accent);
+    }
+
+    .product-live-stream__menu-empty {
+      margin: 0;
+      font-size: 0.85rem;
+      opacity: 0.75;
+    }
+
+    .product-live-stream__media {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .product-live-stream__media-frame {
+      max-width: min(52vw, 560px);
+      width: 100%;
+    }
+
+    @media (max-width: 989px) {
+      .product-live-stream__media-frame {
+        max-width: min(88vw, 420px);
+      }
+    }
+
+    .product-live-stream__img {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: contain;
+      filter: drop-shadow(0 12px 40px rgba(0, 0, 0, 0.45));
+    }
+
+    .product-live-stream__img-placeholder {
+      aspect-ratio: 3/4;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 0.25rem;
+    }
+
+    .product-live-stream__detail {
+      padding: 0.5rem 0;
+    }
+
+    .product-live-stream__title {
+      margin: 0 0 0.35rem;
+      font-size: clamp(1.75rem, 4vw, 2.75rem);
+      font-weight: 700;
+      text-transform: lowercase;
+      letter-spacing: 0.02em;
+      line-height: 1.05;
+    }
+
+    .product-live-stream__vendor {
+      margin: 0 0 1rem;
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      text-transform: lowercase;
+      opacity: 0.92;
+    }
+
+    .product-live-stream__description {
+      margin: 0 0 1.25rem;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      max-height: 11rem;
+      overflow: auto;
+      text-transform: lowercase;
+    }
+
+    .product-live-stream__description :first-child {
+      margin-top: 0;
+    }
+
+    .product-live-stream__price {
+      margin: 0 0 1rem;
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 700;
+    }
+
+    .product-live-stream__option-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .product-live-stream__pill {
+      min-width: 2.25rem;
+      padding: 0.45rem 0.65rem;
+      border-radius: 0.25rem;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      background: transparent;
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+    }
+
+    .product-live-stream__pill.is-active {
+      background: var(--pls-size-active);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    .product-live-stream__pill:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+
+    .product-live-stream__form-wrap .loading__spinner {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+
+    .product-live-stream__submit {
+      margin-top: 0.5rem;
+      padding: 0;
+      border: none;
+      background: none;
+      color: #fff;
+      font: inherit;
+      font-size: clamp(1.05rem, 2vw, 1.25rem);
+      font-weight: 700;
+      text-transform: capitalize;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 0.25em;
+    }
+
+    .product-live-stream__submit:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      text-decoration: none;
+    }
+
+    .product-live-stream__submit .loading__spinner {
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 0.35rem;
+    }
+
+    .product-live-stream--empty {
+      min-height: 40vh;
+    }
+  {% endstylesheet %}
+
+  {% javascript %}
+    (function () {
+      function parseYouTubeId(raw) {
+        if (!raw) return '';
+        var s = String(raw).trim();
+        var m = s.match(/(?:v=|\/embed\/|\.be\/)([A-Za-z0-9_-]{6,})/);
+        return m ? m[1] : '';
+      }
+
+      function buildEmbedUrl(videoId) {
+        var id = String(videoId).trim();
+        var q = [
+          'autoplay=1',
+          'mute=1',
+          'loop=1',
+          'playlist=' + encodeURIComponent(id),
+          'controls=0',
+          'showinfo=0',
+          'rel=0',
+          'iv_load_policy=3',
+          'modestbranding=1',
+          'playsinline=1',
+          'fs=0',
+          'disablekb=1',
+        ].join('&');
+        return 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?' + q;
+      }
+
+      function initStream(root) {
+        var tpl = root.querySelector('[data-pls-streams]');
+        var iframe = root.querySelector('[data-pls-iframe]');
+        if (!tpl || !iframe) return;
+        var urls = [];
+        try {
+          urls = JSON.parse(tpl.innerHTML.trim());
+        } catch (e) {
+          return;
+        }
+        var first = urls.find(function (u) {
+          return u && u.url;
+        });
+        if (!first) return;
+        var id = parseYouTubeId(first.url);
+        if (!id) return;
+        iframe.src = buildEmbedUrl(id);
+      }
+
+      function initClock(root) {
+        var el = root.querySelector('[data-pls-clock]');
+        if (!el) return;
+        function tick() {
+          var now = new Date();
+          var opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+          el.textContent = now.toLocaleString(undefined, opts);
+        }
+        tick();
+        setInterval(tick, 30000);
+      }
+
+      function initProduct(root) {
+        var metaEl = root.querySelector('[data-pls-meta]');
+        if (!metaEl) return;
+        var meta = JSON.parse(metaEl.textContent);
+        var variants = meta.variants || [];
+        var optionCount = meta.optionCount || 0;
+        var input = root.querySelector('[data-pls-variant-input]');
+        var priceEl = root.querySelector('[data-pls-price]');
+        var img = root.querySelector('[data-pls-img]');
+        var submit = root.querySelector('[data-pls-submit]');
+        var submitLabel = root.querySelector('[data-pls-submit-label]');
+        var pills = root.querySelectorAll('[data-pls-pill]');
+
+        function findVariant(selection) {
+          return variants.find(function (v) {
+            for (var i = 0; i < selection.length; i++) {
+              if (String(v.options[i]) !== String(selection[i])) return false;
+            }
+            return true;
+          });
+        }
+
+        function readSelectionFromDom() {
+          var sel = [];
+          for (var oi = 0; oi < optionCount; oi++) {
+            var row = root.querySelector('[data-pls-option-row="' + oi + '"]');
+            var active = row && row.querySelector('[data-pls-pill].is-active');
+            sel.push(active ? active.getAttribute('data-value') : '');
+          }
+          return sel;
+        }
+
+        function applyVariant(v) {
+          if (!v || !input) return;
+          input.value = v.id;
+          input.disabled = !v.available;
+          if (priceEl) priceEl.innerHTML = v.price_html;
+          if (img && v.featured_image) {
+            img.src = v.featured_image;
+            img.srcset = '';
+          }
+          if (submit) submit.disabled = !v.available;
+          if (submitLabel) {
+            submitLabel.textContent = v.available
+              ? window.variantStrings && window.variantStrings.addToCart
+                ? window.variantStrings.addToCart
+                : 'Add to cart'
+              : window.variantStrings && window.variantStrings.soldOut
+                ? window.variantStrings.soldOut
+                : 'Sold out';
+          }
+          try {
+            var url = new URL(window.location.href);
+            url.searchParams.set('variant', String(v.id));
+            window.history.replaceState({}, '', url.toString());
+          } catch (e) {}
+        }
+
+        pills.forEach(function (pill) {
+          pill.addEventListener('click', function () {
+            var row = pill.closest('[data-pls-option-row]');
+            if (!row) return;
+            row.querySelectorAll('[data-pls-pill]').forEach(function (p) {
+              p.classList.remove('is-active');
+            });
+            pill.classList.add('is-active');
+            var sel = readSelectionFromDom();
+            var v = findVariant(sel);
+            if (v) applyVariant(v);
+          });
+        });
+      }
+
+      document.querySelectorAll('[data-product-live-stream]').forEach(function (root) {
+        initStream(root);
+        initClock(root);
+        initProduct(root);
+      });
+    })();
+  {% endjavascript %}
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "t:sections.product_live_stream.name",
+  "tag": "section",
+  "class": "section-product-live-stream",
+  "enabled_on": {
+    "templates": ["product"]
+  },
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "t:sections.product_live_stream.settings.intro.content"
+    },
+    {
+      "type": "link_list",
+      "id": "menu",
+      "label": "t:sections.product_live_stream.settings.menu.label",
+      "default": "main-menu"
+    },
+    {
+      "type": "image_picker",
+      "id": "nav_logo",
+      "label": "t:sections.product_live_stream.settings.nav_logo.label",
+      "info": "t:sections.product_live_stream.settings.nav_logo.info"
+    },
+    {
+      "type": "range",
+      "id": "nav_logo_width",
+      "min": 32,
+      "max": 120,
+      "step": 4,
+      "unit": "px",
+      "label": "t:sections.product_live_stream.settings.nav_logo_width.label",
+      "default": 48
+    },
+    {
+      "type": "text",
+      "id": "youtube_url",
+      "label": "t:sections.product_live_stream.settings.youtube_url.label",
+      "default": "https://www.youtube.com/watch?v=erBoOFKTH4E",
+      "info": "t:sections.product_live_stream.settings.youtube_url.info"
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "t:sections.product_live_stream.settings.overlay_color.label",
+      "default": "#5a7a9a"
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "min": 20,
+      "max": 75,
+      "step": 5,
+      "unit": "%",
+      "label": "t:sections.product_live_stream.settings.overlay_opacity.label",
+      "default": 45
+    },
+    {
+      "type": "color",
+      "id": "accent_shop_color",
+      "label": "t:sections.product_live_stream.settings.accent_shop_color.label",
+      "default": "#e85d4c"
+    },
+    {
+      "type": "color",
+      "id": "size_active_bg",
+      "label": "t:sections.product_live_stream.settings.size_active_bg.label",
+      "default": "#7d7268"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_live_clock",
+      "label": "t:sections.product_live_stream.settings.show_live_clock.label",
+      "default": true
+    }
+  ],
+  "blocks": [
+    {
+      "type": "stream",
+      "name": "t:sections.product_live_stream.blocks.stream.name",
+      "settings": [
+        {
+          "type": "text",
+          "id": "youtube_url",
+          "label": "t:sections.product_live_stream.blocks.stream.settings.youtube_url.label",
+          "default": "https://www.youtube.com/watch?v=bY9Xyjr7nvU"
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

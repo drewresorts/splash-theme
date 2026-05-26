@@ -1,0 +1,26 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "main": {
+      "type": "product-splash",
+      "settings": {
+        "overlay_color": "#2a6ec9",
+        "overlay_opacity": 40,
+        "accent_shop_color": "#e82222",
+        "accent_select_color": "#c96f3a",
+        "logo_mark": "RS"
+      }
+    }
+  },
+  "order": [
+    "main"
+  ]
+}

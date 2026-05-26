@@ -1,0 +1,66 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "splash_streams_jYPmmR": {
+      "type": "splash-streams",
+      "blocks": {
+        "stream_TmMwAG": {
+          "type": "stream",
+          "settings": {
+            "youtube_url": "https://www.youtube.com/watch?v=_eArnSLGhSo"
+          }
+        },
+        "stream_jqHxD6": {
+          "type": "stream",
+          "settings": {
+            "youtube_url": "https://www.youtube.com/watch?v=2ywP2Zzs6Qs"
+          }
+        },
+        "stream_cqRFbW": {
+          "type": "stream",
+          "settings": {
+            "youtube_url": "https://www.youtube.com/watch?v=erBoOFKTH4E"
+          }
+        },
+        "email_signup_8b3nXh": {
+          "type": "email_signup",
+          "disabled": true,
+          "settings": {
+            "position": "bottom",
+            "heading": "",
+            "text": "",
+            "placeholder": "Email",
+            "button_label": "Subscribe",
+            "success_message": "Thanks — you're on the list.",
+            "lowercase_text": true
+          }
+        }
+      },
+      "block_order": [
+        "stream_TmMwAG",
+        "stream_jqHxD6",
+        "stream_cqRFbW",
+        "email_signup_8b3nXh"
+      ],
+      "name": "Splash streams",
+      "settings": {
+        "menu": "main-menu",
+        "menu_logo": "shopify://shop_images/duet_web_menu_star.png",
+        "logo_width": 450,
+        "overlay_color": "#ff0000",
+        "overlay_opacity": 70
+      }
+    }
+  },
+  "order": [
+    "splash_streams_jYPmmR"
+  ]
+}

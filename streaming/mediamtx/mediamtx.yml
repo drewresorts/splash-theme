@@ -1,0 +1,40 @@
+logLevel: info
+logDestinations: [stdout]
+
+api: no
+metrics: no
+pprof: no
+
+rtsp: yes
+rtspAddress: :8554
+rtmp: yes
+rtmpAddress: :1935
+
+hls: yes
+hlsAddress: :8888
+hlsAlwaysRemux: yes
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsSegmentMaxSize: 50M
+hlsAllowOrigin: '*'
+hlsTrustedProxies: []
+hlsEncryption: no
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcAllowOrigin: '*'
+webrtcLocalUDPAddress: :8189
+
+paths:
+  cam:
+    source: publisher
+    sourceProtocol: automatic
+    publishUser: "${PUBLISH_USER:-publisher}"
+    publishPass: "${PUBLISH_PASS:-changeme}"
+    runOnDemand: ""
+    runOnReady: ""
+
+  all_others:
+    source: publisher

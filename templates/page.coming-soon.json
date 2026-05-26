@@ -1,0 +1,25 @@
+{
+  "sections": {
+    "main": {
+      "type": "coming-soon",
+      "blocks": {
+        "instagram": {
+          "type": "social_link",
+          "settings": {
+            "label": "Instagram",
+            "url": "https://instagram.com/"
+          }
+        },
+        "tiktok": {
+          "type": "social_link",
+          "settings": {
+            "label": "TikTok",
+            "url": "https://tiktok.com/"
+          }
+        }
+      },
+      "block_order": ["instagram", "tiktok"]
+    }
+  },
+  "order": ["main"]
+}

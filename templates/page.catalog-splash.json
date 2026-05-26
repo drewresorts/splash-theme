@@ -1,0 +1,73 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "main": {
+      "type": "catalog-splash",
+      "settings": {
+        "overlay_color": "#2a6ec9",
+        "overlay_opacity": 40,
+        "accent_shop_color": "#e82222",
+        "logo_mark": "RS",
+        "vertical_title": "collections",
+        "vertical_title_color": "#0b1f3d"
+      },
+      "blocks": {
+        "tile_1": {
+          "type": "tile",
+          "settings": {
+            "label": "new arrivals"
+          }
+        },
+        "tile_2": {
+          "type": "tile",
+          "settings": {
+            "label": "duetco"
+          }
+        },
+        "tile_3": {
+          "type": "tile",
+          "settings": {
+            "label": "on sale"
+          }
+        },
+        "tile_4": {
+          "type": "tile",
+          "settings": {
+            "label": "accessories"
+          }
+        },
+        "tile_5": {
+          "type": "tile",
+          "settings": {
+            "label": "staff picks"
+          }
+        },
+        "tile_6": {
+          "type": "tile",
+          "settings": {
+            "label": "online only"
+          }
+        }
+      },
+      "block_order": [
+        "tile_1",
+        "tile_2",
+        "tile_3",
+        "tile_4",
+        "tile_5",
+        "tile_6"
+      ]
+    }
+  },
+  "order": [
+    "main"
+  ]
+}
