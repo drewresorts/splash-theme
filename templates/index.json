@@ -39,7 +39,7 @@
             "form_label": "",
             "placeholder": "your@email.com",
             "button_label": "Notify me",
-            "success_message": "You're on the list. See you at launch.",
+            "success_message": "See you soon.",
             "lowercase_text": true
           }
         }
