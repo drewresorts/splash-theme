@@ -30,6 +30,14 @@
             "youtube_url": "https://www.youtube.com/watch?v=erBoOFKTH4E"
           }
         },
+        "video_overlay_main": {
+          "type": "video_overlay",
+          "settings": {
+            "placement": "full_screen",
+            "color": "#ff0000",
+            "opacity": 70
+          }
+        },
         "email_signup_8b3nXh": {
           "type": "email_signup",
           "settings": {
@@ -48,15 +56,14 @@
         "stream_TmMwAG",
         "stream_jqHxD6",
         "stream_cqRFbW",
+        "video_overlay_main",
         "email_signup_8b3nXh"
       ],
       "name": "Splash streams",
       "settings": {
         "menu": "main-menu",
         "menu_logo": "shopify://shop_images/duet_web_menu_star.png",
-        "logo_width": 450,
-        "overlay_color": "#ff0000",
-        "overlay_opacity": 70
+        "logo_width": 450
       }
     }
   },

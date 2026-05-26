@@ -15,18 +15,21 @@
           "settings": {
             "youtube_url": "https://www.youtube.com/watch?v=erBoOFKTH4E"
           }
+        },
+        "video_overlay": {
+          "type": "video_overlay",
+          "settings": {
+            "placement": "full_screen",
+            "color": "#0b0b0f",
+            "opacity": 50
+          }
         }
       },
-      "block_order": [
-        "stream_a",
-        "stream_b"
-      ],
+      "block_order": ["stream_a", "stream_b", "video_overlay"],
       "settings": {
         "menu": "main-menu",
         "menu_logo": "shopify://shop_images/duet_web_menu_star.png",
-        "logo_width": 400,
-        "overlay_color": "#0b0b0f",
-        "overlay_opacity": 50
+        "logo_width": 400
       }
     },
     "banner": {
@@ -54,9 +57,5 @@
       }
     }
   },
-  "order": [
-    "splash_streams_collection",
-    "banner",
-    "product-grid"
-  ]
+  "order": ["splash_streams_collection", "banner", "product-grid"]
 }

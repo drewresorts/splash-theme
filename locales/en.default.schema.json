@@ -3544,19 +3544,34 @@
       "settings": {
         "logo_help": {
           "content": "Set the center logo in Theme settings → Splash streams page → Center logo (image library, not a URL)."
-        },
-        "headers": {
-          "video_overlay": "Video overlay"
-        },
-        "overlay_color": {
-          "label": "Overlay color"
-        },
-        "overlay_opacity": {
-          "label": "Overlay opacity",
-          "info": "0% is fully transparent (video only). 100% is fully opaque (solid color)."
         }
       },
       "blocks": {
+        "video_overlay": {
+          "name": "Video overlay",
+          "settings": {
+            "placement": {
+              "label": "Place over",
+              "info": "Entire background covers desktop YouTube and mobile camera. Use YouTube or Mobile only to target one stream.",
+              "options__1": {
+                "label": "Entire video background"
+              },
+              "options__2": {
+                "label": "YouTube stream only (desktop)"
+              },
+              "options__3": {
+                "label": "Mobile camera only"
+              }
+            },
+            "color": {
+              "label": "Overlay color"
+            },
+            "opacity": {
+              "label": "Overlay opacity",
+              "info": "0% = fully transparent. 100% = fully opaque."
+            }
+          }
+        },
         "email_signup": {
           "name": "Email signup",
           "settings": {

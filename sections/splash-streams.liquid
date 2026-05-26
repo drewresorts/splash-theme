@@ -3,16 +3,6 @@
   assign menu_logo = section.settings.menu_logo
   assign logo_width = section.settings.logo_width | default: 240
   assign logo_src_width = logo_width | times: 2
-  assign overlay_opacity = section.settings.overlay_opacity | default: 35
-  assign overlay_opacity_percent = overlay_opacity | at_least: 0 | at_most: 100
-  assign overlay_color_setting = section.settings.overlay_color
-  if overlay_color_setting != blank
-    assign overlay_rgb = overlay_color_setting.rgb
-  else
-    assign overlay_rgb = '0 0 0'
-  endif
-  assign overlay_background = 'rgb(' | append: overlay_rgb | append: ' / ' | append: overlay_opacity_percent | append: '%)'
-
   assign stream_blocks = section.blocks | where: 'type', 'stream'
   assign email_blocks = section.blocks | where: 'type', 'email_signup'
   assign splash_menu = section.settings.menu
@@ -34,11 +24,11 @@
         referrerpolicy="strict-origin-when-cross-origin"
         tabindex="-1"
       ></iframe>
-      <div
-        class="splash-streams__media-overlay"
-        aria-hidden="true"
-        style="background-color: {{ overlay_background }};"
-      ></div>
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'video_overlay' and block.settings.placement == 'youtube' -%}
+          {%- render 'splash-video-overlay', block: block -%}
+        {%- endif -%}
+      {%- endfor -%}
     </div>
     <div class="splash-streams__selfie-shell">
       <video
@@ -48,19 +38,18 @@
         muted
         autoplay
       ></video>
-      <div
-        class="splash-streams__media-overlay"
-        aria-hidden="true"
-        style="background-color: {{ overlay_background }};"
-      ></div>
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'video_overlay' and block.settings.placement == 'selfie' -%}
+          {%- render 'splash-video-overlay', block: block -%}
+        {%- endif -%}
+      {%- endfor -%}
     </div>
+    {%- for block in section.blocks -%}
+      {%- if block.type == 'video_overlay' and block.settings.placement == 'full_screen' -%}
+        {%- render 'splash-video-overlay', block: block -%}
+      {%- endif -%}
+    {%- endfor -%}
   </div>
-
-  {% style %}
-    #shopify-section-{{ section.id }} .splash-streams__media-overlay {
-      background-color: {{ overlay_background }};
-    }
-  {% endstyle %}
 
   <button
     type="button"
@@ -282,14 +271,18 @@
     transform: scaleX(-1);
   }
 
-  /* Inside each media shell so the tint stacks above iframe/video (not behind YouTube). */
-  .splash-streams__media-overlay {
+  /* video_overlay blocks — above iframe/video, below logo and email (z-index 2–14). */
+  .splash-streams__video-overlay {
     position: absolute;
     inset: 0;
     z-index: 2;
     pointer-events: none;
     transform: translateZ(2px);
-    will-change: opacity;
+  }
+
+  .splash-streams__video-overlay--full_screen {
+    z-index: 5;
+    transform: translateZ(5px);
   }
 
   .splash-streams__camera-prompt {
@@ -1354,29 +1347,53 @@
       "unit": "px",
       "default": 260
     },
-    {
-      "type": "header",
-      "content": "t:splash_streams_page.section.settings.headers.video_overlay"
-    },
-    {
-      "type": "color",
-      "id": "overlay_color",
-      "label": "t:splash_streams_page.section.settings.overlay_color.label",
-      "default": "#000000"
-    },
-    {
-      "type": "range",
-      "id": "overlay_opacity",
-      "label": "t:splash_streams_page.section.settings.overlay_opacity.label",
-      "info": "t:splash_streams_page.section.settings.overlay_opacity.info",
-      "min": 0,
-      "max": 100,
-      "step": 1,
-      "unit": "%",
-      "default": 35
-    }
   ],
   "blocks": [
+    {
+      "type": "video_overlay",
+      "name": "t:splash_streams_page.section.blocks.video_overlay.name",
+      "limit": 3,
+      "settings": [
+        {
+          "type": "select",
+          "id": "placement",
+          "label": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.label",
+          "info": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.info",
+          "default": "full_screen",
+          "options": [
+            {
+              "value": "full_screen",
+              "label": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.options__1.label"
+            },
+            {
+              "value": "youtube",
+              "label": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.options__2.label"
+            },
+            {
+              "value": "selfie",
+              "label": "t:splash_streams_page.section.blocks.video_overlay.settings.placement.options__3.label"
+            }
+          ]
+        },
+        {
+          "type": "color",
+          "id": "color",
+          "label": "t:splash_streams_page.section.blocks.video_overlay.settings.color.label",
+          "default": "#000000"
+        },
+        {
+          "type": "range",
+          "id": "opacity",
+          "label": "t:splash_streams_page.section.blocks.video_overlay.settings.opacity.label",
+          "info": "t:splash_streams_page.section.blocks.video_overlay.settings.opacity.info",
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%",
+          "default": 35
+        }
+      ]
+    },
     {
       "type": "stream",
       "name": "YouTube stream",
@@ -1457,6 +1474,7 @@
     {
       "name": "Splash streams",
       "blocks": [
+        { "type": "video_overlay" },
         { "type": "stream" },
         { "type": "stream" },
         { "type": "email_signup" }
