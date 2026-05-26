@@ -5,6 +5,7 @@
   assign logo_src_width = logo_width | times: 2
   assign overlay_opacity = section.settings.overlay_opacity | default: 55
   assign overlay_color = section.settings.overlay_color | default: '#0b0b0f'
+  assign overlay_alpha = overlay_opacity | divided_by: 100.0
   assign stream_blocks = section.blocks | where: 'type', 'stream'
   assign email_blocks = section.blocks | where: 'type', 'email_signup'
   assign splash_menu = section.settings.menu
@@ -18,8 +19,6 @@
   data-menu-style="{{ menu_style }}"
   style="
     --logo-width: {{ logo_width }}px;
-    --overlay-color: {{ overlay_color }};
-    --overlay-opacity: {{ overlay_opacity | divided_by: 100.0 }};
   "
 >
   <div class="splash-streams__bg" aria-hidden="true">
@@ -33,7 +32,11 @@
         referrerpolicy="strict-origin-when-cross-origin"
         tabindex="-1"
       ></iframe>
-      <div class="splash-streams__overlay" aria-hidden="true"></div>
+      <div
+        class="splash-streams__overlay"
+        aria-hidden="true"
+        style="background-color: {{ overlay_color | color_modify: 'alpha', overlay_alpha }};"
+      ></div>
     </div>
     <div class="splash-streams__selfie-shell">
       <video
@@ -43,7 +46,11 @@
         muted
         autoplay
       ></video>
-      <div class="splash-streams__overlay" aria-hidden="true"></div>
+      <div
+        class="splash-streams__overlay"
+        aria-hidden="true"
+        style="background-color: {{ overlay_color | color_modify: 'alpha', overlay_alpha }};"
+      ></div>
     </div>
   </div>
 
@@ -271,15 +278,14 @@
     transform: scaleX(-1);
   }
 
-  /* Same tint model as coming-soon — color + opacity on section CSS variables. */
+  /* Video tint overlay above iframe/video (alpha baked into the color). */
   .splash-streams__overlay {
     position: absolute;
     inset: 0;
     z-index: 2;
     pointer-events: none;
     transform: translateZ(2px);
-    background-color: var(--overlay-color);
-    opacity: var(--overlay-opacity);
+    background-color: transparent;
   }
 
   .splash-streams__camera-prompt {
