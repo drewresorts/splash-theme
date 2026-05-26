@@ -217,6 +217,10 @@
     }
   },
   "templates": {
+    "404": {
+      "title": "Siden blev ikke fundet",
+      "subtext": "404"
+    },
     "search": {
       "no_results": "Der blev ikke fundet nogen resultater for “{{ terms }}”. Kontrollér stavemåden, eller brug et andet ord eller udtryk.",
       "results_with_count": {
@@ -260,10 +264,6 @@
         "error_heading": "Juster følgende:",
         "title": "Kontaktformular"
       }
-    },
-    "404": {
-      "title": "Siden blev ikke fundet",
-      "subtext": "404"
     }
   },
   "sections": {
@@ -525,6 +525,11 @@
       "send_on_label": "Send (valgfrit)",
       "expanded": "Formularen til modtager af gavekort er vist",
       "collapsed": "Formularen til modtager af gavekort er skjult"
+    }
+  },
+  "splash_streams": {
+    "spread_nav": {
+      "empty": "Choose a menu in the theme editor."
     }
   }
 }
