@@ -3565,6 +3565,9 @@
             "text": {
               "label": "Description"
             },
+            "form_label": {
+              "label": "Form label"
+            },
             "placeholder": {
               "label": "Email placeholder"
             },

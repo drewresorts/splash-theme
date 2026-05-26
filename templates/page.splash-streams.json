@@ -28,9 +28,20 @@
           "settings": {
             "youtube_url": "https://www.youtube.com/watch?v=bY9Xyjr7nvU"
           }
+        },
+        "email_signup": {
+          "type": "email_signup",
+          "settings": {
+            "position": "bottom",
+            "form_label": "Get notified when we launch",
+            "placeholder": "your@email.com",
+            "button_label": "Notify me",
+            "success_message": "You're on the list. See you at launch.",
+            "lowercase_text": false
+          }
         }
       },
-      "block_order": ["stream-1", "stream-2"]
+      "block_order": ["stream-1", "stream-2", "email_signup"]
     }
   },
   "order": ["main"]

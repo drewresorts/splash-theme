@@ -32,15 +32,15 @@
         },
         "email_signup_8b3nXh": {
           "type": "email_signup",
-          "disabled": true,
           "settings": {
             "position": "bottom",
             "heading": "",
             "text": "",
-            "placeholder": "Email",
-            "button_label": "Subscribe",
-            "success_message": "Thanks — you're on the list.",
-            "lowercase_text": true
+            "form_label": "Get notified when we launch",
+            "placeholder": "your@email.com",
+            "button_label": "Notify me",
+            "success_message": "You're on the list. See you at launch.",
+            "lowercase_text": false
           }
         }
       },
