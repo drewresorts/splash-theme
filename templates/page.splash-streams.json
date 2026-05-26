@@ -11,11 +11,6 @@
   "sections": {
     "main": {
       "type": "splash-streams",
-      "settings": {
-        "menu": "main-menu",
-        "overlay_color": "#0b0b0f",
-        "overlay_opacity": 50
-      },
       "blocks": {
         "stream-1": {
           "type": "stream",
@@ -41,8 +36,17 @@
           }
         }
       },
-      "block_order": ["stream-1", "stream-2", "email_signup"]
+      "block_order": [
+        "stream-1",
+        "stream-2",
+        "email_signup"
+      ],
+      "settings": {
+        "menu": "main-menu"
+      }
     }
   },
-  "order": ["main"]
+  "order": [
+    "main"
+  ]
 }
