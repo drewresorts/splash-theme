@@ -19,8 +19,8 @@
           "type": "video_overlay",
           "settings": {
             "placement": "full_screen",
-            "color": "#0b0b0f",
-            "opacity": 50
+            "overlay_color": "#0b0b0f",
+            "overlay_opacity": 50
           }
         },
         "stream-1": {

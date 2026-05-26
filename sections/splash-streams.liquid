@@ -271,13 +271,15 @@
     transform: scaleX(-1);
   }
 
-  /* video_overlay blocks — above iframe/video, below logo and email (z-index 2–14). */
+  /* video_overlay blocks — same tint model as coming-soon (color + opacity). */
   .splash-streams__video-overlay {
     position: absolute;
     inset: 0;
     z-index: 2;
     pointer-events: none;
     transform: translateZ(2px);
+    background-color: var(--overlay-color);
+    opacity: var(--overlay-opacity);
   }
 
   .splash-streams__video-overlay--full_screen {
@@ -1377,20 +1379,19 @@
         },
         {
           "type": "color",
-          "id": "color",
-          "label": "t:splash_streams_page.section.blocks.video_overlay.settings.color.label",
-          "default": "#000000"
+          "id": "overlay_color",
+          "label": "t:coming_soon.section.settings.overlay_color.label",
+          "default": "#0b0b0f"
         },
         {
           "type": "range",
-          "id": "opacity",
-          "label": "t:splash_streams_page.section.blocks.video_overlay.settings.opacity.label",
-          "info": "t:splash_streams_page.section.blocks.video_overlay.settings.opacity.info",
+          "id": "overlay_opacity",
+          "label": "t:coming_soon.section.settings.overlay_opacity.label",
           "min": 0,
-          "max": 100,
-          "step": 1,
+          "max": 90,
+          "step": 5,
           "unit": "%",
-          "default": 35
+          "default": 55
         }
       ]
     },

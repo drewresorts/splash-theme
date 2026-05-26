@@ -34,8 +34,8 @@
           "type": "video_overlay",
           "settings": {
             "placement": "full_screen",
-            "color": "#ff0000",
-            "opacity": 70
+            "overlay_color": "#ff0000",
+            "overlay_opacity": 70
           }
         },
         "email_signup_8b3nXh": {

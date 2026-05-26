@@ -3563,12 +3563,11 @@
                 "label": "Mobile camera only"
               }
             },
-            "color": {
+            "overlay_color": {
               "label": "Overlay color"
             },
-            "opacity": {
-              "label": "Overlay opacity",
-              "info": "0% = fully transparent. 100% = fully opaque."
+            "overlay_opacity": {
+              "label": "Overlay opacity"
             }
           }
         },
