@@ -305,25 +305,6 @@
     -%}
 
     {%- if hide_store_chrome -%}
-      <script>
-        (function () {
-          'use strict';
-          function isSplashEmailForm(el) {
-            return el && el.matches && el.matches('form.splash-streams__email-form');
-          }
-          document.addEventListener(
-            'submit',
-            function (ev) {
-              if (!isSplashEmailForm(ev.target)) return;
-              ev.preventDefault();
-              ev.stopImmediatePropagation();
-              return false;
-            },
-            true
-          );
-        })();
-      </script>
-      <script src="{{ 'splash-email-signup.js' | asset_url }}"></script>
       {% style %}
         body.layout-splash-streams {
           display: block;
@@ -340,10 +321,6 @@
         body.layout-splash-streams .shopify-section {
           margin: 0;
         }
-
-        body.layout-splash-streams .h-captcha-badge {
-          display: none !important;
-        }
       {% endstyle %}
     {%- endif -%}
 
@@ -355,23 +332,6 @@
   </head>
 
   <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
-    {%- if hide_store_chrome -%}
-      <script>
-        if (window.navigation && typeof window.navigation.addEventListener === 'function') {
-          window.navigation.addEventListener('navigate', function (ev) {
-            if (!ev.destination || !ev.destination.url) return;
-            if (ev.destination.url.indexOf('/challenge') === -1) return;
-            if (!document.body.classList.contains('layout-splash-streams')) return;
-            ev.preventDefault();
-            var root = document.querySelector('[data-splash-email-root]');
-            var form = root && root.querySelector('form.splash-streams__email-form');
-            if (root && form && window.__splashEmailShowChallenge) {
-              window.__splashEmailShowChallenge(root, form);
-            }
-          });
-        }
-      </script>
-    {%- endif -%}
     {%- unless hide_store_chrome -%}
       <a class="skip-to-content-link button visually-hidden" href="#MainContent">
         {{ 'accessibility.skip_to_text' | t }}

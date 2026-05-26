@@ -189,13 +189,6 @@
     {%- endunless -%}
   {%- endfor -%}
 
-  <script type="application/json" data-splash-streams-strings>
-    {
-      "emailError": {{ 'splash_streams.email.error' | t | json }},
-      "emailCaptcha": {{ 'splash_streams.email.captcha' | t | json }}
-    }
-  </script>
-
   {%- if stream_blocks.size > 0 -%}
     <p class="splash-streams__key-hint" aria-live="polite">Change stream with arrow keys</p>
   {%- endif -%}
@@ -870,97 +863,6 @@
 
   .splash-streams__email-message--success {
     color: #b8f5c8;
-  }
-
-  .splash-streams__email-form-panel[hidden],
-  .splash-streams__email-success-panel[hidden] {
-    display: none !important;
-  }
-
-  .splash-streams__email-success-panel {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 3rem;
-  }
-
-  .splash-streams__email-message--standalone {
-    margin: 0;
-  }
-
-  .splash-streams__email-post-sink {
-    position: absolute;
-    width: 0;
-    height: 0;
-    border: 0;
-    overflow: hidden;
-  }
-
-  .splash-streams__email-challenge-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1.25rem;
-    background: rgba(0, 0, 0, 0.82);
-    backdrop-filter: blur(4px);
-  }
-
-  .splash-streams__email-challenge-overlay[hidden] {
-    display: none !important;
-  }
-
-  .splash-streams__email-challenge-dialog {
-    width: min(94vw, 26rem);
-    max-height: min(90vh, 32rem);
-    padding: 1.25rem 1rem 1rem;
-    border-radius: 0.5rem;
-    background: #fff;
-    color: #111;
-    text-align: center;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  }
-
-  .splash-streams__email-challenge-title {
-    margin: 0 0 0.75rem;
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: 1rem;
-    font-weight: 400;
-    line-height: 1.35;
-    color: #111;
-  }
-
-  .splash-streams__email-challenge-frame {
-    display: block;
-    width: 100%;
-    height: min(58vh, 22rem);
-    min-height: 14rem;
-    border: 0;
-    border-radius: 0.25rem;
-    background: #fff;
-  }
-
-  .splash-streams__email-challenge-done {
-    margin-top: 0.85rem;
-    padding: 0.45rem 1.1rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border: 1px solid #111;
-    border-radius: 0;
-    background: #fff;
-    color: #111;
-    cursor: pointer;
-    text-transform: none;
-  }
-
-  html.splash-streams--challenge-open {
-    overflow: hidden;
-  }
-
-  html.splash-streams--challenge-open .h-captcha-badge {
-    display: none !important;
   }
 
   @media (prefers-reduced-motion: reduce) {
