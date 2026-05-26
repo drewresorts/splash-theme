@@ -1,0 +1,850 @@
+{%- liquid
+  assign overlay_opacity = section.settings.overlay_opacity | default: 42
+  assign overlay_color = section.settings.overlay_color | default: '#1e6fd9'
+  assign accent_shop = section.settings.accent_shop_color | default: '#e82222'
+  assign accent_select = section.settings.accent_select_color | default: '#c96f3a'
+  assign bg_image = section.settings.background_image
+  assign side_menu = section.settings.side_menu
+  assign logo_text = section.settings.logo_mark | default: shop.name
+  assign current_variant = product.selected_or_first_available_variant
+  assign featured_img_url = current_variant.featured_image | default: product.featured_image
+-%}
+
+<section
+  class="product-splash"
+  data-product-splash
+  data-cart-add-url="{{ routes.cart_add_url }}"
+  style="
+    --ps-overlay-color: {{ overlay_color }};
+    --ps-overlay-opacity: {{ overlay_opacity | divided_by: 100.0 }};
+    --ps-accent-shop: {{ accent_shop }};
+    --ps-accent-select: {{ accent_select }};
+  "
+>
+  <div class="product-splash__bg" aria-hidden="true">
+    {%- if bg_image != blank -%}
+      <div
+        class="product-splash__bg-photo"
+        style="background-image: url('{{ bg_image | image_url: width: 2400 }}');"
+      ></div>
+    {%- else -%}
+      <div class="product-splash__bg-fallback"></div>
+    {%- endif -%}
+    <div class="product-splash__bg-overlay"></div>
+  </div>
+
+  <header class="product-splash__header">
+    <span class="product-splash__logo">{{ logo_text | escape }}</span>
+    <div class="product-splash__status" data-product-splash-clock role="status">
+      <span class="product-splash__weather-icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 4a4 4 0 100 8 4 4 0 000-8z" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M12 12v3m0 0h3m-3 0H9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M4 18h16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.55"/>
+        </svg>
+      </span>
+      <span data-product-splash-clock-text></span>
+    </div>
+  </header>
+
+  <nav class="product-splash__nav" aria-label="{{ section.settings.nav_aria_label | default: 'Shop' }}">
+    <ul class="product-splash__nav-list" role="list">
+      {%- if side_menu != blank and side_menu.links.size > 0 -%}
+        {%- for link in side_menu.links -%}
+          <li class="product-splash__nav-item">
+            <a
+              href="{{ link.url }}"
+              class="product-splash__nav-link{% if forloop.first %} product-splash__nav-link--accent{% endif %}"
+            >
+              <span class="product-splash__nav-icon" aria-hidden="true">
+                {%- if forloop.first -%}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 6.8H21l-5.5 4 2.1 6.5L12 17.8 6.4 19.3l2.1-6.5L3 8.8h6.8L12 2z"/></svg>
+                {%- elsif forloop.index == 2 -%}
+                  <span class="product-splash__mini-badge">✓</span>
+                {%- endif -%}
+              </span>
+              {{ link.title | escape }}
+            </a>
+          </li>
+        {%- endfor -%}
+      {%- else -%}
+        <li class="product-splash__nav-item">
+          <span class="product-splash__nav-empty">{{ 'product_splash.nav.placeholder' | t }}</span>
+        </li>
+      {%- endif -%}
+    </ul>
+  </nav>
+
+  <div class="product-splash__media">
+    <div class="product-splash__media-frame">
+      {%- if featured_img_url != blank -%}
+        {{
+          featured_img_url
+          | image_url: width: 1400
+          | image_tag:
+            loading: 'eager',
+            fetchpriority: 'high',
+            decoding: 'async',
+            alt: product.title,
+            class: 'product-splash__img'
+        }}
+      {%- else -%}
+        <div class="product-splash__img-placeholder">{{ product.title | escape }}</div>
+      {%- endif -%}
+    </div>
+  </div>
+
+  <div class="product-splash__detail">
+    {% form 'product', product, id: 'ProductSplashForm', class: 'product-splash__form', novalidate: 'novalidate' %}
+      <input type="hidden" name="id" value="{{ current_variant.id }}" data-product-splash-variant-id>
+      <input type="hidden" name="quantity" value="1">
+
+      <h1 class="product-splash__title">{{ product.title | escape }}</h1>
+      {%- if product.vendor != blank -%}
+        <p class="product-splash__vendor">{{ product.vendor | escape }}</p>
+      {%- endif -%}
+
+      {%- if product.description != blank -%}
+        <div class="product-splash__description rte">{{ product.description }}</div>
+      {%- endif -%}
+
+      <div class="product-splash__buy-row">
+        <div class="product-splash__price-col">
+          <p class="product-splash__price">
+            <span data-product-splash-price>{{ current_variant.price | money }}</span>
+            <span class="product-splash__compare" data-product-splash-compare {% unless current_variant.compare_at_price > current_variant.price %}hidden{% endunless %}>
+              {%- if current_variant.compare_at_price > current_variant.price -%}
+                {{ current_variant.compare_at_price | money }}
+              {%- endif -%}
+            </span>
+          </p>
+        </div>
+
+        {%- unless product.has_only_default_variant -%}
+          {%- assign first_option = product.options_with_values | first -%}
+          {%- if first_option != blank -%}
+            <div class="product-splash__opts-inline" data-option-row="0">
+              <span class="visually-hidden">{{ first_option.name }}</span>
+              <div class="product-splash__swatches" role="group" aria-label="{{ first_option.name | escape }}">
+                {%- for value in first_option.values -%}
+                  {%- liquid
+                    assign is_selected = false
+                    if current_variant.option1 == value
+                      assign is_selected = true
+                    endif
+                  -%}
+                  <button
+                    type="button"
+                    class="product-splash__swatch{% if is_selected %} is-selected{% endif %}"
+                    data-option-value="{{ value | escape }}"
+                    data-option-index="0"
+                    aria-pressed="{{ is_selected }}"
+                  >
+                    {{ value | escape }}
+                  </button>
+                {%- endfor -%}
+              </div>
+            </div>
+          {%- endif -%}
+        {%- endunless -%}
+      </div>
+
+      {%- unless product.has_only_default_variant -%}
+        {%- assign skip_first = true -%}
+        {%- for option in product.options_with_values -%}
+          {%- if skip_first -%}
+            {%- assign skip_first = false -%}
+          {%- else -%}
+            <div class="product-splash__opts-block" data-option-row="{{ forloop.index0 }}">
+              <p class="product-splash__opt-label">{{ option.name | escape }}</p>
+              <div class="product-splash__swatches product-splash__swatches--stacked" role="group" aria-label="{{ option.name | escape }}">
+                {%- for value in option.values -%}
+                  {%- liquid
+                    assign is_selected = false
+                    if current_variant.options[forloop.parentloop.index0] == value
+                      assign is_selected = true
+                    endif
+                  -%}
+                  <button
+                    type="button"
+                    class="product-splash__swatch{% if is_selected %} is-selected{% endif %}"
+                    data-option-value="{{ value | escape }}"
+                    data-option-index="{{ forloop.parentloop.index0 }}"
+                    aria-pressed="{{ is_selected }}"
+                  >
+                    {{ value | escape }}
+                  </button>
+                {%- endfor -%}
+              </div>
+            </div>
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endunless -%}
+
+      <p class="product-splash__error" data-product-splash-error hidden role="alert"></p>
+
+      <button type="submit" name="add" class="product-splash__cta" data-product-splash-submit {% unless current_variant.available %}disabled{% endunless %}>
+        <span data-product-splash-submit-label>
+          {%- if current_variant.available -%}
+            {{ 'product_splash.add_to_cart' | t }}
+          {%- else -%}
+            {{ 'product_splash.sold_out' | t }}
+          {%- endif -%}
+        </span>
+      </button>
+    {% endform %}
+  </div>
+
+  <div class="product-splash__toast" data-product-splash-toast hidden role="status" aria-live="polite"></div>
+
+  {%- capture product_splash_json -%}
+    {
+      "options": {{ product.options | json }},
+      "variants": [
+        {%- for variant in product.variants -%}
+          {
+            "id": {{ variant.id }},
+            "options": {{ variant.options | json }},
+            "available": {{ variant.available | json }},
+            "price": {{ variant.price | money | json }},
+            "compare_at_price": {% if variant.compare_at_price > variant.price %}{{ variant.compare_at_price | money | json }}{% else %}null{% endif %},
+            "featured_image": {% if variant.featured_image %}{{ variant.featured_image | image_url: width: 1400 | json }}{% else %}null{% endif %}
+          }{%- unless forloop.last %},{% endunless %}
+        {%- endfor -%}
+      ],
+      "initial_options": {{ current_variant.options | json }},
+      "fallback_image": {% if product.featured_image %}{{ product.featured_image | image_url: width: 1400 | json }}{% else %}null{% endif %},
+      "strings": {
+        "add_to_cart": {{ 'product_splash.add_to_cart' | t | json }},
+        "sold_out": {{ 'product_splash.sold_out' | t | json }},
+        "added": {{ 'product_splash.added' | t | json }},
+        "error": {{ 'product_splash.error' | t | json }}
+      }
+    }
+  {%- endcapture -%}
+  <script type="application/json" data-product-splash-data>{{ product_splash_json | strip_newlines | replace: '</', '<\/' }}</script>
+</section>
+
+{% stylesheet %}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;800&display=swap');
+
+  .product-splash {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(120px, 14vw) minmax(0, 1fr) minmax(260px, 34vw);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'header header header'
+      'nav media detail';
+    min-height: 100svh;
+    width: 100%;
+    isolation: isolate;
+    font-family: Inter, var(--font-body-family, system-ui, sans-serif);
+    font-weight: 700;
+    color: #fff;
+    padding: clamp(0.75rem, 2vw, 1.25rem) clamp(0.75rem, 2.5vw, 2rem) clamp(1rem, 3vw, 2rem);
+    gap: clamp(0.5rem, 2vw, 2rem);
+    align-items: center;
+  }
+
+  .product-splash__bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .product-splash__bg-photo,
+  .product-splash__bg-fallback {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    transform: scale(1.02);
+    filter: saturate(0.92) blur(1px);
+  }
+
+  .product-splash__bg-fallback {
+    background-image: linear-gradient(135deg, #1a2440 0%, #0d1528 45%, #1e3358 100%);
+  }
+
+  .product-splash__bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--ps-overlay-color, #1e6fd9) calc(var(--ps-overlay-opacity, 0.42) * 100%), transparent);
+  }
+
+  .product-splash__header {
+    grid-area: header;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+  }
+
+  .product-splash__logo {
+    font-size: clamp(1rem, 1.6vw, 1.35rem);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+  }
+
+  .product-splash__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(10px);
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+  }
+
+  .product-splash__weather-icon {
+    display: flex;
+    opacity: 0.95;
+  }
+
+  .product-splash__nav {
+    grid-area: nav;
+    position: relative;
+    z-index: 2;
+    align-self: center;
+  }
+
+  .product-splash__nav-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1rem, 2.5vw, 1.75rem);
+  }
+
+  .product-splash__nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: clamp(1.05rem, 2vw, 1.45rem);
+    text-decoration: none;
+    color: #fff;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+    letter-spacing: 0.02em;
+    padding: 0.15rem 0.35rem;
+    border-radius: 0.25rem;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), transparent);
+    transition: opacity 0.15s ease;
+  }
+
+  .product-splash__nav-link:hover {
+    opacity: 0.88;
+  }
+
+  .product-splash__nav-link--accent {
+    color: var(--ps-accent-shop, #e82222);
+  }
+
+  .product-splash__nav-icon {
+    display: inline-flex;
+    width: 1.25em;
+    justify-content: center;
+    opacity: 0.95;
+  }
+
+  .product-splash__mini-badge {
+    display: inline-grid;
+    place-items: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    font-size: 0.55rem;
+    background: #2563eb;
+    border-radius: 2px;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .product-splash__nav-empty {
+    font-size: 0.85rem;
+    opacity: 0.75;
+    max-width: 12rem;
+    line-height: 1.35;
+  }
+
+  .product-splash__media {
+    grid-area: media;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: min(70vh, 640px);
+  }
+
+  .product-splash__media-frame {
+    width: min(420px, 88%);
+    filter: drop-shadow(0 28px 60px rgba(0, 0, 0, 0.45));
+  }
+
+  .product-splash__img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .product-splash__img-placeholder {
+    aspect-ratio: 3 / 4;
+    display: grid;
+    place-items: center;
+    padding: 2rem;
+    text-align: center;
+    font-size: 1rem;
+    opacity: 0.8;
+    border: 1px dashed rgba(255, 255, 255, 0.35);
+    border-radius: 0.5rem;
+  }
+
+  .product-splash__detail {
+    grid-area: detail;
+    position: relative;
+    z-index: 2;
+    align-self: center;
+    max-width: 34rem;
+    justify-self: end;
+    width: 100%;
+  }
+
+  .product-splash__title {
+    margin: 0 0 0.25rem;
+    font-size: clamp(2rem, 4.5vw, 3.75rem);
+    line-height: 1.05;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    text-shadow: 0 4px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  .product-splash__vendor {
+    margin: 0 0 1rem;
+    font-size: clamp(1rem, 1.8vw, 1.25rem);
+    font-weight: 700;
+    opacity: 0.92;
+  }
+
+  .product-splash__description {
+    margin: 0 0 1.25rem;
+    font-size: clamp(0.88rem, 1.35vw, 1rem);
+    font-weight: 600;
+    line-height: 1.55;
+    opacity: 0.92;
+    max-height: min(28vh, 220px);
+    overflow: auto;
+    padding-right: 0.25rem;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  }
+
+  .product-splash__description.rte p:first-child {
+    margin-top: 0;
+  }
+
+  .product-splash__description.rte p:last-child {
+    margin-bottom: 0;
+  }
+
+  .product-splash__buy-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .product-splash__price {
+    margin: 0;
+    font-size: clamp(1.5rem, 2.8vw, 2.15rem);
+    font-weight: 800;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .product-splash__compare {
+    font-size: 0.65em;
+    font-weight: 700;
+    opacity: 0.55;
+    text-decoration: line-through;
+  }
+
+  .product-splash__compare[hidden] {
+    display: none;
+  }
+
+  .product-splash__opts-inline {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .product-splash__opts-block {
+    margin-bottom: 0.85rem;
+  }
+
+  .product-splash__opt-label {
+    margin: 0 0 0.35rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.75;
+  }
+
+  .product-splash__swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.65rem;
+    align-items: center;
+  }
+
+  .product-splash__swatches--stacked {
+    flex-wrap: wrap;
+  }
+
+  .product-splash__swatch {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: #fff;
+    font: inherit;
+    font-size: clamp(0.95rem, 1.5vw, 1.15rem);
+    font-weight: 800;
+    cursor: pointer;
+    opacity: 0.88;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    transition: color 0.12s ease, opacity 0.12s ease;
+    min-width: 1.5em;
+    text-align: center;
+  }
+
+  .product-splash__swatch:hover {
+    opacity: 1;
+  }
+
+  .product-splash__swatch.is-selected {
+    color: var(--ps-accent-select, #c96f3a);
+    opacity: 1;
+  }
+
+  .product-splash__cta {
+    margin-top: 0.25rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: #fff;
+    font: inherit;
+    font-size: clamp(1.15rem, 2vw, 1.65rem);
+    font-weight: 800;
+    cursor: pointer;
+    text-shadow: 0 3px 18px rgba(0, 0, 0, 0.45);
+    letter-spacing: 0.02em;
+    transition: opacity 0.15s ease;
+  }
+
+  .product-splash__cta:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+
+  .product-splash__cta:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .product-splash__error {
+    margin: 0.35rem 0 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #fecaca;
+  }
+
+  .product-splash__error[hidden] {
+    display: none;
+  }
+
+  .product-splash__toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 10;
+    padding: 0.85rem 1.1rem;
+    border-radius: 0.65rem;
+    background: rgba(12, 14, 22, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+    font-size: 0.9rem;
+    font-weight: 600;
+    max-width: min(360px, 92vw);
+  }
+
+  .product-splash__toast[hidden] {
+    display: none;
+  }
+
+  @media (max-width: 960px) {
+    .product-splash {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        'header'
+        'media'
+        'detail'
+        'nav';
+      align-items: start;
+    }
+
+    .product-splash__nav-list {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+    }
+
+    .product-splash__media {
+      min-height: auto;
+    }
+
+    .product-splash__detail {
+      justify-self: stretch;
+    }
+  }
+{% endstylesheet %}
+
+<script>
+  (function () {
+    var root = document.querySelector('[data-product-splash]');
+    if (!root) return;
+
+    var clockEl = root.querySelector('[data-product-splash-clock-text]');
+    if (clockEl) {
+      function tick() {
+        var now = new Date();
+        var opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+        clockEl.textContent = now.toLocaleString(undefined, opts);
+      }
+      tick();
+      setInterval(tick, 30000);
+    }
+
+    var dataEl = root.querySelector('[data-product-splash-data]');
+    if (!dataEl) return;
+    var payload = {};
+    try {
+      payload = JSON.parse(dataEl.textContent);
+    } catch (_e) {
+      return;
+    }
+
+    var variants = payload.variants || [];
+    var selected = (payload.initial_options || []).slice();
+    var fallbackImage = payload.fallback_image || '';
+    var strings = payload.strings || {};
+
+    var idInput = root.querySelector('[data-product-splash-variant-id]');
+    var priceEl = root.querySelector('[data-product-splash-price]');
+    var compareEl = root.querySelector('[data-product-splash-compare]');
+    var imgEl = root.querySelector('.product-splash__img');
+    var form = root.querySelector('#ProductSplashForm');
+    var errorEl = root.querySelector('[data-product-splash-error]');
+    var submitBtn = root.querySelector('[data-product-splash-submit]');
+    var submitLabel = root.querySelector('[data-product-splash-submit-label]');
+    var toastEl = root.querySelector('[data-product-splash-toast]');
+
+    function findVariant(opts) {
+      return variants.find(function (v) {
+        return v.options.every(function (o, i) {
+          return o === opts[i];
+        });
+      });
+    }
+
+    function nearestVariant(opts) {
+      var exact = findVariant(opts);
+      if (exact) return exact;
+      for (var i = opts.length - 1; i >= 0; i--) {
+        if (!opts[i]) continue;
+        var cand = variants.find(function (v) {
+          return v.options[i] === opts[i] && v.available;
+        });
+        if (cand) return cand;
+      }
+      return variants.find(function (v) {
+        return v.available;
+      }) || variants[0];
+    }
+
+    function syncUi(variant) {
+      if (!variant) return;
+      if (idInput) idInput.value = String(variant.id);
+      if (priceEl) priceEl.textContent = variant.price;
+      if (compareEl) {
+        if (variant.compare_at_price) {
+          compareEl.textContent = variant.compare_at_price;
+          compareEl.hidden = false;
+        } else {
+          compareEl.textContent = '';
+          compareEl.hidden = true;
+        }
+      }
+      if (imgEl) {
+        imgEl.src = variant.featured_image || fallbackImage || imgEl.src;
+      }
+      selected = variant.options.slice();
+
+      root.querySelectorAll('.product-splash__swatch').forEach(function (btn) {
+        var idx = parseInt(btn.getAttribute('data-option-index'), 10);
+        var val = btn.getAttribute('data-option-value');
+        var on = selected[idx] === val;
+        btn.classList.toggle('is-selected', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+
+      if (submitBtn && submitLabel) {
+        if (variant.available) {
+          submitBtn.disabled = false;
+          submitLabel.textContent = strings.add_to_cart || 'Add To Cart';
+        } else {
+          submitBtn.disabled = true;
+          submitLabel.textContent = strings.sold_out || 'Sold out';
+        }
+      }
+
+      try {
+        var url = new URL(window.location.href);
+        url.searchParams.set('variant', String(variant.id));
+        window.history.replaceState({}, '', url.toString());
+      } catch (_e) {}
+    }
+
+    root.querySelectorAll('.product-splash__swatch').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = parseInt(btn.getAttribute('data-option-index'), 10);
+        var val = btn.getAttribute('data-option-value');
+        var next = selected.slice();
+        next[idx] = val;
+        var v = nearestVariant(next);
+        if (v) syncUi(v);
+      });
+    });
+
+    function cartAddUrl() {
+      var raw = root.getAttribute('data-cart-add-url') || '/cart/add';
+      return /\.js(\?|$)/i.test(raw) ? raw : raw.replace(/\/?$/, '') + '.js';
+    }
+
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!idInput) return;
+        if (errorEl) {
+          errorEl.hidden = true;
+          errorEl.textContent = '';
+        }
+        var fd = new FormData(form);
+        fetch(cartAddUrl(), {
+          method: 'POST',
+          body: fd,
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              if (!res.ok) throw new Error((data && (data.description || data.message)) || strings.error);
+              return data;
+            });
+          })
+          .then(function () {
+            if (toastEl) {
+              toastEl.textContent = strings.added || 'Added';
+              toastEl.hidden = false;
+              clearTimeout(toastEl._t);
+              toastEl._t = setTimeout(function () {
+                toastEl.hidden = true;
+              }, 2200);
+            }
+          })
+          .catch(function (err) {
+            if (errorEl) {
+              errorEl.textContent = err && err.message ? err.message : strings.error || 'Error';
+              errorEl.hidden = false;
+            }
+          });
+      });
+    }
+
+    var boot = findVariant(selected);
+    if (boot) syncUi(boot);
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "t:product_splash.section.name",
+  "tag": "section",
+  "class": "section--product-splash",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "t:product_splash.section.settings.intro"
+    },
+    {
+      "type": "image_picker",
+      "id": "background_image",
+      "label": "t:product_splash.section.settings.background_image.label"
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "t:product_splash.section.settings.overlay_color.label",
+      "default": "#1e6fd9"
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "label": "t:product_splash.section.settings.overlay_opacity.label",
+      "min": 10,
+      "max": 85,
+      "step": 1,
+      "unit": "%",
+      "default": 42
+    },
+    {
+      "type": "color",
+      "id": "accent_shop_color",
+      "label": "t:product_splash.section.settings.accent_shop_color.label",
+      "default": "#e82222"
+    },
+    {
+      "type": "color",
+      "id": "accent_select_color",
+      "label": "t:product_splash.section.settings.accent_select_color.label",
+      "default": "#c96f3a"
+    },
+    {
+      "type": "text",
+      "id": "logo_mark",
+      "label": "t:product_splash.section.settings.logo_mark.label",
+      "default": "RS"
+    },
+    {
+      "type": "link_list",
+      "id": "side_menu",
+      "label": "t:product_splash.section.settings.side_menu.label"
+    },
+    {
+      "type": "text",
+      "id": "nav_aria_label",
+      "label": "t:product_splash.section.settings.nav_aria_label.label",
+      "default": "Shop menu"
+    }
+  ]
+}
+{% endschema %}

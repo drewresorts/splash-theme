@@ -1,0 +1,679 @@
+{%- liquid
+  assign stream_url = section.settings.stream_url | strip
+  assign poster_image = section.settings.poster_image
+  assign overlay_opacity = section.settings.overlay_opacity | default: 55
+  assign overlay_color = section.settings.overlay_color | default: '#000000'
+  assign accent_color = section.settings.accent_color | default: '#ffffff'
+  assign launch_date = section.settings.launch_date | strip
+  assign mute_audio = section.settings.mute_audio
+-%}
+
+<section
+  class="coming-soon"
+  data-coming-soon
+  data-stream-url="{{ stream_url | escape }}"
+  data-launch-date="{{ launch_date | escape }}"
+  data-mute="{% if mute_audio %}true{% else %}false{% endif %}"
+  style="
+    --overlay-color: {{ overlay_color }};
+    --overlay-opacity: {{ overlay_opacity | divided_by: 100.0 }};
+    --accent-color: {{ accent_color }};
+  "
+>
+  <div class="coming-soon__media">
+    <video
+      class="coming-soon__video"
+      data-coming-soon-video
+      autoplay
+      playsinline
+      {% if mute_audio %}muted{% endif %}
+      loop
+      preload="auto"
+      {% if poster_image %}poster="{{ poster_image | image_url: width: 1920 }}"{% endif %}
+      aria-hidden="true"
+    ></video>
+    {%- if poster_image -%}
+      {{
+        poster_image
+        | image_url: width: 1920
+        | image_tag:
+          class: 'coming-soon__fallback',
+          loading: 'eager',
+          decoding: 'async',
+          alt: '',
+          'data-coming-soon-fallback': '',
+          hidden: ''
+      }}
+    {%- endif -%}
+    <div class="coming-soon__overlay" aria-hidden="true"></div>
+  </div>
+
+  <div class="coming-soon__content">
+    {%- if section.settings.eyebrow != blank -%}
+      <p class="coming-soon__eyebrow">{{ section.settings.eyebrow | escape }}</p>
+    {%- endif -%}
+
+    {%- if section.settings.heading != blank -%}
+      <h1 class="coming-soon__heading">{{ section.settings.heading }}</h1>
+    {%- endif -%}
+
+    {%- if section.settings.subheading != blank -%}
+      <p class="coming-soon__subheading">{{ section.settings.subheading }}</p>
+    {%- endif -%}
+
+    {%- if launch_date != blank -%}
+      <div
+        class="coming-soon__countdown"
+        data-coming-soon-countdown
+        role="timer"
+        aria-live="polite"
+      >
+        <div class="coming-soon__countdown-cell">
+          <span class="coming-soon__countdown-value" data-unit="days">--</span>
+          <span class="coming-soon__countdown-label">{{ 'coming_soon.countdown.days' | t }}</span>
+        </div>
+        <div class="coming-soon__countdown-cell">
+          <span class="coming-soon__countdown-value" data-unit="hours">--</span>
+          <span class="coming-soon__countdown-label">{{ 'coming_soon.countdown.hours' | t }}</span>
+        </div>
+        <div class="coming-soon__countdown-cell">
+          <span class="coming-soon__countdown-value" data-unit="minutes">--</span>
+          <span class="coming-soon__countdown-label">{{ 'coming_soon.countdown.minutes' | t }}</span>
+        </div>
+        <div class="coming-soon__countdown-cell">
+          <span class="coming-soon__countdown-value" data-unit="seconds">--</span>
+          <span class="coming-soon__countdown-label">{{ 'coming_soon.countdown.seconds' | t }}</span>
+        </div>
+      </div>
+    {%- endif -%}
+
+    {%- if section.settings.show_signup -%}
+      {%- form 'customer', class: 'coming-soon__form', novalidate: 'novalidate' -%}
+        <input type="hidden" name="contact[tags]" value="coming-soon">
+        <label class="coming-soon__form-label" for="ComingSoonEmail">
+          {{ 'coming_soon.signup.label' | t }}
+        </label>
+        <div class="coming-soon__form-row">
+          <input
+            id="ComingSoonEmail"
+            class="coming-soon__form-input"
+            type="email"
+            name="contact[email]"
+            autocomplete="email"
+            required
+            placeholder="{{ 'coming_soon.signup.placeholder' | t }}"
+          >
+          <button class="coming-soon__form-button" type="submit">
+            {{ 'coming_soon.signup.button' | t }}
+          </button>
+        </div>
+
+        {%- if form.posted_successfully? -%}
+          <p class="coming-soon__form-message coming-soon__form-message--success" role="status">
+            {{ 'coming_soon.signup.success' | t }}
+          </p>
+        {%- elsif form.errors -%}
+          <p class="coming-soon__form-message coming-soon__form-message--error" role="alert">
+            {{ form.errors | default_errors }}
+          </p>
+        {%- endif -%}
+      {%- endform -%}
+    {%- endif -%}
+
+    {%- assign social_blocks = section.blocks | where: 'type', 'social_link' -%}
+    {%- if social_blocks.size > 0 -%}
+      <ul class="coming-soon__social" role="list">
+        {%- for block in social_blocks -%}
+          {%- if block.settings.url != blank and block.settings.label != blank -%}
+            <li {{ block.shopify_attributes }}>
+              <a
+                href="{{ block.settings.url }}"
+                rel="noopener"
+                target="_blank"
+                class="coming-soon__social-link"
+              >
+                {{ block.settings.label | escape }}
+              </a>
+            </li>
+          {%- endif -%}
+        {%- endfor -%}
+      </ul>
+    {%- endif -%}
+
+    {%- if section.settings.footer_text != blank -%}
+      <p class="coming-soon__footer">{{ section.settings.footer_text }}</p>
+    {%- endif -%}
+
+    <button
+      type="button"
+      class="coming-soon__sound"
+      data-coming-soon-sound
+      aria-pressed="{% if mute_audio %}false{% else %}true{% endif %}"
+      hidden
+    >
+      <span data-sound-on>{{ 'coming_soon.sound.mute' | t }}</span>
+      <span data-sound-off>{{ 'coming_soon.sound.unmute' | t }}</span>
+    </button>
+  </div>
+</section>
+
+{% stylesheet %}
+  .coming-soon {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 100svh;
+    width: 100%;
+    overflow: hidden;
+    color: var(--accent-color);
+    font-family: var(--font-body-family, system-ui, sans-serif);
+    isolation: isolate;
+  }
+
+  .coming-soon__media {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+  }
+
+  .coming-soon__video,
+  .coming-soon__fallback {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .coming-soon__fallback[hidden] {
+    display: none;
+  }
+
+  .coming-soon__overlay {
+    position: absolute;
+    inset: 0;
+    background-color: var(--overlay-color);
+    opacity: var(--overlay-opacity);
+    pointer-events: none;
+  }
+
+  .coming-soon__content {
+    width: min(720px, 92vw);
+    padding: clamp(2rem, 6vw, 4rem);
+    text-align: center;
+    backdrop-filter: blur(2px);
+  }
+
+  .coming-soon__eyebrow {
+    margin: 0 0 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    font-size: 0.85rem;
+    opacity: 0.85;
+  }
+
+  .coming-soon__heading {
+    margin: 0 0 1rem;
+    font-size: clamp(2.25rem, 6vw, 4.5rem);
+    line-height: 1.05;
+    font-weight: 600;
+  }
+
+  .coming-soon__subheading {
+    margin: 0 auto 2rem;
+    max-width: 48ch;
+    font-size: clamp(1rem, 1.6vw, 1.15rem);
+    line-height: 1.5;
+    opacity: 0.9;
+  }
+
+  .coming-soon__countdown {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin: 0 auto 2rem;
+    max-width: 28rem;
+  }
+
+  .coming-soon__countdown-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.85rem 0.25rem;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 35%, transparent);
+    border-radius: 0.65rem;
+    background: color-mix(in srgb, var(--overlay-color) 35%, transparent);
+  }
+
+  .coming-soon__countdown-value {
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .coming-soon__countdown-label {
+    margin-top: 0.4rem;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    opacity: 0.8;
+  }
+
+  .coming-soon__form {
+    margin: 0 auto 2rem;
+    max-width: 28rem;
+    text-align: left;
+  }
+
+  .coming-soon__form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+
+  .coming-soon__form-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .coming-soon__form-input {
+    flex: 1 1 14rem;
+    min-width: 0;
+    padding: 0.85rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+    background: color-mix(in srgb, var(--overlay-color) 55%, transparent);
+    color: var(--accent-color);
+    font: inherit;
+  }
+
+  .coming-soon__form-input::placeholder {
+    color: color-mix(in srgb, var(--accent-color) 65%, transparent);
+  }
+
+  .coming-soon__form-input:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+  }
+
+  .coming-soon__form-button {
+    padding: 0.85rem 1.4rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--accent-color);
+    background: var(--accent-color);
+    color: var(--overlay-color);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 120ms ease;
+  }
+
+  .coming-soon__form-button:hover,
+  .coming-soon__form-button:focus-visible {
+    opacity: 0.85;
+    outline: none;
+  }
+
+  .coming-soon__form-message {
+    margin: 0.75rem 0 0;
+    font-size: 0.9rem;
+  }
+
+  .coming-soon__form-message--error {
+    color: #ffb4b4;
+  }
+
+  .coming-soon__social {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    justify-content: center;
+    list-style: none;
+    margin: 0 0 1.5rem;
+    padding: 0;
+  }
+
+  .coming-soon__social-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+    padding-bottom: 2px;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+  }
+
+  .coming-soon__social-link:hover,
+  .coming-soon__social-link:focus-visible {
+    border-bottom-color: var(--accent-color);
+    outline: none;
+  }
+
+  .coming-soon__footer {
+    margin: 0;
+    font-size: 0.75rem;
+    opacity: 0.75;
+    letter-spacing: 0.05em;
+  }
+
+  .coming-soon__sound {
+    position: absolute;
+    bottom: 1.25rem;
+    right: 1.25rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+    background: color-mix(in srgb, var(--overlay-color) 55%, transparent);
+    color: var(--accent-color);
+    font: inherit;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .coming-soon__sound[hidden] {
+    display: none;
+  }
+
+  .coming-soon__sound[aria-pressed='true'] [data-sound-off] {
+    display: none;
+  }
+
+  .coming-soon__sound[aria-pressed='false'] [data-sound-on] {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .coming-soon__video {
+      display: none;
+    }
+    .coming-soon__fallback[hidden] {
+      display: block;
+    }
+  }
+{% endstylesheet %}
+
+{% javascript %}
+  (function () {
+    const root = document.querySelector('[data-coming-soon]');
+    if (!root) return;
+
+    const video = root.querySelector('[data-coming-soon-video]');
+    const fallback = root.querySelector('[data-coming-soon-fallback]');
+    const soundButton = root.querySelector('[data-coming-soon-sound]');
+    const countdown = root.querySelector('[data-coming-soon-countdown]');
+    const streamUrl = (root.dataset.streamUrl || '').trim();
+    const launchDate = (root.dataset.launchDate || '').trim();
+
+    function showFallback() {
+      if (video) video.style.display = 'none';
+      if (fallback) {
+        fallback.hidden = false;
+        fallback.removeAttribute('hidden');
+      }
+    }
+
+    function attachStream() {
+      if (!video || !streamUrl) {
+        showFallback();
+        return;
+      }
+
+      const isHls = /\.m3u8(\?|$)/i.test(streamUrl);
+      const isMp4OrWebm = /\.(mp4|webm|mov)(\?|$)/i.test(streamUrl);
+
+      if (isMp4OrWebm) {
+        video.src = streamUrl;
+        video.play().catch(showFallback);
+        return;
+      }
+
+      if (isHls) {
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = streamUrl;
+          video.play().catch(showFallback);
+          return;
+        }
+
+        loadHlsLibrary()
+          .then(function (Hls) {
+            if (!Hls || !Hls.isSupported()) {
+              showFallback();
+              return;
+            }
+            const hls = new Hls({
+              lowLatencyMode: true,
+              backBufferLength: 10,
+              maxBufferLength: 6,
+            });
+            hls.loadSource(streamUrl);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.ERROR, function (_evt, data) {
+              if (data && data.fatal) {
+                hls.destroy();
+                showFallback();
+              }
+            });
+            video.play().catch(function () {});
+          })
+          .catch(showFallback);
+        return;
+      }
+
+      video.src = streamUrl;
+      video.play().catch(showFallback);
+    }
+
+    function loadHlsLibrary() {
+      return new Promise(function (resolve, reject) {
+        if (window.Hls) {
+          resolve(window.Hls);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js';
+        script.async = true;
+        script.crossOrigin = 'anonymous';
+        script.onload = function () {
+          resolve(window.Hls);
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    function setupSoundToggle() {
+      if (!video || !soundButton) return;
+      const startMuted = root.dataset.mute !== 'false';
+      video.muted = startMuted;
+      soundButton.setAttribute('aria-pressed', String(!startMuted));
+      soundButton.hidden = false;
+      soundButton.removeAttribute('hidden');
+      soundButton.addEventListener('click', function () {
+        video.muted = !video.muted;
+        soundButton.setAttribute('aria-pressed', String(!video.muted));
+        if (!video.muted) video.play().catch(function () {});
+      });
+    }
+
+    function startCountdown() {
+      if (!countdown || !launchDate) return;
+      const target = new Date(launchDate).getTime();
+      if (Number.isNaN(target)) return;
+
+      const cells = {
+        days: countdown.querySelector('[data-unit="days"]'),
+        hours: countdown.querySelector('[data-unit="hours"]'),
+        minutes: countdown.querySelector('[data-unit="minutes"]'),
+        seconds: countdown.querySelector('[data-unit="seconds"]'),
+      };
+
+      function pad(n) {
+        return n < 10 ? '0' + n : String(n);
+      }
+
+      function tick() {
+        const diff = Math.max(0, target - Date.now());
+        const totalSeconds = Math.floor(diff / 1000);
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        if (cells.days) cells.days.textContent = pad(days);
+        if (cells.hours) cells.hours.textContent = pad(hours);
+        if (cells.minutes) cells.minutes.textContent = pad(minutes);
+        if (cells.seconds) cells.seconds.textContent = pad(seconds);
+
+        if (diff <= 0) {
+          clearInterval(timer);
+        }
+      }
+
+      tick();
+      const timer = setInterval(tick, 1000);
+    }
+
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      showFallback();
+    } else {
+      attachStream();
+      setupSoundToggle();
+    }
+    startCountdown();
+  })();
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "t:coming_soon.section.name",
+  "tag": "section",
+  "class": "section--coming-soon",
+  "settings": [
+    {
+      "type": "header",
+      "content": "t:coming_soon.section.headers.stream"
+    },
+    {
+      "type": "url",
+      "id": "stream_url",
+      "label": "t:coming_soon.section.settings.stream_url.label",
+      "info": "t:coming_soon.section.settings.stream_url.info"
+    },
+    {
+      "type": "image_picker",
+      "id": "poster_image",
+      "label": "t:coming_soon.section.settings.poster_image.label",
+      "info": "t:coming_soon.section.settings.poster_image.info"
+    },
+    {
+      "type": "checkbox",
+      "id": "mute_audio",
+      "label": "t:coming_soon.section.settings.mute_audio.label",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "t:coming_soon.section.headers.copy"
+    },
+    {
+      "type": "text",
+      "id": "eyebrow",
+      "label": "t:coming_soon.section.settings.eyebrow.label",
+      "default": "Coming soon"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "t:coming_soon.section.settings.heading.label",
+      "default": "Something special is on the way"
+    },
+    {
+      "type": "textarea",
+      "id": "subheading",
+      "label": "t:coming_soon.section.settings.subheading.label",
+      "default": "We're putting the final touches on the launch. Tune into the live feed and be the first to know when the doors open."
+    },
+    {
+      "type": "text",
+      "id": "footer_text",
+      "label": "t:coming_soon.section.settings.footer_text.label"
+    },
+    {
+      "type": "header",
+      "content": "t:coming_soon.section.headers.launch"
+    },
+    {
+      "type": "text",
+      "id": "launch_date",
+      "label": "t:coming_soon.section.settings.launch_date.label",
+      "info": "t:coming_soon.section.settings.launch_date.info"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_signup",
+      "label": "t:coming_soon.section.settings.show_signup.label",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "t:coming_soon.section.headers.style"
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "t:coming_soon.section.settings.overlay_color.label",
+      "default": "#0b0b0f"
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "label": "t:coming_soon.section.settings.overlay_opacity.label",
+      "min": 0,
+      "max": 90,
+      "step": 5,
+      "unit": "%",
+      "default": 55
+    },
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "t:coming_soon.section.settings.accent_color.label",
+      "default": "#ffffff"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "social_link",
+      "name": "t:coming_soon.blocks.social_link.name",
+      "settings": [
+        {
+          "type": "text",
+          "id": "label",
+          "label": "t:coming_soon.blocks.social_link.label",
+          "default": "Instagram"
+        },
+        {
+          "type": "url",
+          "id": "url",
+          "label": "t:coming_soon.blocks.social_link.url"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "t:coming_soon.section.presets.default",
+      "blocks": [
+        { "type": "social_link" },
+        { "type": "social_link" }
+      ]
+    }
+  ]
+}
+{% endschema %}

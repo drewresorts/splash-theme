@@ -1,0 +1,562 @@
+{%- liquid
+  assign overlay_opacity = section.settings.overlay_opacity | default: 42
+  assign overlay_color = section.settings.overlay_color | default: '#1e6fd9'
+  assign accent_shop = section.settings.accent_shop_color | default: '#e82222'
+  assign bg_image = section.settings.background_image
+  assign side_menu = section.settings.side_menu
+  assign logo_text = section.settings.logo_mark | default: shop.name
+  assign vertical_title = section.settings.vertical_title | default: 'collections'
+  assign vertical_color = section.settings.vertical_title_color | default: '#0b1f3d'
+-%}
+
+<section
+  class="catalog-splash"
+  data-catalog-splash
+  style="
+    --cs-overlay-color: {{ overlay_color }};
+    --cs-overlay-opacity: {{ overlay_opacity | divided_by: 100.0 }};
+    --cs-accent-shop: {{ accent_shop }};
+    --cs-vertical-color: {{ vertical_color }};
+  "
+>
+  <div class="catalog-splash__bg" aria-hidden="true">
+    {%- if bg_image != blank -%}
+      <div
+        class="catalog-splash__bg-photo"
+        style="background-image: url('{{ bg_image | image_url: width: 2400 }}');"
+      ></div>
+    {%- else -%}
+      <div class="catalog-splash__bg-fallback"></div>
+    {%- endif -%}
+    <div class="catalog-splash__bg-overlay"></div>
+  </div>
+
+  <header class="catalog-splash__header">
+    <span class="catalog-splash__logo">{{ logo_text | escape }}</span>
+    <div class="catalog-splash__status" data-catalog-splash-clock role="status">
+      <span class="catalog-splash__weather-icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 4a4 4 0 100 8 4 4 0 000-8z" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M12 12v3m0 0h3m-3 0H9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M4 18h16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.55"/>
+        </svg>
+      </span>
+      <span data-catalog-splash-clock-text></span>
+    </div>
+  </header>
+
+  <nav class="catalog-splash__nav" aria-label="{{ section.settings.nav_aria_label | default: 'Shop' }}">
+    <ul class="catalog-splash__nav-list" role="list">
+      {%- if side_menu != blank and side_menu.links.size > 0 -%}
+        {%- for link in side_menu.links -%}
+          <li class="catalog-splash__nav-item">
+            <a
+              href="{{ link.url }}"
+              class="catalog-splash__nav-link{% if forloop.first %} catalog-splash__nav-link--accent{% endif %}"
+            >
+              <span class="catalog-splash__nav-icon" aria-hidden="true">
+                {%- if forloop.first -%}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.2 6.8H21l-5.5 4 2.1 6.5L12 17.8 6.4 19.3l2.1-6.5L3 8.8h6.8L12 2z"/></svg>
+                {%- elsif forloop.index == 2 -%}
+                  <span class="catalog-splash__mini-badge">✓</span>
+                {%- endif -%}
+              </span>
+              {{ link.title | escape }}
+            </a>
+          </li>
+        {%- endfor -%}
+      {%- else -%}
+        <li class="catalog-splash__nav-item">
+          <span class="catalog-splash__nav-empty">{{ 'catalog_splash.nav.placeholder' | t }}</span>
+        </li>
+      {%- endif -%}
+    </ul>
+  </nav>
+
+  <div class="catalog-splash__grid-wrap">
+    <ul class="catalog-splash__grid" role="list">
+      {%- for block in section.blocks -%}
+        {%- case block.type -%}
+          {%- when 'tile' -%}
+            {%- liquid
+              assign tile_href = block.settings.link
+              if block.settings.collection != blank
+                assign tile_href = block.settings.collection.url
+              endif
+              if tile_href == blank
+                assign tile_href = '#'
+              endif
+            -%}
+            <li class="catalog-splash__tile" {{ block.shopify_attributes }}>
+              <a class="catalog-splash__tile-link" href="{{ tile_href }}">
+                <span class="catalog-splash__tile-label">{{ block.settings.label | escape }}</span>
+                <span class="catalog-splash__tile-visual">
+                  {%- if block.settings.image != blank -%}
+                    {{
+                      block.settings.image
+                      | image_url: width: 800
+                      | image_tag:
+                        loading: 'lazy',
+                        decoding: 'async',
+                        alt: block.settings.label,
+                        class: 'catalog-splash__tile-img'
+                    }}
+                  {%- else -%}
+                    <span class="catalog-splash__tile-ph" aria-hidden="true"></span>
+                  {%- endif -%}
+                </span>
+              </a>
+            </li>
+        {%- endcase -%}
+      {%- endfor -%}
+    </ul>
+  </div>
+
+  <div class="catalog-splash__rail" aria-hidden="true">
+    <p class="catalog-splash__rail-text">{{ vertical_title | escape }}</p>
+  </div>
+</section>
+
+{% stylesheet %}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;800&display=swap');
+
+  .catalog-splash {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(120px, 14vw) minmax(0, 1fr) minmax(2.5rem, 5vw);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'header header header'
+      'nav grid rail';
+    min-height: 100svh;
+    width: 100%;
+    isolation: isolate;
+    font-family: Inter, var(--font-body-family, system-ui, sans-serif);
+    font-weight: 700;
+    color: #fff;
+    padding: clamp(0.75rem, 2vw, 1.25rem) clamp(0.75rem, 2.5vw, 2rem) clamp(1rem, 3vw, 2rem);
+    gap: clamp(0.5rem, 2vw, 1.5rem);
+    align-items: center;
+  }
+
+  .catalog-splash__bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .catalog-splash__bg-photo,
+  .catalog-splash__bg-fallback {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    transform: scale(1.02);
+    filter: saturate(0.92) blur(1px);
+  }
+
+  .catalog-splash__bg-fallback {
+    background-image: linear-gradient(135deg, #1a2440 0%, #0d1528 45%, #1e3358 100%);
+  }
+
+  .catalog-splash__bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--cs-overlay-color, #1e6fd9) calc(var(--cs-overlay-opacity, 0.42) * 100%), transparent);
+  }
+
+  .catalog-splash__header {
+    grid-area: header;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+  }
+
+  .catalog-splash__logo {
+    font-size: clamp(1rem, 1.6vw, 1.35rem);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+  }
+
+  .catalog-splash__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(10px);
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+  }
+
+  .catalog-splash__weather-icon {
+    display: flex;
+    opacity: 0.95;
+  }
+
+  .catalog-splash__nav {
+    grid-area: nav;
+    position: relative;
+    z-index: 2;
+    align-self: center;
+  }
+
+  .catalog-splash__nav-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1rem, 2.5vw, 1.75rem);
+  }
+
+  .catalog-splash__nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: clamp(1.05rem, 2vw, 1.45rem);
+    text-decoration: none;
+    color: #fff;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+    letter-spacing: 0.02em;
+    padding: 0.15rem 0.35rem;
+    border-radius: 0.25rem;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), transparent);
+    transition: opacity 0.15s ease;
+  }
+
+  .catalog-splash__nav-link:hover {
+    opacity: 0.88;
+  }
+
+  .catalog-splash__nav-link--accent {
+    color: var(--cs-accent-shop, #e82222);
+  }
+
+  .catalog-splash__nav-icon {
+    display: inline-flex;
+    width: 1.25em;
+    justify-content: center;
+    opacity: 0.95;
+  }
+
+  .catalog-splash__mini-badge {
+    display: inline-grid;
+    place-items: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    font-size: 0.55rem;
+    background: #2563eb;
+    border-radius: 2px;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .catalog-splash__nav-empty {
+    font-size: 0.85rem;
+    opacity: 0.75;
+    max-width: 12rem;
+    line-height: 1.35;
+  }
+
+  .catalog-splash__grid-wrap {
+    grid-area: grid;
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: min(920px, 100%);
+    justify-self: center;
+    align-self: center;
+  }
+
+  .catalog-splash__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(1rem, 3vw, 2rem);
+    align-items: start;
+  }
+
+  .catalog-splash__tile {
+    margin: 0;
+  }
+
+  .catalog-splash__tile-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.65rem;
+    text-decoration: none;
+    color: #fff;
+    text-align: center;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+
+  .catalog-splash__tile-link:hover {
+    transform: translateY(-3px);
+    opacity: 0.95;
+  }
+
+  .catalog-splash__tile-label {
+    font-size: clamp(0.78rem, 1.4vw, 0.95rem);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  }
+
+  .catalog-splash__tile-visual {
+    display: block;
+    width: min(220px, 100%);
+    margin: 0 auto;
+    filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.4));
+  }
+
+  .catalog-splash__tile-img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .catalog-splash__tile-ph {
+    display: block;
+    aspect-ratio: 3 / 4;
+    width: 100%;
+    border-radius: 0.35rem;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px dashed rgba(0, 0, 0, 0.15);
+  }
+
+  .catalog-splash__rail {
+    grid-area: rail;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    align-self: stretch;
+    padding-top: 0.5rem;
+  }
+
+  .catalog-splash__rail-text {
+    margin: 0;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+    color: var(--cs-vertical-color, #0b1f3d);
+    text-shadow: 0 0 1px rgba(255, 255, 255, 0.25);
+    line-height: 1;
+  }
+
+  @media (max-width: 960px) {
+    .catalog-splash {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        'header'
+        'grid'
+        'nav'
+        'rail';
+      align-items: start;
+    }
+
+    .catalog-splash__nav-list {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+    }
+
+    .catalog-splash__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .catalog-splash__rail {
+      justify-content: flex-end;
+      padding-top: 0;
+    }
+
+    .catalog-splash__rail-text {
+      writing-mode: horizontal-tb;
+      transform: none;
+      font-size: clamp(1.75rem, 6vw, 2.5rem);
+    }
+  }
+
+  @media (max-width: 520px) {
+    .catalog-splash__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+{% endstylesheet %}
+
+<script>
+  (function () {
+    var root = document.querySelector('[data-catalog-splash]');
+    if (!root) return;
+    var clockEl = root.querySelector('[data-catalog-splash-clock-text]');
+    if (!clockEl) return;
+    function tick() {
+      var now = new Date();
+      var opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+      clockEl.textContent = now.toLocaleString(undefined, opts);
+    }
+    tick();
+    setInterval(tick, 30000);
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "t:catalog_splash.section.name",
+  "tag": "section",
+  "class": "section--catalog-splash",
+  "max_blocks": 12,
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "t:catalog_splash.section.settings.intro"
+    },
+    {
+      "type": "image_picker",
+      "id": "background_image",
+      "label": "t:catalog_splash.section.settings.background_image.label"
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "t:catalog_splash.section.settings.overlay_color.label",
+      "default": "#1e6fd9"
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "label": "t:catalog_splash.section.settings.overlay_opacity.label",
+      "min": 10,
+      "max": 85,
+      "step": 1,
+      "unit": "%",
+      "default": 42
+    },
+    {
+      "type": "color",
+      "id": "accent_shop_color",
+      "label": "t:catalog_splash.section.settings.accent_shop_color.label",
+      "default": "#e82222"
+    },
+    {
+      "type": "text",
+      "id": "logo_mark",
+      "label": "t:catalog_splash.section.settings.logo_mark.label",
+      "default": "RS"
+    },
+    {
+      "type": "link_list",
+      "id": "side_menu",
+      "label": "t:catalog_splash.section.settings.side_menu.label"
+    },
+    {
+      "type": "text",
+      "id": "nav_aria_label",
+      "label": "t:catalog_splash.section.settings.nav_aria_label.label",
+      "default": "Shop menu"
+    },
+    {
+      "type": "text",
+      "id": "vertical_title",
+      "label": "t:catalog_splash.section.settings.vertical_title.label",
+      "default": "collections"
+    },
+    {
+      "type": "color",
+      "id": "vertical_title_color",
+      "label": "t:catalog_splash.section.settings.vertical_title_color.label",
+      "default": "#0b1f3d"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "tile",
+      "name": "t:catalog_splash.blocks.tile.name",
+      "settings": [
+        {
+          "type": "text",
+          "id": "label",
+          "label": "t:catalog_splash.blocks.tile.settings.label.label",
+          "default": "Category"
+        },
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "t:catalog_splash.blocks.tile.settings.image.label"
+        },
+        {
+          "type": "collection",
+          "id": "collection",
+          "label": "t:catalog_splash.blocks.tile.settings.collection.label"
+        },
+        {
+          "type": "url",
+          "id": "link",
+          "label": "t:catalog_splash.blocks.tile.settings.link.label",
+          "info": "t:catalog_splash.blocks.tile.settings.link.info"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "t:catalog_splash.section.presets.default",
+      "blocks": [
+        {
+          "type": "tile",
+          "settings": {
+            "label": "new arrivals"
+          }
+        },
+        {
+          "type": "tile",
+          "settings": {
+            "label": "duetco"
+          }
+        },
+        {
+          "type": "tile",
+          "settings": {
+            "label": "on sale"
+          }
+        },
+        {
+          "type": "tile",
+          "settings": {
+            "label": "accessories"
+          }
+        },
+        {
+          "type": "tile",
+          "settings": {
+            "label": "staff picks"
+          }
+        },
+        {
+          "type": "tile",
+          "settings": {
+            "label": "online only"
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}
