@@ -1,0 +1,157 @@
+{% comment %}
+  Splash homepage email signup — submits in-page; captcha shown on splash, not /challenge redirect.
+
+  Accepts:
+  - block: {Object} email_signup block
+  - section: {Object} splash-streams section
+{% endcomment %}
+
+{%- liquid
+  assign signup_heading = block.settings.heading | strip
+  assign signup_text = block.settings.text
+  assign signup_placeholder = block.settings.placeholder | default: 'Email' | strip
+  assign signup_button = block.settings.button_label | default: 'Subscribe' | strip
+  assign lowercase_class = ''
+  if block.settings.lowercase_text
+    assign lowercase_class = ' splash-streams__signup--lowercase'
+  endif
+
+  assign return_to_path = request.path
+  if return_to_path == blank
+    assign return_to_path = '/'
+  endif
+
+  if block.settings.success_message != blank
+    assign signup_success_text = block.settings.success_message
+  else
+    assign signup_success_text = 'splash_streams.email.success' | t
+  endif
+-%}
+
+<div
+  class="splash-streams__email-signup{{ lowercase_class }}"
+  data-splash-email-root
+  data-splash-email-block-id="{{ block.id }}"
+  {% if form.posted_successfully? %}
+    data-splash-email-just-success
+  {% endif %}
+>
+  {%- if signup_heading != blank -%}
+    <p class="splash-streams__signup-heading">{{ signup_heading | escape }}</p>
+  {%- endif -%}
+
+  {%- if signup_text != blank -%}
+    <div class="splash-streams__signup-text rte">{{ signup_text }}</div>
+  {%- endif -%}
+
+  <div
+    class="splash-streams__email-form-panel"
+    data-splash-email-form-panel
+    {% if form.posted_successfully? %}
+      hidden
+    {% endif %}
+  >
+    {%- assign splash_email_form_id = 'SplashEmail-' | append: block.id -%}
+    {%- assign splash_email_sink_name = 'SplashEmailSink-' | append: block.id -%}
+    {% form 'customer', class: 'splash-streams__email-form', id: splash_email_form_id, data-shopify-captcha: 'true', data-splash-email-form: 'true', target: splash_email_sink_name %}
+      <input type="hidden" name="contact[tags]" value="newsletter">
+      <input type="hidden" name="return_to" value="{{ return_to_path | escape }}">
+
+      <div class="splash-streams__email-field">
+        <input
+          id="SplashEmailInput-{{ block.id }}"
+          class="splash-streams__email-field__input"
+          type="email"
+          name="contact[email]"
+          value="{{ form.email }}"
+          aria-required="true"
+          autocorrect="off"
+          autocapitalize="off"
+          autocomplete="email"
+          placeholder="{{ signup_placeholder | escape }}"
+          required
+          {% if form.errors %}
+            aria-invalid="true"
+            aria-describedby="SplashEmailError-{{ block.id }}"
+          {% endif %}
+        >
+        <button
+          type="button"
+          class="splash-streams__email-field__button"
+          data-splash-email-submit
+          aria-label="{{ signup_button | escape }}"
+        >
+          {{ signup_button | escape }}
+        </button>
+      </div>
+
+      <p
+        class="splash-streams__email-message splash-streams__email-message--error"
+        data-splash-email-error
+        role="alert"
+        hidden
+      ></p>
+
+      {%- if form.errors -%}
+        <p class="splash-streams__email-message splash-streams__email-message--error" id="SplashEmailError-{{ block.id }}" role="alert">
+          {%- if form.errors.messages.email != blank -%}
+            {{ form.errors.messages.email }}
+          {%- else -%}
+            {{ 'splash_streams.email.error' | t }}
+          {%- endif -%}
+        </p>
+      {%- endif -%}
+    {% endform %}
+    <iframe
+      class="splash-streams__email-post-sink visually-hidden"
+      name="{{ splash_email_sink_name }}"
+      data-splash-email-post-sink
+      title=""
+      tabindex="-1"
+      hidden
+    ></iframe>
+  </div>
+
+  <div
+    class="splash-streams__email-success-panel"
+    data-splash-email-success-panel
+    {% unless form.posted_successfully? %}
+      hidden
+    {% endunless %}
+  >
+    <p
+      class="splash-streams__email-message splash-streams__email-message--success splash-streams__email-message--standalone"
+      id="SplashEmailSuccess-{{ block.id }}"
+      role="status"
+      tabindex="-1"
+    >
+      {{ signup_success_text | escape }}
+    </p>
+  </div>
+
+  <div
+    class="splash-streams__email-challenge-overlay"
+    data-splash-email-challenge-overlay
+    hidden
+    aria-hidden="true"
+  >
+    <div
+      class="splash-streams__email-challenge-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="SplashEmailChallengeTitle-{{ block.id }}"
+    >
+      <p class="splash-streams__email-challenge-title" id="SplashEmailChallengeTitle-{{ block.id }}">
+        {{ 'splash_streams.email.captcha_heading' | t }}
+      </p>
+      <iframe
+        class="splash-streams__email-challenge-frame"
+        data-splash-email-challenge-frame
+        title="{{ 'splash_streams.email.captcha_frame_title' | t }}"
+      ></iframe>
+      <button type="button" class="splash-streams__email-challenge-done" data-splash-email-challenge-done>
+        {{ 'splash_streams.email.captcha_retry' | t }}
+      </button>
+    </div>
+  </div>
+</div>
