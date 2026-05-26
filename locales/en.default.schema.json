@@ -3544,6 +3544,16 @@
       "settings": {
         "logo_help": {
           "content": "Set the center logo in Theme settings → Splash streams page → Center logo (image library, not a URL)."
+        },
+        "headers": {
+          "video_overlay": "Video overlay"
+        },
+        "overlay_color": {
+          "label": "Overlay color"
+        },
+        "overlay_opacity": {
+          "label": "Overlay opacity",
+          "info": "0% is fully transparent (video only). 100% is fully opaque (solid color)."
         }
       },
       "blocks": {

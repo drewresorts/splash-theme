@@ -5,7 +5,9 @@
   assign logo_src_width = logo_width | times: 2
   assign overlay_opacity = section.settings.overlay_opacity | default: 35
   assign overlay_color = section.settings.overlay_color | default: '#000000'
-  assign overlay_alpha = overlay_opacity | times: 0.01
+  assign overlay_opacity_percent = overlay_opacity | at_least: 0 | at_most: 100
+  assign overlay_alpha = overlay_opacity_percent | times: 1.0 | divided_by: 100.0
+  assign overlay_background = overlay_color | color_modify: 'alpha', overlay_alpha
 
   assign stream_blocks = section.blocks | where: 'type', 'stream'
   assign email_blocks = section.blocks | where: 'type', 'email_signup'
@@ -15,7 +17,10 @@
 <section
   class="splash-streams"
   data-splash-streams
-  style="--logo-width: {{ logo_width }}px;"
+  style="
+    --logo-width: {{ logo_width }}px;
+    --splash-video-overlay: {{ overlay_background }};
+  "
 >
   <div class="splash-streams__bg" aria-hidden="true">
     <div class="splash-streams__player-shell">
@@ -38,17 +43,12 @@
         autoplay
       ></video>
     </div>
-    <div
-      class="splash-streams__overlay"
-      aria-hidden="true"
-      style="background-color: {{ overlay_color }}; opacity: {{ overlay_alpha }};"
-    ></div>
+    <div class="splash-streams__overlay" aria-hidden="true"></div>
   </div>
 
   {% style %}
-    #shopify-section-{{ section.id }} .splash-streams__overlay {
-      background-color: {{ overlay_color }};
-      opacity: {{ overlay_alpha }};
+    #shopify-section-{{ section.id }} .splash-streams {
+      --splash-video-overlay: {{ overlay_background }};
     }
   {% endstyle %}
 
@@ -325,12 +325,13 @@
     }
   }
 
+  /* Color + opacity tint above YouTube/selfie video, below logo/menu/email (section chrome). */
   .splash-streams__overlay {
     position: absolute;
     inset: 0;
-    z-index: 10;
+    z-index: 1;
     pointer-events: none;
-    transform: translateZ(10px);
+    background-color: var(--splash-video-overlay, transparent);
   }
 
   .splash-streams__chrome {
@@ -1339,18 +1340,23 @@
       "default": 260
     },
     {
+      "type": "header",
+      "content": "t:splash_streams_page.section.settings.headers.video_overlay"
+    },
+    {
       "type": "color",
       "id": "overlay_color",
-      "label": "Overlay color",
+      "label": "t:splash_streams_page.section.settings.overlay_color.label",
       "default": "#000000"
     },
     {
       "type": "range",
       "id": "overlay_opacity",
-      "label": "Overlay opacity",
+      "label": "t:splash_streams_page.section.settings.overlay_opacity.label",
+      "info": "t:splash_streams_page.section.settings.overlay_opacity.info",
       "min": 0,
-      "max": 80,
-      "step": 5,
+      "max": 100,
+      "step": 1,
       "unit": "%",
       "default": 35
     }
