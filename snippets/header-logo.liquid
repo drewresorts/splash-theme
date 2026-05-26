@@ -1,0 +1,108 @@
+{% comment %}
+  Header logo markup for sections/header.liquid.
+
+  Accepts:
+  - section: {Object} Header section
+  - logo_layout: {String} 'default' or 'middle-center' (affects responsive sizes)
+{% endcomment %}
+
+{%- liquid
+  assign header_logo = section.settings.logo
+  if header_logo == blank
+    assign header_logo = settings.logo
+  endif
+
+  if section.settings.logo != blank
+    assign header_logo_width = section.settings.logo_width
+  else
+    assign header_logo_width = settings.logo_width
+  endif
+
+  assign header_mobile_logo = section.settings.mobile_logo
+  if header_mobile_logo == blank
+    assign header_mobile_logo = header_logo
+  endif
+
+  if section.settings.mobile_logo != blank
+    assign header_mobile_logo_width = section.settings.mobile_logo_width
+  else
+    assign header_mobile_logo_width = header_logo_width
+  endif
+
+  assign show_dual_logos = false
+  if section.settings.mobile_logo != blank and section.settings.mobile_logo.id != header_logo.id
+    assign show_dual_logos = true
+  endif
+
+  assign header_logo_link = section.settings.logo_link | default: routes.root_url
+  if header_logo_link == blank
+    assign header_logo_link = routes.root_url
+  endif
+
+  assign header_logo_alt = section.settings.logo_alt | strip
+  if header_logo_alt == blank
+    assign header_logo_alt = header_logo.alt | default: shop.name
+  endif
+  assign header_logo_alt = header_logo_alt | escape
+
+  if logo_layout == 'middle-center'
+    capture logo_sizes
+      echo '(min-width: 750px) '
+      echo header_logo_width
+      echo 'px, 50vw'
+    endcapture
+  else
+    capture logo_sizes
+      echo '(max-width: '
+      echo header_logo_width | times: 2
+      echo 'px) 50vw, '
+      echo header_logo_width
+      echo 'px'
+    endcapture
+  endif
+
+  assign logo_src_width = header_logo_width | times: 2 | at_most: 600
+  assign mobile_src_width = header_mobile_logo_width | times: 2 | at_most: 600
+-%}
+
+{%- if header_logo != blank -%}
+  <div class="header__heading-logo-wrapper{% if show_dual_logos %} header__heading-logo-wrapper--dual{% endif %}">
+    {%- if show_dual_logos -%}
+      {%- assign mobile_logo_height = header_mobile_logo_width | divided_by: header_mobile_logo.aspect_ratio -%}
+      {{
+        header_mobile_logo
+        | image_url: width: mobile_src_width
+        | image_tag:
+          class: 'header__heading-logo header__heading-logo--mobile motion-reduce',
+          widths: header_mobile_logo_width,
+          height: mobile_logo_height,
+          width: header_mobile_logo_width,
+          alt: header_logo_alt,
+          sizes: logo_sizes,
+          loading: 'eager'
+      }}
+    {%- endif -%}
+
+    {%- assign logo_height = header_logo_width | divided_by: header_logo.aspect_ratio -%}
+    {%- capture logo_widths -%}{{ header_logo_width }}, {{ header_logo_width | times: 1.5 | round }}, {{ header_logo_width | times: 2 }}{%- endcapture -%}
+    {%- if show_dual_logos -%}
+      {%- assign desktop_logo_class = 'header__heading-logo header__heading-logo--desktop motion-reduce' -%}
+    {%- else -%}
+      {%- assign desktop_logo_class = 'header__heading-logo motion-reduce' -%}
+    {%- endif -%}
+    {{
+      header_logo
+      | image_url: width: logo_src_width
+      | image_tag:
+        class: desktop_logo_class,
+        widths: logo_widths,
+        height: logo_height,
+        width: header_logo_width,
+        alt: header_logo_alt,
+        sizes: logo_sizes,
+        preload: true
+    }}
+  </div>
+{%- else -%}
+  <span class="h2">{{ shop.name }}</span>
+{%- endif -%}
