@@ -1,0 +1,1517 @@
+{%- liquid
+  assign logo_image = settings.splash_streams_logo
+  assign menu_logo = section.settings.menu_logo
+  assign logo_width = section.settings.logo_width | default: 240
+  assign logo_src_width = logo_width | times: 2
+  assign overlay_opacity = section.settings.overlay_opacity | default: 35
+  assign overlay_color = section.settings.overlay_color | default: '#000000'
+  assign overlay_alpha = overlay_opacity | times: 0.01
+
+  assign stream_blocks = section.blocks | where: 'type', 'stream'
+  assign email_blocks = section.blocks | where: 'type', 'email_signup'
+  assign splash_menu = section.settings.menu
+-%}
+
+<section
+  class="splash-streams"
+  data-splash-streams
+  style="--logo-width: {{ logo_width }}px;"
+>
+  <div class="splash-streams__bg" aria-hidden="true">
+    <div class="splash-streams__player-shell">
+      <iframe
+        class="splash-streams__player"
+        data-splash-streams-iframe
+        title=""
+        frameborder="0"
+        allow="autoplay; encrypted-media"
+        referrerpolicy="strict-origin-when-cross-origin"
+        tabindex="-1"
+      ></iframe>
+    </div>
+    <div class="splash-streams__selfie-shell">
+      <video
+        class="splash-streams__selfie"
+        data-splash-streams-selfie
+        playsinline
+        muted
+        autoplay
+      ></video>
+    </div>
+    <div
+      class="splash-streams__overlay"
+      aria-hidden="true"
+      style="background-color: {{ overlay_color }}; opacity: {{ overlay_alpha }};"
+    ></div>
+  </div>
+
+  {% style %}
+    #shopify-section-{{ section.id }} .splash-streams__overlay {
+      background-color: {{ overlay_color }};
+      opacity: {{ overlay_alpha }};
+    }
+  {% endstyle %}
+
+  <button
+    type="button"
+    class="splash-streams__camera-prompt"
+    data-splash-streams-camera-prompt
+    hidden
+  >
+    Tap to use your camera
+  </button>
+
+  <div class="splash-streams__chrome">
+    <button
+      type="button"
+      class="splash-streams__nav-backdrop"
+      data-splash-nav-backdrop
+      tabindex="-1"
+      aria-hidden="true"
+      hidden
+    ></button>
+
+    <div class="splash-streams__nav-cluster" data-splash-nav-cluster>
+      <button
+        type="button"
+        class="splash-streams__logo-toggle"
+        data-splash-logo-toggle
+        aria-expanded="false"
+        aria-controls="SplashStreamsNav"
+        aria-label="Menu"
+      >
+        <span class="splash-streams__logo-toggle-inner">
+          {%- if logo_image != blank and menu_logo != blank -%}
+            {{
+              logo_image
+              | image_url: width: logo_src_width
+              | image_tag:
+                width: logo_width,
+                loading: 'eager',
+                decoding: 'async',
+                alt: '',
+                class: 'splash-streams__logo-img splash-streams__logo-img--default'
+            }}
+            {{
+              menu_logo
+              | image_url: width: logo_src_width
+              | image_tag:
+                width: logo_width,
+                loading: 'eager',
+                decoding: 'async',
+                alt: '',
+                class: 'splash-streams__logo-img splash-streams__logo-img--menu'
+            }}
+          {%- elsif logo_image != blank -%}
+            {{
+              logo_image
+              | image_url: width: logo_src_width
+              | image_tag:
+                width: logo_width,
+                loading: 'eager',
+                decoding: 'async',
+                alt: '',
+                class: 'splash-streams__logo-img splash-streams__logo-img--default'
+            }}
+          {%- elsif menu_logo != blank -%}
+            {{
+              menu_logo
+              | image_url: width: logo_src_width
+              | image_tag:
+                width: logo_width,
+                loading: 'eager',
+                decoding: 'async',
+                alt: '',
+                class: 'splash-streams__logo-img splash-streams__logo-img--default'
+            }}
+          {%- else -%}
+            <span class="splash-streams__logo-text splash-streams__logo-text--default">{{ shop.name }}</span>
+          {%- endif -%}
+        </span>
+      </button>
+
+      <nav
+        id="SplashStreamsNav"
+        class="splash-streams__nav"
+        data-splash-nav
+        aria-label="{% if splash_menu != blank %}{{ splash_menu.title | escape }}{% else %}Menu{% endif %}"
+        hidden
+      >
+      <ul class="splash-streams__nav-list" role="list">
+        {%- if splash_menu != blank and splash_menu.links.size > 0 -%}
+          {%- for link in splash_menu.links -%}
+            <li class="splash-streams__nav-item{% if link.links != blank %} splash-streams__nav-item--has-children{% endif %}">
+              <a href="{{ link.url }}" class="splash-streams__nav-link">{{ link.title | escape }}</a>
+              {%- if link.links != blank -%}
+                <ul class="splash-streams__nav-sublist" role="list">
+                  {%- for child in link.links -%}
+                    <li>
+                      <a href="{{ child.url }}" class="splash-streams__nav-link splash-streams__nav-link--sub">
+                        {{- child.title | escape -}}
+                      </a>
+                    </li>
+                  {%- endfor -%}
+                </ul>
+              {%- endif -%}
+            </li>
+          {%- endfor -%}
+        {%- else -%}
+          <li class="splash-streams__nav-item splash-streams__nav-item--empty">
+            <span class="splash-streams__nav-empty">Select a navigation menu in the theme editor for this section.</span>
+          </li>
+        {%- endif -%}
+      </ul>
+      </nav>
+    </div>
+
+    {%- for block in email_blocks -%}
+      {%- if block.settings.position == 'below_logo' -%}
+        <div
+          class="splash-streams__signup splash-streams__signup--below-logo"
+          {{ block.shopify_attributes }}
+          data-splash-email-signup
+        >
+          {%- render 'splash-email-signup', block: block, section: section -%}
+        </div>
+      {%- endif -%}
+    {%- endfor -%}
+  </div>
+
+  {%- for block in email_blocks -%}
+    {%- unless block.settings.position == 'below_logo' -%}
+      <div
+        class="splash-streams__signup splash-streams__signup--bottom"
+        {{ block.shopify_attributes }}
+        data-splash-email-signup
+      >
+        {%- render 'splash-email-signup', block: block, section: section -%}
+      </div>
+    {%- endunless -%}
+  {%- endfor -%}
+
+  <script type="application/json" data-splash-streams-strings>
+    {
+      "emailError": {{ 'splash_streams.email.error' | t | json }},
+      "emailCaptcha": {{ 'splash_streams.email.captcha' | t | json }}
+    }
+  </script>
+
+  {%- if stream_blocks.size > 0 -%}
+    <p class="splash-streams__key-hint" aria-live="polite">Change stream with arrow keys</p>
+  {%- endif -%}
+
+  <template data-splash-streams-data>
+    [
+      {%- for block in stream_blocks -%}
+        {%- liquid
+          assign raw = block.settings.youtube_url | strip
+        -%}
+        { "url": {{ raw | json }} }{% unless forloop.last %},{% endunless %}
+      {%- endfor -%}
+    ]
+  </template>
+</section>
+
+{% stylesheet %}
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap');
+
+  .splash-streams {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 100svh;
+    width: 100%;
+    overflow: hidden;
+    isolation: isolate;
+    background: #000;
+    padding: 3rem 1.25rem;
+  }
+
+  .splash-streams__bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    isolation: isolate;
+  }
+
+  /* YouTube cannot hide title/channel UI via params; crop it outside the viewport. */
+  .splash-streams__player-shell {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .splash-streams__player {
+    position: absolute;
+    left: 50%;
+    top: 56%;
+    width: max(100vw, 177.78vh);
+    height: max(56.25vw, 100vh);
+    transform: translate(-50%, -50%) scale(1.32);
+    transform-origin: center center;
+    pointer-events: none;
+    border: 0;
+  }
+
+  .splash-streams__selfie-shell {
+    display: none;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+    background: #000;
+  }
+
+  .splash-streams__selfie {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    transform: scaleX(-1);
+  }
+
+  .splash-streams__camera-prompt {
+    position: absolute;
+    bottom: max(1.25rem, env(safe-area-inset-bottom));
+    left: 50%;
+    z-index: 3;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0.65rem 1.1rem;
+    max-width: min(92vw, 22rem);
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, #fff 35%, transparent);
+    background: color-mix(in srgb, #000 55%, transparent);
+    color: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .splash-streams__camera-prompt[hidden] {
+    display: none;
+  }
+
+  .splash-streams__camera-prompt:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 749px) {
+    .splash-streams:not(.splash-streams--selfie-fallback) .splash-streams__player-shell {
+      display: none;
+    }
+
+    .splash-streams:not(.splash-streams--selfie-fallback) .splash-streams__selfie-shell {
+      display: block;
+    }
+
+    .splash-streams--selfie-fallback .splash-streams__selfie-shell {
+      display: none;
+    }
+
+    .splash-streams--selfie-fallback .splash-streams__player-shell {
+      display: block;
+    }
+  }
+
+  @media (min-width: 750px) {
+    .splash-streams__selfie-shell {
+      display: none !important;
+    }
+
+    .splash-streams__camera-prompt {
+      display: none !important;
+    }
+  }
+
+  .splash-streams__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    transform: translateZ(10px);
+  }
+
+  .splash-streams__chrome {
+    display: flex;
+    position: relative;
+    z-index: 2;
+    grid-column: 1;
+    grid-row: 1;
+    place-self: center;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .splash-streams__chrome > * {
+    pointer-events: auto;
+  }
+
+  .splash-streams__nav-cluster {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 21;
+    pointer-events: none;
+  }
+
+  .splash-streams__nav-cluster > * {
+    pointer-events: auto;
+  }
+
+  .splash-streams--nav-open .splash-streams__chrome {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    place-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    pointer-events: none;
+  }
+
+  .splash-streams--nav-open .splash-streams__nav-cluster {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(0.45rem, 1.5vh, 1rem);
+    max-width: min(96vw, 40rem);
+    pointer-events: auto;
+  }
+
+  @media (max-width: 749px) {
+    .splash-streams--nav-open .splash-streams__nav-cluster {
+      max-width: 100%;
+    }
+  }
+
+  .splash-streams__nav-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 18;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    opacity: 0;
+    cursor: default;
+    pointer-events: none;
+  }
+
+  .splash-streams--nav-open .splash-streams__nav-backdrop {
+    display: block;
+    pointer-events: auto;
+  }
+
+  .splash-streams__nav-backdrop[hidden] {
+    display: none !important;
+  }
+
+  .splash-streams__nav {
+    display: none;
+    position: relative;
+    z-index: 19;
+    width: auto;
+    max-width: min(96vw, 72rem);
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    pointer-events: none;
+    font-size: 1rem;
+  }
+
+  .splash-streams--nav-open .splash-streams__nav {
+    display: block;
+    pointer-events: auto;
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    margin: 0;
+  }
+
+  .splash-streams__nav-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .splash-streams--nav-open .splash-streams__nav-list {
+    align-items: center;
+  }
+
+  @media (min-width: 750px) {
+    .splash-streams--nav-open .splash-streams__nav-list {
+      flex-direction: column;
+      flex-wrap: nowrap;
+      justify-content: center;
+      align-items: center;
+      column-gap: 0;
+      row-gap: clamp(0.35rem, 1vh, 0.65rem);
+    }
+  }
+
+  @media (max-width: 749px) {
+    .splash-streams--nav-open .splash-streams__nav-list {
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+    }
+  }
+
+  .splash-streams__nav-item {
+    flex: 0 1 auto;
+  }
+
+  @media (min-width: 750px) {
+    .splash-streams--nav-open .splash-streams__nav-item {
+      display: block;
+      max-width: none;
+    }
+  }
+
+  .splash-streams__nav-link {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 0.35rem 0.15rem;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font-family: 'Roboto', ui-sans-serif, system-ui, sans-serif;
+    font-size: 400%;
+    font-weight: 700;
+    font-style: normal;
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+    text-decoration: none;
+    text-transform: lowercase;
+    text-shadow: none;
+    cursor: pointer;
+  }
+
+  .splash-streams__nav-link--sub {
+    font-size: 400%;
+    font-weight: 700;
+    font-family: 'Roboto', ui-sans-serif, system-ui, sans-serif;
+    text-transform: lowercase;
+    text-shadow: none;
+    padding-left: 0.35rem;
+    text-align: center;
+  }
+
+  .splash-streams__nav-sublist {
+    list-style: none;
+    margin: 0.35rem 0 0;
+    padding: 0.35rem 0 0;
+    border-left: none;
+    border-top: 1px solid color-mix(in srgb, #fff 22%, transparent);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  @media (min-width: 750px) {
+    .splash-streams__nav-sublist {
+      align-items: center;
+      width: 100%;
+    }
+  }
+
+  .splash-streams__nav-empty {
+    display: block;
+    margin: 0;
+    padding: 0.35rem 0;
+    text-align: center;
+    font-family: 'Roboto', ui-sans-serif, system-ui, sans-serif;
+    font-size: 400%;
+    font-weight: 700;
+    color: color-mix(in srgb, #fff 88%, transparent);
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+    text-transform: lowercase;
+    text-shadow: none;
+  }
+
+  .splash-streams__nav-link:focus-visible,
+  .splash-streams__logo-toggle:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+
+  .splash-streams__logo-toggle {
+    position: relative;
+    z-index: 21;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .splash-streams__logo-toggle-inner {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .splash-streams__logo-img--menu {
+    display: none;
+  }
+
+  .splash-streams--nav-open .splash-streams__logo-img--default {
+    display: none;
+  }
+
+  .splash-streams--nav-open .splash-streams__logo-img--menu {
+    display: block;
+  }
+
+  .splash-streams--nav-open .splash-streams__logo-toggle {
+    position: relative;
+    top: auto;
+    left: auto;
+    z-index: 22;
+    flex: 0 0 auto;
+    transform: none;
+    align-self: center;
+  }
+
+  @media (min-width: 750px) {
+    .splash-streams--nav-open .splash-streams__logo-toggle .splash-streams__logo-img,
+    .splash-streams--nav-open .splash-streams__logo-toggle .splash-streams__logo-img--default,
+    .splash-streams--nav-open .splash-streams__logo-toggle .splash-streams__logo-img--menu {
+      width: auto;
+      height: clamp(3.25rem, 5.5vw, 4.5rem);
+      max-height: 4.75rem;
+      max-width: min(20vw, 5.5rem);
+    }
+  }
+
+  @media (max-width: 749px) {
+    .splash-streams--nav-open .splash-streams__logo-toggle .splash-streams__logo-img,
+    .splash-streams--nav-open .splash-streams__logo-toggle .splash-streams__logo-img--default,
+    .splash-streams--nav-open .splash-streams__logo-toggle .splash-streams__logo-img--menu {
+      width: min(72vw, 4rem);
+      height: auto;
+      max-width: 4rem;
+    }
+  }
+
+  @media (min-width: 750px) {
+    .splash-streams--nav-open .splash-streams__nav-link,
+    .splash-streams--nav-open .splash-streams__nav-link--sub {
+      width: auto;
+      max-width: 100%;
+    }
+  }
+
+  .splash-streams--camera-live:not(.splash-streams--nav-open) .splash-streams__logo-toggle .splash-streams__logo-img--default,
+  .splash-streams--camera-live:not(.splash-streams--nav-open) .splash-streams__logo-toggle .splash-streams__logo-text--default {
+    animation: splash-streams-logo-blink 1s ease-in-out infinite;
+  }
+
+  @keyframes splash-streams-logo-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.4;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .splash-streams--camera-live:not(.splash-streams--nav-open) .splash-streams__logo-toggle .splash-streams__logo-img--default,
+    .splash-streams--camera-live:not(.splash-streams--nav-open) .splash-streams__logo-toggle .splash-streams__logo-text--default {
+      animation: none;
+    }
+  }
+
+  .splash-streams__logo-img {
+    width: min(86vw, var(--logo-width));
+    height: auto;
+  }
+
+  .splash-streams__logo-text {
+    font-family: var(--font-body-family, system-ui, sans-serif);
+    font-size: clamp(1.25rem, 4vw, 2rem);
+    letter-spacing: 0.04em;
+    color: #fff;
+  }
+
+  @media (max-width: 749px) {
+    .splash-streams__logo-toggle .splash-streams__logo-img {
+      width: min(86vw, calc(var(--logo-width) * 0.5));
+    }
+
+    .splash-streams__logo-toggle .splash-streams__logo-text,
+    .splash-streams__logo-toggle .splash-streams__logo-text--default {
+      font-size: clamp(0.625rem, 2vw, 1rem);
+    }
+  }
+
+  .splash-streams__key-hint {
+    display: none;
+    position: absolute;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    left: 50%;
+    z-index: 4;
+    transform: translateX(-50%);
+    margin: 0;
+    max-width: min(92vw, 28rem);
+    padding: 0 0.5rem;
+    text-align: center;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, #fff 72%, transparent);
+    text-shadow:
+      0 0 8px #000,
+      0 1px 2px #000;
+    pointer-events: none;
+  }
+
+  @media (min-width: 750px) {
+    .splash-streams__key-hint {
+      display: block;
+    }
+  }
+
+  .splash-streams--nav-open .splash-streams__key-hint {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .splash-streams__signup {
+    z-index: 14;
+    pointer-events: auto;
+    text-align: center;
+    font-family: 'Roboto', sans-serif;
+    font-weight: 700;
+    color: #fff;
+    text-shadow:
+      0 0 10px #000,
+      0 1px 3px #000;
+  }
+
+  .splash-streams__signup--bottom {
+    position: fixed;
+    bottom: max(1.25rem, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(92vw, 32rem);
+    padding: 0 1rem;
+  }
+
+  @media (min-width: 750px) {
+    .splash-streams__signup--bottom {
+      bottom: max(2rem, 6vh);
+    }
+
+    .splash-streams:has(.splash-streams__key-hint) .splash-streams__signup--bottom {
+      bottom: max(3.25rem, 8vh);
+    }
+  }
+
+  .splash-streams__signup--below-logo {
+    position: relative;
+    width: min(92vw, 32rem);
+    margin-top: clamp(0.75rem, 2vh, 1.5rem);
+  }
+
+  .splash-streams--nav-open .splash-streams__signup {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+
+  .splash-streams__signup-heading {
+    margin: 0 0 0.35rem;
+    font-size: clamp(0.85rem, 2.5vw, 1.05rem);
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+  }
+
+  .splash-streams__signup-text {
+    margin: 0 0 0.75rem;
+    font-size: clamp(0.7rem, 2vw, 0.85rem);
+    font-weight: 400;
+    line-height: 1.35;
+    opacity: 0.9;
+  }
+
+  .splash-streams__signup--lowercase .splash-streams__signup-heading,
+  .splash-streams__signup--lowercase .splash-streams__signup-text,
+  .splash-streams__signup--lowercase .splash-streams__email-field__input,
+  .splash-streams__signup--lowercase .splash-streams__email-field__button {
+    text-transform: lowercase;
+  }
+
+  .splash-streams__email-form {
+    margin: 0;
+  }
+
+  .splash-streams__email-field {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 0;
+    border-radius: 0.25rem;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, #fff 35%, transparent);
+    background: color-mix(in srgb, #000 45%, transparent);
+    backdrop-filter: blur(6px);
+  }
+
+  .splash-streams__email-field__input {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .splash-streams__email-field__input::placeholder {
+    color: color-mix(in srgb, #fff 55%, transparent);
+    opacity: 1;
+  }
+
+  .splash-streams__email-field__input:focus {
+    outline: 2px solid color-mix(in srgb, #fff 70%, transparent);
+    outline-offset: -2px;
+  }
+
+  .splash-streams__email-field__button {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0.85rem 1.15rem;
+    border: 0;
+    border-left: 1px solid color-mix(in srgb, #fff 25%, transparent);
+    background: color-mix(in srgb, #fff 18%, transparent);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: background 0.15s ease;
+  }
+
+  .splash-streams__email-field__button:hover,
+  .splash-streams__email-field__button:focus-visible {
+    background: color-mix(in srgb, #fff 32%, transparent);
+  }
+
+  .splash-streams__email-message {
+    margin: 0.65rem 0 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  .splash-streams__email-message--error {
+    color: #ffb4b4;
+  }
+
+  .splash-streams__email-message--success {
+    color: #b8f5c8;
+  }
+
+  .splash-streams__email-form-panel[hidden],
+  .splash-streams__email-success-panel[hidden] {
+    display: none !important;
+  }
+
+  .splash-streams__email-success-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
+  }
+
+  .splash-streams__email-message--standalone {
+    margin: 0;
+  }
+
+  .splash-streams__email-post-sink {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border: 0;
+    overflow: hidden;
+  }
+
+  .splash-streams__email-challenge-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(4px);
+  }
+
+  .splash-streams__email-challenge-overlay[hidden] {
+    display: none !important;
+  }
+
+  .splash-streams__email-challenge-dialog {
+    width: min(94vw, 26rem);
+    max-height: min(90vh, 32rem);
+    padding: 1.25rem 1rem 1rem;
+    border-radius: 0.5rem;
+    background: #fff;
+    color: #111;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  .splash-streams__email-challenge-title {
+    margin: 0 0 0.75rem;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: #111;
+  }
+
+  .splash-streams__email-challenge-frame {
+    display: block;
+    width: 100%;
+    height: min(58vh, 22rem);
+    min-height: 14rem;
+    border: 0;
+    border-radius: 0.25rem;
+    background: #fff;
+  }
+
+  .splash-streams__email-challenge-done {
+    margin-top: 0.85rem;
+    padding: 0.45rem 1.1rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid #111;
+    border-radius: 0;
+    background: #fff;
+    color: #111;
+    cursor: pointer;
+    text-transform: none;
+  }
+
+  html.splash-streams--challenge-open {
+    overflow: hidden;
+  }
+
+  html.splash-streams--challenge-open .h-captcha-badge {
+    display: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .splash-streams__selfie-shell {
+      display: none !important;
+    }
+
+    .splash-streams__player-shell {
+      display: block !important;
+    }
+  }
+{% endstylesheet %}
+
+{% javascript %}
+  (function () {
+    const root = document.querySelector('[data-splash-streams]');
+    if (!root) return;
+
+    const iframe = root.querySelector('[data-splash-streams-iframe]');
+    const selfieVideo = root.querySelector('[data-splash-streams-selfie]');
+    const cameraPrompt = root.querySelector('[data-splash-streams-camera-prompt]');
+    const dataEl = root.querySelector('[data-splash-streams-data]');
+    const logoToggle = root.querySelector('[data-splash-logo-toggle]');
+    const navEl = root.querySelector('[data-splash-nav]');
+    const backdrop = root.querySelector('[data-splash-nav-backdrop]');
+    if (!iframe || !dataEl || !selfieVideo) return;
+
+    let streams = [];
+    try {
+      streams = JSON.parse(dataEl.innerHTML || '[]');
+    } catch (e) {
+      streams = [];
+    }
+    streams = (streams || []).filter((s) => s && typeof s.url === 'string' && s.url.trim().length > 0);
+
+    const mobileMql = window.matchMedia
+      ? window.matchMedia('(max-width: 749px)')
+      : { matches: false, addEventListener: function () {}, addListener: function () {} };
+    function isMobile() {
+      return mobileMql.matches;
+    }
+
+    const prefersReducedMotion =
+      window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function parseYouTubeId(inputUrl) {
+      const raw = (inputUrl || '').trim();
+      if (!raw) return null;
+      try {
+        const url = new URL(raw, window.location.origin);
+        if (url.hostname === 'youtu.be') {
+          return (url.pathname || '').replace('/', '') || null;
+        }
+        if (url.hostname.endsWith('youtube.com') || url.hostname.endsWith('youtube-nocookie.com')) {
+          const v = url.searchParams.get('v');
+          if (v) return v;
+          const match = (url.pathname || '').match(/\/(live|embed|shorts)\/([^/?#]+)/i);
+          if (match && match[2]) return match[2];
+        }
+      } catch (e) {
+        // ignore
+      }
+      const fallbackMatch = raw.match(/[?&]v=([^&]+)/);
+      if (fallbackMatch && fallbackMatch[1]) return fallbackMatch[1];
+      return null;
+    }
+
+    function isLiveSourceUrl(inputUrl) {
+      return /\/live(\/|$)/i.test(String(inputUrl || ''));
+    }
+
+    function buildEmbedUrl(videoId, sourceUrl) {
+      const id = String(videoId).trim();
+      const common = [
+        'autoplay=1',
+        'mute=1',
+        'controls=0',
+        'showinfo=0',
+        'rel=0',
+        'iv_load_policy=3',
+        'modestbranding=1',
+        'playsinline=1',
+        'fs=0',
+        'disablekb=1',
+      ];
+      // Loop + playlist makes live streams stutter/reload; skip for /live/ URLs.
+      if (!isLiveSourceUrl(sourceUrl)) {
+        common.push('loop=1', 'playlist=' + encodeURIComponent(id));
+      }
+      return 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?' + common.join('&');
+    }
+
+    let currentVideoId = null;
+    let lastLayoutMode = null;
+    let syncLayoutTimer = null;
+
+    const ids = streams
+      .map((s) => parseYouTubeId(s.url))
+      .filter(Boolean);
+    const hasYoutube = ids.length > 0;
+
+    let index = 0;
+
+    function closeNav() {
+      root.classList.remove('splash-streams--nav-open');
+      if (backdrop) {
+        backdrop.setAttribute('hidden', '');
+      }
+      if (navEl) {
+        navEl.setAttribute('hidden', '');
+      }
+      if (logoToggle) {
+        logoToggle.setAttribute('aria-expanded', 'false');
+        logoToggle.setAttribute('aria-label', 'Menu');
+      }
+    }
+
+    function openNav() {
+      root.classList.add('splash-streams--nav-open');
+      if (backdrop) {
+        backdrop.removeAttribute('hidden');
+      }
+      if (navEl) {
+        navEl.removeAttribute('hidden');
+      }
+      if (logoToggle) {
+        logoToggle.setAttribute('aria-expanded', 'true');
+        logoToggle.setAttribute('aria-label', 'Close menu');
+      }
+    }
+
+    function toggleNav() {
+      if (root.classList.contains('splash-streams--nav-open')) {
+        closeNav();
+      } else {
+        openNav();
+      }
+    }
+
+    function stopSelfie() {
+      root.classList.remove('splash-streams--camera-live');
+      try {
+        const ms = selfieVideo.srcObject;
+        if (ms && ms.getTracks) {
+          ms.getTracks().forEach(function (t) {
+            t.stop();
+          });
+        }
+        selfieVideo.srcObject = null;
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    function streamSourceUrlAt(i) {
+      const entry = streams[i];
+      return entry && typeof entry.url === 'string' ? entry.url : '';
+    }
+
+    function applyYoutubeVideo(videoId, sourceUrl, forceReload) {
+      if (!hasYoutube || !videoId) return;
+      const url = buildEmbedUrl(videoId, sourceUrl);
+      const changingVideo = currentVideoId !== videoId;
+
+      if (!forceReload && !changingVideo && iframe.src && iframe.src.indexOf(videoId) !== -1) {
+        return;
+      }
+
+      currentVideoId = videoId;
+      root.dataset.splashActiveVideo = videoId;
+
+      if (changingVideo && iframe.src && iframe.src !== 'about:blank') {
+        iframe.src = 'about:blank';
+        window.setTimeout(function () {
+          iframe.src = url;
+        }, 30);
+      } else {
+        iframe.src = url;
+      }
+    }
+
+    function switchTo(nextIndex) {
+      if (!hasYoutube) return;
+      if (isMobile() && !root.classList.contains('splash-streams--selfie-fallback')) return;
+      const newIndex = ((nextIndex % ids.length) + ids.length) % ids.length;
+      index = newIndex;
+      applyYoutubeVideo(ids[index], streamSourceUrlAt(index), false);
+    }
+
+    function showCameraPrompt() {
+      if (!cameraPrompt || !isMobile()) return;
+      cameraPrompt.hidden = false;
+      cameraPrompt.removeAttribute('hidden');
+    }
+
+    function hideCameraPrompt() {
+      if (!cameraPrompt) return;
+      cameraPrompt.hidden = true;
+      cameraPrompt.setAttribute('hidden', '');
+    }
+
+    function startSelfie() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return Promise.resolve(false);
+      }
+      if (root.classList.contains('splash-streams--camera-live') && selfieVideo.srcObject) {
+        try {
+          const tracks = selfieVideo.srcObject.getTracks();
+          if (tracks.some(function (t) {
+            return t.readyState === 'live';
+          })) {
+            return Promise.resolve(true);
+          }
+        } catch (e) {
+          // continue to restart camera
+        }
+      }
+      stopSelfie();
+      return navigator.mediaDevices
+        .getUserMedia({
+          video: { facingMode: { ideal: 'user' } },
+          audio: false,
+        })
+        .then(function (stream) {
+          selfieVideo.srcObject = stream;
+          return selfieVideo.play().then(function () {
+            root.classList.remove('splash-streams--selfie-fallback');
+            iframe.src = 'about:blank';
+            hideCameraPrompt();
+            if (isMobile()) {
+              root.classList.add('splash-streams--camera-live');
+            }
+            return true;
+          });
+        })
+        .catch(function () {
+          return false;
+        });
+    }
+
+    function useYoutubeOnMobile() {
+      root.classList.add('splash-streams--selfie-fallback');
+      hideCameraPrompt();
+      stopSelfie();
+      if (hasYoutube) {
+        switchTo(index);
+      }
+    }
+
+    function syncLayoutNow() {
+      const mode = isMobile() ? 'mobile' : 'desktop';
+
+      if (mode === 'mobile') {
+        if (mode === lastLayoutMode) {
+          return;
+        }
+        closeNav();
+        stopSelfie();
+        root.classList.remove('splash-streams--selfie-fallback');
+        startSelfie().then(function (ok) {
+          if (!ok) {
+            if (cameraPrompt) {
+              showCameraPrompt();
+            } else {
+              useYoutubeOnMobile();
+            }
+          }
+        });
+      } else {
+        if (mode === lastLayoutMode && currentVideoId && iframe.dataset.splashActiveVideo) {
+          return;
+        }
+        closeNav();
+        hideCameraPrompt();
+        stopSelfie();
+        root.classList.remove('splash-streams--selfie-fallback');
+        if (hasYoutube) {
+          applyYoutubeVideo(ids[index], streamSourceUrlAt(index), false);
+        } else {
+          iframe.src = 'about:blank';
+          currentVideoId = null;
+        }
+      }
+
+      lastLayoutMode = mode;
+    }
+
+    function syncLayout() {
+      window.clearTimeout(syncLayoutTimer);
+      syncLayoutTimer = window.setTimeout(syncLayoutNow, 200);
+    }
+
+    function onKeyDown(e) {
+      if (!e) return;
+      if (e.key === 'Escape' && root.classList.contains('splash-streams--nav-open')) {
+        e.preventDefault();
+        closeNav();
+        return;
+      }
+      if (!hasYoutube) return;
+      if (isMobile() && !root.classList.contains('splash-streams--selfie-fallback')) return;
+      const tag = (e.target && e.target.tagName) ? String(e.target.tagName).toLowerCase() : '';
+      const editable =
+        tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target && e.target.isContentEditable);
+      if (editable) return;
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        switchTo(index - 1);
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        switchTo(index + 1);
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+
+    // Mobile swipe (bottom of the screen) switches from front camera to the
+    // configured YouTube streams and continues cycling between them.
+    let swipeStartX = 0;
+    let swipeStartY = 0;
+    let swipeStartAt = 0;
+    let swipeArmed = false;
+
+    function shouldIgnoreTouchTarget(target) {
+      if (!target || !target.closest) return false;
+      // Avoid fighting with taps on buttons/links/inputs.
+      return Boolean(
+        target.closest('button,a,input,textarea,select,label,[role="button"],[role="link"]')
+      );
+    }
+
+    function touchInBottomZone(clientY) {
+      // Use a conservative bottom region so gestures don't conflict with scrolling.
+      return clientY > window.innerHeight * 0.65;
+    }
+
+    function loadYoutubeIndex(nextIndex) {
+      if (!hasYoutube) return;
+      closeNav();
+      root.classList.add('splash-streams--selfie-fallback');
+      stopSelfie();
+      index = ((nextIndex % ids.length) + ids.length) % ids.length;
+      applyYoutubeVideo(ids[index], streamSourceUrlAt(index), true);
+    }
+
+    root.addEventListener(
+      'touchstart',
+      function (e) {
+        if (!isMobile() || !hasYoutube) return;
+        if (root.classList.contains('splash-streams--nav-open')) return;
+        if (!e.changedTouches || !e.changedTouches.length) return;
+        const t = e.changedTouches[0];
+        if (!touchInBottomZone(t.clientY)) return;
+        if (shouldIgnoreTouchTarget(e.target)) return;
+
+        swipeStartX = t.clientX;
+        swipeStartY = t.clientY;
+        swipeStartAt = Date.now();
+        swipeArmed = true;
+      },
+      { passive: true }
+    );
+
+    root.addEventListener(
+      'touchend',
+      function (e) {
+        if (!isMobile() || !hasYoutube) return;
+        if (!swipeArmed) return;
+        swipeArmed = false;
+        if (!e.changedTouches || !e.changedTouches.length) return;
+
+        const t = e.changedTouches[0];
+        const dx = t.clientX - swipeStartX;
+        const dy = t.clientY - swipeStartY;
+        const dt = Date.now() - swipeStartAt;
+
+        // Horizontal swipe with reasonable distance + speed.
+        if (dt > 900) return;
+        if (Math.abs(dx) < 60) return;
+        if (Math.abs(dx) < Math.abs(dy) * 1.1) return;
+
+        // Swipe left => next stream; swipe right => previous stream.
+        const dir = dx < 0 ? 1 : -1;
+        loadYoutubeIndex(index + dir);
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    if (prefersReducedMotion) {
+      closeNav();
+      if (hasYoutube) {
+        switchTo(0);
+      }
+      return;
+    }
+
+    if (logoToggle) {
+      logoToggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        toggleNav();
+      });
+    }
+
+    if (backdrop) {
+      backdrop.addEventListener('click', function () {
+        closeNav();
+      });
+    }
+
+    if (navEl) {
+      navEl.addEventListener('click', function (e) {
+        const anchor = e.target.closest('a[href]');
+        if (anchor && navEl.contains(anchor)) {
+          closeNav();
+        }
+      });
+    }
+
+    if (cameraPrompt) {
+      cameraPrompt.addEventListener('click', function () {
+        startSelfie().then(function (ok) {
+          if (!ok) {
+            useYoutubeOnMobile();
+          }
+        });
+      });
+    }
+
+    if (mobileMql.addEventListener) {
+      mobileMql.addEventListener('change', syncLayout);
+    } else if (mobileMql.addListener) {
+      mobileMql.addListener(syncLayout);
+    }
+
+    syncLayout();
+  })();
+{% endjavascript %}
+
+
+{% schema %}
+{
+  "name": "Splash streams",
+  "tag": "section",
+  "class": "section--splash-streams",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "t:splash_streams_page.section.settings.logo_help.content"
+    },
+    {
+      "type": "link_list",
+      "id": "menu",
+      "label": "Navigation menu",
+      "default": "main-menu",
+      "info": "Same links as your storefront navigation (Online Store -> Navigation). Shows top-level items and one submenu level."
+    },
+    {
+      "type": "image_picker",
+      "id": "menu_logo",
+      "label": "Menu open logo",
+      "info": "When set along with the theme logo (Theme settings → Splash streams page → Center logo), this image is shown on the button while the menu is open. Leave blank to keep the same logo when open."
+    },
+    {
+      "type": "range",
+      "id": "logo_width",
+      "label": "Logo width",
+      "min": 120,
+      "max": 520,
+      "step": 10,
+      "unit": "px",
+      "default": 260
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "Overlay color",
+      "default": "#000000"
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "label": "Overlay opacity",
+      "min": 0,
+      "max": 80,
+      "step": 5,
+      "unit": "%",
+      "default": 35
+    }
+  ],
+  "blocks": [
+    {
+      "type": "stream",
+      "name": "YouTube stream",
+      "settings": [
+        {
+          "type": "text",
+          "id": "youtube_url",
+          "label": "YouTube URL",
+          "default": "https://www.youtube.com/watch?v=erBoOFKTH4E"
+        }
+      ]
+    },
+    {
+      "type": "email_signup",
+      "name": "t:splash_streams_page.section.blocks.email_signup.name",
+      "limit": 1,
+      "settings": [
+        {
+          "type": "select",
+          "id": "position",
+          "label": "t:splash_streams_page.section.blocks.email_signup.settings.position.label",
+          "default": "bottom",
+          "options": [
+            {
+              "value": "bottom",
+              "label": "t:splash_streams_page.section.blocks.email_signup.settings.position.options__1.label"
+            },
+            {
+              "value": "below_logo",
+              "label": "t:splash_streams_page.section.blocks.email_signup.settings.position.options__2.label"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "heading",
+          "label": "t:splash_streams_page.section.blocks.email_signup.settings.heading.label",
+          "default": "Stay in the loop"
+        },
+        {
+          "type": "richtext",
+          "id": "text",
+          "label": "t:splash_streams_page.section.blocks.email_signup.settings.text.label"
+        },
+        {
+          "type": "text",
+          "id": "placeholder",
+          "label": "t:splash_streams_page.section.blocks.email_signup.settings.placeholder.label",
+          "default": "Email"
+        },
+        {
+          "type": "text",
+          "id": "button_label",
+          "label": "t:splash_streams_page.section.blocks.email_signup.settings.button_label.label",
+          "default": "Subscribe"
+        },
+        {
+          "type": "text",
+          "id": "success_message",
+          "label": "t:splash_streams_page.section.blocks.email_signup.settings.success_message.label",
+          "default": "Thanks — you're on the list."
+        },
+        {
+          "type": "checkbox",
+          "id": "lowercase_text",
+          "label": "t:splash_streams_page.section.blocks.email_signup.settings.lowercase_text.label",
+          "default": true
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Splash streams",
+      "blocks": [
+        { "type": "stream" },
+        { "type": "stream" },
+        { "type": "email_signup" }
+      ]
+    }
+  ]
+}
+{% endschema %}
