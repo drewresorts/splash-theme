@@ -1,0 +1,7 @@
+streaming/
+.git/
+.github/
+AGENTS
+README
+LICENSE
+release-notes

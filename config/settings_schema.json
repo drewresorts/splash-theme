@@ -1,11 +1,11 @@
 [
   {
     "name": "theme_info",
-    "theme_name": "Coming Soon Live (Dawn)",
+    "theme_name": "Coming Soon Live",
     "theme_version": "2.0.0",
-    "theme_author": "Shopify (Dawn) + custom sections",
-    "theme_documentation_url": "https://help.shopify.com/manual/online-store/themes",
-    "theme_support_url": "https://support.shopify.com/"
+    "theme_author": "Drew Resorts",
+    "theme_documentation_url": "https://github.com/drewresorts/splash-theme",
+    "theme_support_url": "https://github.com/drewresorts/splash-theme/issues"
   },
   {
     "name": "t:settings_schema.logo.name",
@@ -1457,7 +1457,7 @@
     "settings": [
       {
         "type": "paragraph",
-        "content": "t:settings_schema.streaming.intro"
+        "content": "t:settings_schema.streaming.intro.content"
       },
       {
         "type": "url",
@@ -1472,7 +1472,7 @@
     "settings": [
       {
         "type": "paragraph",
-        "content": "t:settings_schema.splash_streams.intro"
+        "content": "t:settings_schema.splash_streams.intro.content"
       },
       {
         "type": "image_picker",

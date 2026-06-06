@@ -1,0 +1,39 @@
+{% comment %}
+  Full-width header navigation for splash-streams (spread_header menu style).
+
+  Accepts:
+  - menu: {Linklist} navigation link list
+  - lowercase_links: {Boolean}
+{% endcomment %}
+
+{%- liquid
+  assign nav_lowercase = lowercase_links | default: true
+-%}
+
+<header class="splash-streams__spread-header">
+  <nav
+    class="splash-streams__nav-spread"
+    aria-label="{% if menu != blank %}{{ menu.title | escape }}{% else %}Main{% endif %}"
+  >
+    <ul
+      class="splash-streams__nav-spread-list{% if nav_lowercase %} splash-streams__nav-spread-list--lowercase{% endif %}"
+      role="list"
+    >
+      {%- if menu != blank and menu.links.size > 0 -%}
+        {%- for link in menu.links -%}
+          <li class="splash-streams__nav-spread-item">
+            <a href="{{ link.url }}" class="splash-streams__nav-spread-link">
+              {{- link.title | escape -}}
+            </a>
+          </li>
+        {%- endfor -%}
+      {%- else -%}
+        <li class="splash-streams__nav-spread-item splash-streams__nav-spread-item--empty">
+          <span class="splash-streams__nav-spread-empty">
+            {{- 'splash_streams.spread_nav.empty' | t -}}
+          </span>
+        </li>
+      {%- endif -%}
+    </ul>
+  </nav>
+</header>

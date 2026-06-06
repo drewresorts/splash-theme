@@ -3,19 +3,23 @@
   assign menu_logo = section.settings.menu_logo
   assign logo_width = section.settings.logo_width | default: 240
   assign logo_src_width = logo_width | times: 2
-  assign overlay_opacity = section.settings.overlay_opacity | default: 35
-  assign overlay_color = section.settings.overlay_color | default: '#000000'
-  assign overlay_alpha = overlay_opacity | times: 0.01
-
+  assign overlay_opacity = section.settings.overlay_opacity | default: 55
+  assign overlay_color = section.settings.overlay_color | default: '#0b0b0f'
+  assign overlay_alpha = overlay_opacity | divided_by: 100.0
   assign stream_blocks = section.blocks | where: 'type', 'stream'
   assign email_blocks = section.blocks | where: 'type', 'email_signup'
   assign splash_menu = section.settings.menu
+  assign menu_style = section.settings.menu_style | default: 'logo_overlay'
+  assign spread_lowercase = section.settings.spread_lowercase_links
 -%}
 
 <section
-  class="splash-streams"
+  class="splash-streams{% if menu_style == 'spread_header' %} splash-streams--menu-spread{% endif %}"
   data-splash-streams
-  style="--logo-width: {{ logo_width }}px;"
+  data-menu-style="{{ menu_style }}"
+  style="
+    --logo-width: {{ logo_width }}px;
+  "
 >
   <div class="splash-streams__bg" aria-hidden="true">
     <div class="splash-streams__player-shell">
@@ -28,6 +32,11 @@
         referrerpolicy="strict-origin-when-cross-origin"
         tabindex="-1"
       ></iframe>
+      <div
+        class="splash-streams__overlay"
+        aria-hidden="true"
+        style="background-color: {{ overlay_color | color_modify: 'alpha', overlay_alpha }};"
+      ></div>
     </div>
     <div class="splash-streams__selfie-shell">
       <video
@@ -37,20 +46,13 @@
         muted
         autoplay
       ></video>
+      <div
+        class="splash-streams__overlay"
+        aria-hidden="true"
+        style="background-color: {{ overlay_color | color_modify: 'alpha', overlay_alpha }};"
+      ></div>
     </div>
-    <div
-      class="splash-streams__overlay"
-      aria-hidden="true"
-      style="background-color: {{ overlay_color }}; opacity: {{ overlay_alpha }};"
-    ></div>
   </div>
-
-  {% style %}
-    #shopify-section-{{ section.id }} .splash-streams__overlay {
-      background-color: {{ overlay_color }};
-      opacity: {{ overlay_alpha }};
-    }
-  {% endstyle %}
 
   <button
     type="button"
@@ -62,6 +64,9 @@
   </button>
 
   <div class="splash-streams__chrome">
+    {%- if menu_style == 'spread_header' -%}
+      {%- render 'splash-streams-nav-spread', menu: splash_menu, lowercase_links: spread_lowercase -%}
+    {%- else -%}
     <button
       type="button"
       class="splash-streams__nav-backdrop"
@@ -163,6 +168,7 @@
       </ul>
       </nav>
     </div>
+    {%- endif -%}
 
     {%- for block in email_blocks -%}
       {%- if block.settings.position == 'below_logo' -%}
@@ -188,13 +194,6 @@
       </div>
     {%- endunless -%}
   {%- endfor -%}
-
-  <script type="application/json" data-splash-streams-strings>
-    {
-      "emailError": {{ 'splash_streams.email.error' | t | json }},
-      "emailCaptcha": {{ 'splash_streams.email.captcha' | t | json }}
-    }
-  </script>
 
   {%- if stream_blocks.size > 0 -%}
     <p class="splash-streams__key-hint" aria-live="polite">Change stream with arrow keys</p>
@@ -241,10 +240,12 @@
     overflow: hidden;
     z-index: 0;
     pointer-events: none;
+    isolation: isolate;
   }
 
   .splash-streams__player {
     position: absolute;
+    z-index: 0;
     left: 50%;
     top: 56%;
     width: max(100vw, 177.78vh);
@@ -263,16 +264,28 @@
     z-index: 0;
     pointer-events: none;
     background: #000;
+    isolation: isolate;
   }
 
   .splash-streams__selfie {
     position: absolute;
+    z-index: 0;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
     object-position: center;
     transform: scaleX(-1);
+  }
+
+  /* Video tint overlay above iframe/video (alpha baked into the color). */
+  .splash-streams__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    transform: translateZ(2px);
+    background-color: transparent;
   }
 
   .splash-streams__camera-prompt {
@@ -332,14 +345,6 @@
     }
   }
 
-  .splash-streams__overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    pointer-events: none;
-    transform: translateZ(10px);
-  }
-
   .splash-streams__chrome {
     display: flex;
     position: relative;
@@ -355,6 +360,115 @@
 
   .splash-streams__chrome > * {
     pointer-events: auto;
+  }
+
+  /* Spread header: top-level page links across the viewport (like a word-spaced header row). */
+  .splash-streams--menu-spread .splash-streams__chrome {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    place-self: stretch;
+    width: 100%;
+    max-width: none;
+    padding: max(0.85rem, env(safe-area-inset-top)) clamp(1rem, 3vw, 2.75rem) 0;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+
+  .splash-streams__spread-header {
+    width: 100%;
+    pointer-events: auto;
+  }
+
+  .splash-streams__nav-spread {
+    width: 100%;
+  }
+
+  .splash-streams__nav-spread-list {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: clamp(0.25rem, 1.5vw, 1.25rem);
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .splash-streams__nav-spread-item {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .splash-streams__nav-spread-link,
+  .splash-streams__nav-spread-empty {
+    display: block;
+    font-family: 'Roboto', ui-sans-serif, system-ui, sans-serif;
+    font-size: clamp(0.65rem, 2.35vw, 1.05rem);
+    font-weight: 700;
+    font-style: normal;
+    line-height: 1.15;
+    letter-spacing: 0.06em;
+    color: #fff;
+    text-decoration: none;
+    text-shadow:
+      0 0 10px #000,
+      0 1px 3px #000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .splash-streams__nav-spread-list--lowercase .splash-streams__nav-spread-link,
+  .splash-streams__nav-spread-list--lowercase .splash-streams__nav-spread-empty {
+    text-transform: lowercase;
+  }
+
+  .splash-streams__nav-spread-link:hover,
+  .splash-streams__nav-spread-link:focus-visible {
+    opacity: 0.85;
+    outline: none;
+  }
+
+  .splash-streams__nav-spread-link:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+  }
+
+  .splash-streams__nav-spread-item--empty {
+    flex: 1 1 100%;
+    text-align: center;
+  }
+
+  .splash-streams--menu-spread .splash-streams__signup--below-logo {
+    margin-top: clamp(0.5rem, 2vh, 1rem);
+  }
+
+  @media (max-width: 749px) {
+    .splash-streams__nav-spread-list {
+      flex-wrap: wrap;
+      justify-content: space-between;
+      row-gap: 0.45rem;
+    }
+
+    .splash-streams__nav-spread-item {
+      flex: 0 1 calc(50% - 0.5rem);
+      text-align: center;
+    }
+
+    .splash-streams__nav-spread-link,
+    .splash-streams__nav-spread-empty {
+      font-size: clamp(0.6rem, 3.2vw, 0.9rem);
+      text-align: center;
+    }
   }
 
   .splash-streams__nav-cluster {
@@ -771,6 +885,7 @@
 
   .splash-streams__signup--lowercase .splash-streams__signup-heading,
   .splash-streams__signup--lowercase .splash-streams__signup-text,
+  .splash-streams__signup--lowercase .splash-streams__email-form-label,
   .splash-streams__signup--lowercase .splash-streams__email-field__input,
   .splash-streams__signup--lowercase .splash-streams__email-field__button {
     text-transform: lowercase;
@@ -778,17 +893,38 @@
 
   .splash-streams__email-form {
     margin: 0;
+    text-align: left;
+  }
+
+  .splash-streams__email-form-label {
+    display: block;
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    line-height: 1.3;
+    color: #fff;
+    opacity: 0.9;
+  }
+
+  .splash-streams__email-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   .splash-streams__email-field {
     display: flex;
     align-items: stretch;
     gap: 0;
+    flex: 1 1 14rem;
+    min-width: 0;
     margin: 0;
-    border-radius: 0.25rem;
+    border-radius: 0.5rem;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, #fff 35%, transparent);
-    background: color-mix(in srgb, #000 45%, transparent);
+    border: 1px solid color-mix(in srgb, #fff 45%, transparent);
+    background: color-mix(in srgb, #000 55%, transparent);
     backdrop-filter: blur(6px);
   }
 
@@ -848,97 +984,6 @@
 
   .splash-streams__email-message--success {
     color: #b8f5c8;
-  }
-
-  .splash-streams__email-form-panel[hidden],
-  .splash-streams__email-success-panel[hidden] {
-    display: none !important;
-  }
-
-  .splash-streams__email-success-panel {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 3rem;
-  }
-
-  .splash-streams__email-message--standalone {
-    margin: 0;
-  }
-
-  .splash-streams__email-post-sink {
-    position: absolute;
-    width: 0;
-    height: 0;
-    border: 0;
-    overflow: hidden;
-  }
-
-  .splash-streams__email-challenge-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1.25rem;
-    background: rgba(0, 0, 0, 0.82);
-    backdrop-filter: blur(4px);
-  }
-
-  .splash-streams__email-challenge-overlay[hidden] {
-    display: none !important;
-  }
-
-  .splash-streams__email-challenge-dialog {
-    width: min(94vw, 26rem);
-    max-height: min(90vh, 32rem);
-    padding: 1.25rem 1rem 1rem;
-    border-radius: 0.5rem;
-    background: #fff;
-    color: #111;
-    text-align: center;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  }
-
-  .splash-streams__email-challenge-title {
-    margin: 0 0 0.75rem;
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: 1rem;
-    font-weight: 400;
-    line-height: 1.35;
-    color: #111;
-  }
-
-  .splash-streams__email-challenge-frame {
-    display: block;
-    width: 100%;
-    height: min(58vh, 22rem);
-    min-height: 14rem;
-    border: 0;
-    border-radius: 0.25rem;
-    background: #fff;
-  }
-
-  .splash-streams__email-challenge-done {
-    margin-top: 0.85rem;
-    padding: 0.45rem 1.1rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border: 1px solid #111;
-    border-radius: 0;
-    background: #fff;
-    color: #111;
-    cursor: pointer;
-    text-transform: none;
-  }
-
-  html.splash-streams--challenge-open {
-    overflow: hidden;
-  }
-
-  html.splash-streams--challenge-open .h-captcha-badge {
-    display: none !important;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1383,7 +1428,7 @@
 
 {% schema %}
 {
-  "name": "Splash streams",
+  "name": "t:splash_streams_page.section.name",
   "tag": "section",
   "class": "section--splash-streams",
   "settings": [
@@ -1399,10 +1444,35 @@
       "info": "Same links as your storefront navigation (Online Store -> Navigation). Shows top-level items and one submenu level."
     },
     {
+      "type": "select",
+      "id": "menu_style",
+      "label": "t:splash_streams_page.section.settings.menu_style.label",
+      "info": "t:splash_streams_page.section.settings.menu_style.info",
+      "default": "logo_overlay",
+      "options": [
+        {
+          "value": "logo_overlay",
+          "label": "t:splash_streams_page.section.settings.menu_style.options__1.label"
+        },
+        {
+          "value": "spread_header",
+          "label": "t:splash_streams_page.section.settings.menu_style.options__2.label"
+        }
+      ]
+    },
+    {
+      "type": "checkbox",
+      "id": "spread_lowercase_links",
+      "label": "t:splash_streams_page.section.settings.spread_lowercase_links.label",
+      "default": true,
+      "visible_if": "{{ section.settings.menu_style == 'spread_header' }}"
+    },
+    {
       "type": "image_picker",
       "id": "menu_logo",
       "label": "Menu open logo",
-      "info": "When set along with the theme logo (Theme settings → Splash streams page → Center logo), this image is shown on the button while the menu is open. Leave blank to keep the same logo when open."
+      "info": "When set along with the theme logo (Theme settings → Splash streams page → Center logo), this image is shown on the button while the menu is open. Leave blank to keep the same logo when open.",
+      "visible_if": "{{ section.settings.menu_style == 'logo_overlay' }}"
     },
     {
       "type": "range",
@@ -1415,20 +1485,24 @@
       "default": 260
     },
     {
+      "type": "header",
+      "content": "t:coming_soon.section.headers.style"
+    },
+    {
       "type": "color",
       "id": "overlay_color",
-      "label": "Overlay color",
-      "default": "#000000"
+      "label": "t:coming_soon.section.settings.overlay_color.label",
+      "default": "#0b0b0f"
     },
     {
       "type": "range",
       "id": "overlay_opacity",
-      "label": "Overlay opacity",
+      "label": "t:coming_soon.section.settings.overlay_opacity.label",
       "min": 0,
-      "max": 80,
+      "max": 90,
       "step": 5,
       "unit": "%",
-      "default": 35
+      "default": 55
     }
   ],
   "blocks": [
@@ -1468,8 +1542,7 @@
         {
           "type": "text",
           "id": "heading",
-          "label": "t:splash_streams_page.section.blocks.email_signup.settings.heading.label",
-          "default": "Stay in the loop"
+          "label": "t:splash_streams_page.section.blocks.email_signup.settings.heading.label"
         },
         {
           "type": "richtext",
@@ -1478,34 +1551,40 @@
         },
         {
           "type": "text",
+          "id": "form_label",
+          "label": "t:splash_streams_page.section.blocks.email_signup.settings.form_label.label",
+          "default": "Get notified when we launch"
+        },
+        {
+          "type": "text",
           "id": "placeholder",
           "label": "t:splash_streams_page.section.blocks.email_signup.settings.placeholder.label",
-          "default": "Email"
+          "default": "your@email.com"
         },
         {
           "type": "text",
           "id": "button_label",
           "label": "t:splash_streams_page.section.blocks.email_signup.settings.button_label.label",
-          "default": "Subscribe"
+          "default": "Notify me"
         },
         {
           "type": "text",
           "id": "success_message",
           "label": "t:splash_streams_page.section.blocks.email_signup.settings.success_message.label",
-          "default": "Thanks — you're on the list."
+          "default": "You're on the list. See you at launch."
         },
         {
           "type": "checkbox",
           "id": "lowercase_text",
           "label": "t:splash_streams_page.section.blocks.email_signup.settings.lowercase_text.label",
-          "default": true
+          "default": false
         }
       ]
     }
   ],
   "presets": [
     {
-      "name": "Splash streams",
+      "name": "t:splash_streams_page.section.name",
       "blocks": [
         { "type": "stream" },
         { "type": "stream" },
