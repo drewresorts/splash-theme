@@ -1122,7 +1122,7 @@
         },
         "logo_position": {
           "label": "Logo position",
-          "info": "Position of the logo in the header layout."
+          "info": "Position of the logo in the header layout.",
           "options__1": {
             "label": "Middle left"
           },
