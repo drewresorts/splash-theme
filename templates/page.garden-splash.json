@@ -1,11 +1,39 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
 {
   "sections": {
     "main": {
       "type": "garden-splash",
       "settings": {
-        "menu": "main-menu"
+        "logo": "shopify://shop_images/duet_spellout_white.png",
+        "logo_size": 55,
+        "menu": "main-menu",
+        "logo_link": "",
+        "center_color": "#f04e62",
+        "center_accent_color": "#a62749",
+        "color_1": "#a62749",
+        "color_2": "#66a4c8",
+        "color_3": "#191f6b",
+        "color_4": "#FBB9B9",
+        "color_5": "#f04e62",
+        "color_6": "#FBB9B9",
+        "foliage_color": "#66a4c8",
+        "soil_color": "#FFFFFF",
+        "bloom_duration": 10,
+        "density": "airy",
+        "hint_text": "touch the garden",
+        "show_replant": true
       }
     }
   },
-  "order": ["main"]
+  "order": [
+    "main"
+  ]
 }
