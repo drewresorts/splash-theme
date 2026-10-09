@@ -9,8 +9,16 @@
  */
 {
   "sections": {
+    "garden_splash_duet": {
+      "type": "garden-splash",
+      "settings": {
+        "menu": "main-menu",
+        "center_color": "#FF6F61"
+      }
+    },
     "splash_streams_jYPmmR": {
       "type": "splash-streams",
+      "disabled": true,
       "blocks": {
         "stream_TmMwAG": {
           "type": "stream",
@@ -61,6 +69,7 @@
     }
   },
   "order": [
+    "garden_splash_duet",
     "splash_streams_jYPmmR"
   ]
 }
