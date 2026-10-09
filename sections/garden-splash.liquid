@@ -1,0 +1,606 @@
+{%- liquid
+  assign logo_image = section.settings.logo | default: settings.splash_streams_logo
+  assign garden_menu = section.settings.menu
+  assign logo_size = section.settings.logo_size | default: 55
+  assign logo_ratio = logo_size | times: 0.01
+
+  assign has_menu = false
+  if garden_menu != blank and garden_menu.links.size > 0
+    assign has_menu = true
+  endif
+
+-%}
+
+{%- capture palette_json -%}
+  ["{{ section.settings.color_1 }}","{{ section.settings.color_2 }}","{{ section.settings.color_3 }}","{{ section.settings.color_4 }}","{{ section.settings.color_5 }}","{{ section.settings.color_6 }}"]
+{%- endcapture -%}
+
+<script src="{{ 'garden-splash.js' | asset_url }}" defer="defer"></script>
+
+<garden-splash
+  class="garden-splash"
+  data-center-color="{{ section.settings.center_color }}"
+  data-center-accent="{{ section.settings.center_accent_color }}"
+  data-palette="{{ palette_json | escape }}"
+  data-foliage-color="{{ section.settings.foliage_color }}"
+  data-soil-color="{{ section.settings.soil_color }}"
+  data-duration="{{ section.settings.bloom_duration }}"
+  data-density="{{ section.settings.density }}"
+  data-logo-scale="{{ logo_ratio }}"
+  style="--garden-coral: {{ section.settings.center_color }}; --garden-soil: {{ section.settings.soil_color }};"
+>
+  <canvas class="garden-splash__canvas" data-garden-canvas aria-hidden="true"></canvas>
+
+  <div class="garden-splash__center" data-garden-ui>
+    <div class="garden-splash__float" data-garden-float>
+      {%- capture logo_markup -%}
+        {%- if logo_image != blank -%}
+          {{
+            logo_image
+            | image_url: width: 900
+            | image_tag:
+              widths: '240, 360, 480, 640, 900',
+              sizes: '(min-width: 750px) 420px, 60vw',
+              loading: 'eager',
+              fetchpriority: 'high',
+              alt: shop.name,
+              class: 'garden-splash__logo-img'
+          }}
+        {%- else -%}
+          <span class="garden-splash__logo-text">{{ shop.name }}</span>
+        {%- endif -%}
+      {%- endcapture -%}
+
+      {%- if has_menu -%}
+        <button
+          type="button"
+          class="garden-splash__logo"
+          data-garden-logo
+          data-garden-nav-toggle
+          aria-expanded="false"
+          aria-controls="GardenSplashNav-{{ section.id }}"
+          aria-label="{{ shop.name | escape }} menu"
+        >
+          {{ logo_markup }}
+        </button>
+      {%- elsif section.settings.logo_link != blank -%}
+        <a class="garden-splash__logo" href="{{ section.settings.logo_link }}" data-garden-logo>
+          {{ logo_markup }}
+        </a>
+      {%- else -%}
+        <h1 class="garden-splash__logo" data-garden-logo>
+          {{ logo_markup }}
+        </h1>
+      {%- endif -%}
+    </div>
+  </div>
+
+  {%- if has_menu -%}
+    <nav
+      id="GardenSplashNav-{{ section.id }}"
+      class="garden-splash__nav"
+      data-garden-nav
+      data-garden-ui
+      aria-label="{{ garden_menu.title | escape }}"
+    >
+      <ul class="garden-splash__nav-list" role="list">
+        {%- for link in garden_menu.links -%}
+          <li class="garden-splash__nav-item" style="--i: {{ forloop.index0 }};">
+            <a href="{{ link.url }}" class="garden-splash__nav-link">{{ link.title | escape }}</a>
+            {%- if link.links != blank -%}
+              <ul class="garden-splash__nav-sublist" role="list">
+                {%- for child in link.links -%}
+                  <li>
+                    <a href="{{ child.url }}" class="garden-splash__nav-link garden-splash__nav-link--sub">
+                      {{- child.title | escape -}}
+                    </a>
+                  </li>
+                {%- endfor -%}
+              </ul>
+            {%- endif -%}
+          </li>
+        {%- endfor -%}
+      </ul>
+    </nav>
+  {%- endif -%}
+
+  {%- if section.settings.hint_text != blank -%}
+    <p class="garden-splash__hint" data-garden-hint aria-hidden="true">{{ section.settings.hint_text | escape }}</p>
+  {%- endif -%}
+
+  {%- if section.settings.show_replant -%}
+    <button
+      type="button"
+      class="garden-splash__replant"
+      data-garden-replant
+      data-garden-ui
+      aria-label="Replant the garden"
+      title="Replant the garden"
+    >
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+        <path d="M12 21v-8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M12 13c0-3.6-2.6-6-6.5-6 0 3.6 2.6 6 6.5 6Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M12 11c0-3.2 2.3-5.5 5.8-5.5 0 3.2-2.3 5.5-5.8 5.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M7 21h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </button>
+  {%- endif -%}
+</garden-splash>
+
+{% stylesheet %}
+  .garden-splash {
+    --garden-powder: #b9e5fb;
+    --garden-ocean: #191f6b;
+    --garden-wine: #a62749;
+    --garden-teal: #66a4c8;
+    --garden-paper: var(--garden-powder);
+    --garden-ink: var(--garden-ocean);
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100vh;
+    height: 100svh;
+    min-height: 32rem;
+    overflow: hidden;
+    isolation: isolate;
+    background:
+      radial-gradient(circle at 50% 50%, var(--garden-coral, #f04e62) 0 16%, transparent 16.5%),
+      var(--garden-soil, #191f6b);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  .garden-splash.is-ready {
+    background: var(--garden-soil, #191f6b);
+  }
+
+  .garden-splash__canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+  }
+
+  /* ---------- Center logo, pasted on like a sticker ---------- */
+
+  .garden-splash__center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 3;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .garden-splash__float {
+    position: absolute;
+    left: 0;
+    top: 0;
+    will-change: transform;
+  }
+
+  .garden-splash__logo {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: grid;
+    place-items: center;
+    width: var(--garden-logo-size, min(56vw, 22rem));
+    aspect-ratio: 1;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--garden-paper);
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) rotate(-4deg);
+    transition:
+      opacity 0.25s ease,
+      transform 0.55s cubic-bezier(0.2, 1.6, 0.4, 1);
+  }
+
+  h1.garden-splash__logo {
+    cursor: default;
+    pointer-events: none;
+  }
+
+  .garden-splash.is-ready:not(.is-bloomed) .garden-splash__logo {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.7) rotate(-22deg);
+    pointer-events: none;
+  }
+
+  .garden-splash.is-ready:not(.is-bloomed) .garden-splash__logo:focus-visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-4deg);
+  }
+
+  .garden-splash__logo:focus-visible {
+    outline: 2px dashed var(--garden-paper);
+    outline-offset: 8px;
+  }
+
+  .garden-splash__logo-img,
+  .garden-splash__logo-text {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(2px 4px 0 rgba(14, 8, 4, 0.3));
+  }
+
+  .garden-splash__logo-text {
+    width: auto;
+    font-family: var(--font-heading-family);
+    font-size: clamp(2.4rem, 7vw, 5.6rem);
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
+    text-align: center;
+    color: var(--garden-coral, #f04e62);
+  }
+
+  /* ---------- Menu: links cut out like ransom-note labels ---------- */
+
+  .garden-splash__nav {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    padding: 6rem 2rem;
+    background: color-mix(in srgb, var(--garden-ocean) 42%, transparent);
+    -webkit-backdrop-filter: blur(10px) saturate(1.1);
+    backdrop-filter: blur(10px) saturate(1.1);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+    overflow-y: auto;
+  }
+
+  .garden-splash.is-nav-open .garden-splash__nav {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.35s ease;
+  }
+
+  .garden-splash.is-nav-open .garden-splash__logo {
+    transform: translate(-50%, calc(-50% - min(30svh, 15rem))) scale(0.42) rotate(6deg);
+  }
+
+  .garden-splash__nav-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.2rem;
+    margin: min(18svh, 9rem) 0 0;
+    padding: 0;
+    list-style: none;
+    text-align: center;
+  }
+
+  .garden-splash__nav-item {
+    --tilt: -2.5deg;
+    opacity: 0;
+    transform: translateY(14px) scale(1.25) rotate(calc(var(--tilt) * 4));
+    transition: opacity 0.12s steps(2), transform 0.4s cubic-bezier(0.2, 1.6, 0.4, 1);
+  }
+
+  .garden-splash__nav-item:nth-child(even) {
+    --tilt: 2deg;
+  }
+
+  .garden-splash__nav-item:nth-child(3n) {
+    --tilt: -1deg;
+  }
+
+  .garden-splash.is-nav-open .garden-splash__nav-item {
+    opacity: 1;
+    transform: rotate(var(--tilt));
+    transition-delay: calc(0.08s + var(--i, 0) * 0.07s);
+  }
+
+  .garden-splash__nav-link {
+    display: inline-block;
+    padding: 0.3rem 1.2rem 0.5rem;
+    background: var(--garden-paper);
+    color: var(--garden-ocean);
+    font-family: var(--font-heading-family);
+    font-size: clamp(2.2rem, 4.6vw, 3.6rem);
+    line-height: 1.1;
+    letter-spacing: 0.01em;
+    text-transform: lowercase;
+    text-decoration: none;
+    box-shadow: 2px 3px 0 rgba(14, 8, 4, 0.35);
+    clip-path: polygon(1% 4%, 30% 0, 62% 6%, 99% 1%, 100% 52%, 97% 97%, 64% 100%, 28% 94%, 0 100%, 2% 48%);
+    transition: background-color 0.15s steps(2), color 0.15s steps(2);
+  }
+
+  .garden-splash__nav-item:nth-child(3n + 2) > .garden-splash__nav-link {
+    background: var(--garden-teal);
+    color: var(--garden-ocean);
+  }
+
+  .garden-splash__nav-item:nth-child(3n + 3) > .garden-splash__nav-link {
+    background: var(--garden-coral, #f04e62);
+    color: var(--garden-paper);
+  }
+
+  .garden-splash__nav-link:hover,
+  .garden-splash__nav-link:focus-visible {
+    background: var(--garden-wine);
+    color: var(--garden-powder);
+  }
+
+  .garden-splash__nav-link:focus-visible {
+    outline: 2px dashed var(--garden-paper);
+    outline-offset: 4px;
+  }
+
+  .garden-splash__nav-sublist {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem 0.8rem;
+    margin: 0.8rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .garden-splash__nav-link--sub {
+    font-size: clamp(1.4rem, 2.2vw, 1.8rem);
+    background: var(--garden-paper);
+    color: var(--garden-ink);
+  }
+
+  /* ---------- Hint + replant ---------- */
+
+  .garden-splash__hint {
+    position: absolute;
+    left: 50%;
+    bottom: max(2.4rem, env(safe-area-inset-bottom));
+    z-index: 2;
+    margin: 0;
+    padding: 0.5rem 1.4rem 0.7rem;
+    background: var(--garden-paper);
+    color: var(--garden-ocean);
+    font-family: var(--font-body-family);
+    font-size: 1.4rem;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 2px 3px 0 rgba(14, 8, 4, 0.35);
+    clip-path: polygon(0 6%, 22% 0, 54% 5%, 100% 0, 98% 55%, 100% 100%, 70% 95%, 35% 100%, 2% 96%, 0 50%);
+    transform: translateX(-50%) rotate(-2deg);
+    transition: opacity 0.3s steps(3), transform 0.3s steps(3);
+    animation: garden-splash-hint 1.6s steps(1) infinite;
+  }
+
+  .garden-splash.has-interacted .garden-splash__hint,
+  .garden-splash.is-nav-open .garden-splash__hint {
+    opacity: 0;
+    transform: translate(-50%, 14px) rotate(4deg);
+    animation: none;
+  }
+
+  /* Hand-animated wobble, a couple of frames per second. */
+  @keyframes garden-splash-hint {
+    0% { transform: translateX(-50%) rotate(-2deg); }
+    33% { transform: translateX(calc(-50% + 1px)) rotate(-1.2deg); }
+    66% { transform: translateX(calc(-50% - 1px)) rotate(-2.6deg); }
+  }
+
+  .garden-splash__replant {
+    position: absolute;
+    left: max(1.6rem, env(safe-area-inset-left));
+    bottom: max(1.6rem, env(safe-area-inset-bottom));
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 4.6rem;
+    height: 4.6rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 46% 54% 50% 48% / 52% 46% 54% 48%;
+    background: var(--garden-paper);
+    color: var(--garden-ocean);
+    box-shadow: 2px 3px 0 rgba(14, 8, 4, 0.35);
+    cursor: pointer;
+    transform: rotate(-8deg);
+    transition: transform 0.25s steps(3);
+  }
+
+  .garden-splash__replant:hover,
+  .garden-splash__replant:focus-visible {
+    transform: rotate(10deg) scale(1.08);
+  }
+
+  .garden-splash__replant:focus-visible {
+    outline: 2px dashed var(--garden-paper);
+    outline-offset: 3px;
+  }
+
+  .garden-splash.is-nav-open .garden-splash__replant {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .garden-splash__logo,
+    .garden-splash__nav,
+    .garden-splash__nav-item,
+    .garden-splash__replant {
+      transition-duration: 0.01s;
+    }
+
+    .garden-splash__hint {
+      animation: none;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Garden splash",
+  "tag": "section",
+  "class": "section--garden-splash",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "A top-down, cut-and-paste collage garden of paper asterisk flowers that grows from seed to full bloom. Visitors can sweep through the flowers, press and drag to make them grow, and tap open flowers to have them re-cut from new paper. The center flower opens last and your logo is pasted on top. Built to fill the whole screen, so it works best as the only section on a page."
+    },
+    {
+      "type": "header",
+      "content": "Logo & menu"
+    },
+    {
+      "type": "image_picker",
+      "id": "logo",
+      "label": "Center logo",
+      "info": "Leave blank to use Theme settings → Splash streams page → Center logo."
+    },
+    {
+      "type": "range",
+      "id": "logo_size",
+      "label": "Logo size",
+      "info": "Relative to the center flower.",
+      "min": 30,
+      "max": 90,
+      "step": 5,
+      "unit": "%",
+      "default": 55
+    },
+    {
+      "type": "link_list",
+      "id": "menu",
+      "label": "Navigation menu",
+      "default": "main-menu",
+      "info": "When set, tapping the logo opens this menu over the garden."
+    },
+    {
+      "type": "url",
+      "id": "logo_link",
+      "label": "Logo link",
+      "info": "Used when no menu is selected."
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "center_color",
+      "label": "Center flower",
+      "default": "#F04E62"
+    },
+    {
+      "type": "color",
+      "id": "center_accent_color",
+      "label": "Center flower back layer",
+      "default": "#A62749"
+    },
+    {
+      "type": "color",
+      "id": "color_1",
+      "label": "Garden color 1",
+      "default": "#A62749"
+    },
+    {
+      "type": "color",
+      "id": "color_2",
+      "label": "Garden color 2",
+      "default": "#66A4C8"
+    },
+    {
+      "type": "color",
+      "id": "color_3",
+      "label": "Garden color 3",
+      "default": "#191F6B"
+    },
+    {
+      "type": "color",
+      "id": "color_4",
+      "label": "Garden color 4",
+      "default": "#B9E5FB"
+    },
+    {
+      "type": "color",
+      "id": "color_5",
+      "label": "Garden color 5",
+      "default": "#F04E62"
+    },
+    {
+      "type": "color",
+      "id": "color_6",
+      "label": "Garden color 6",
+      "default": "#B9E5FB"
+    },
+    {
+      "type": "color",
+      "id": "foliage_color",
+      "label": "Leaves",
+      "default": "#66A4C8"
+    },
+    {
+      "type": "color",
+      "id": "soil_color",
+      "label": "Background",
+      "default": "#191F6B"
+    },
+    {
+      "type": "header",
+      "content": "Growth"
+    },
+    {
+      "type": "range",
+      "id": "bloom_duration",
+      "label": "Time to full bloom",
+      "min": 4,
+      "max": 30,
+      "step": 1,
+      "unit": "s",
+      "default": 12
+    },
+    {
+      "type": "select",
+      "id": "density",
+      "label": "Garden density",
+      "default": "lush",
+      "options": [
+        { "value": "airy", "label": "Airy — larger flowers" },
+        { "value": "lush", "label": "Lush" },
+        { "value": "overgrown", "label": "Overgrown — smaller, more flowers" }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "hint_text",
+      "label": "Hint text",
+      "default": "touch the garden",
+      "info": "Fades away after the first interaction. Leave blank to hide."
+    },
+    {
+      "type": "checkbox",
+      "id": "show_replant",
+      "label": "Show replant button",
+      "default": true
+    }
+  ],
+  "presets": [
+    {
+      "name": "Garden splash"
+    }
+  ]
+}
+{% endschema %}
