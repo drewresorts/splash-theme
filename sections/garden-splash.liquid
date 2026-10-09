@@ -21,7 +21,7 @@
   ["{{ section.settings.color_1 }}","{{ section.settings.color_2 }}","{{ section.settings.color_3 }}","{{ section.settings.color_4 }}","{{ section.settings.color_5 }}","{{ section.settings.color_6 }}"]
 {%- endcapture -%}
 
-<script src="{{ 'garden-splash.js' | asset_url }}" defer="defer"></script>
+<script type="module" src="{{ 'garden-splash.js' | asset_url }}"></script>
 
 <garden-splash
   class="garden-splash"
@@ -38,6 +38,7 @@
   <canvas class="garden-splash__canvas" data-garden-canvas aria-hidden="true"></canvas>
   <canvas class="garden-splash__film" data-garden-film aria-hidden="true"></canvas>
   <div class="garden-splash__grain" data-garden-grain aria-hidden="true"></div>
+  <canvas class="garden-splash__overlay" data-garden-overlay aria-hidden="true"></canvas>
 
   <div class="garden-splash__center">
     {%- capture logo_markup -%}
@@ -169,12 +170,24 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* The 3D render is drawn at low resolution and scaled up with hard pixels. */
   .garden-splash__canvas {
     position: absolute;
     inset: 0;
     display: block;
     width: 100%;
     height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  .garden-splash__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
   }
 
   /* Film finish: vignette and scanlines, then grain that shifts a few times a second. */
@@ -484,7 +497,7 @@
   "settings": [
     {
       "type": "paragraph",
-      "content": "A dream-like field of asterisk specimens seen from above, some with eyes that follow the visitor. Each grows from seed to full bloom, and the center specimen resolves last with your logo on it. Visitors can hover to inspect a specimen, press and drag to accelerate growth, and tap to resequence a specimen and make the eyes blink. Built to fill the whole screen, so it works best as the only section on a page."
+      "content": "A field of 3D asterisk specimens seen from above, rendered like cheap late-90s CGI, some with eyes that follow the visitor. Each grows from seed to full bloom, and the center specimen resolves last with your logo on it. Visitors can hover to inspect a specimen, press and drag to accelerate growth, and tap to resequence a specimen and make the eyes blink. Built to fill the whole screen, so it works best as the only section on a page."
     },
     {
       "type": "header",
