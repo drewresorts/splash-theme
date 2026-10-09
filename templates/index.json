@@ -13,7 +13,8 @@
       "type": "garden-splash",
       "settings": {
         "menu": "main-menu",
-        "center_color": "#FF6F61"
+        "center_color": "#F04E62",
+        "center_accent_color": "#A62749"
       }
     },
     "splash_streams_jYPmmR": {
