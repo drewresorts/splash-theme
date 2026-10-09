@@ -67,16 +67,70 @@
   const POWDER = [185, 229, 251];
   const OCEAN = [25, 31, 107];
 
-  /* Canvas filters (blur) power the depth of field and glow; Safari < 18 goes without. */
-  const CAN_FILTER = (() => {
-    try {
-      const c = document.createElement('canvas').getContext('2d');
-      c.filter = 'blur(2px)';
-      return c.filter === 'blur(2px)';
-    } catch (e) {
-      return false;
+  /*
+   * The field is rendered under-resolved and scaled up without smoothing,
+   * like an old 3D render: stair-stepped edges, banded shading, hard shadows.
+   */
+  const renderScale = (w) => (w < 750 ? 0.75 : 0.5);
+
+  /* A gradient whose color stops are hard bands instead of smooth blends. */
+  function banded(grad, bands) {
+    let from = 0;
+    for (const [to, color] of bands) {
+      grad.addColorStop(from, color);
+      grad.addColorStop(to, color);
+      from = to;
     }
-  })();
+    return grad;
+  }
+
+  /* A plastic sphere lit from the top left, with a hard drop shadow. */
+  function sphere(g, x, y, r, c, shadow) {
+    if (r < 0.4) return;
+    if (shadow !== false) {
+      g.fillStyle = 'rgba(0,0,0,0.42)';
+      g.beginPath();
+      g.ellipse(x + r * 0.45, y + r * 0.6, r, r * 0.85, 0, 0, TAU);
+      g.fill();
+    }
+    g.fillStyle = banded(g.createRadialGradient(x - r * 0.35, y - r * 0.4, 0, x - r * 0.1, y - r * 0.1, r * 1.15), [
+      [0.14, rgba(tone(c, 0.85))],
+      [0.36, rgba(tone(c, 0.3))],
+      [0.66, rgba(c)],
+      [0.86, rgba(tone(c, -0.35))],
+      [1, rgba(tone(c, -0.62))],
+    ]);
+    g.beginPath();
+    g.arc(x, y, r, 0, TAU);
+    g.fill();
+  }
+
+  /* A shaded tube between two points: shadow, body, and a specular line. */
+  function tube(g, path, c, w) {
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    g.save();
+    g.translate(w * 0.6, w * 0.8);
+    path();
+    g.strokeStyle = 'rgba(0,0,0,0.38)';
+    g.lineWidth = w;
+    g.stroke();
+    g.restore();
+    path();
+    g.strokeStyle = rgba(tone(c, -0.45));
+    g.lineWidth = w;
+    g.stroke();
+    g.strokeStyle = rgba(c);
+    g.lineWidth = w * 0.6;
+    g.stroke();
+    g.save();
+    g.translate(-w * 0.16, -w * 0.16);
+    path();
+    g.strokeStyle = rgba(tone(c, 0.75));
+    g.lineWidth = Math.max(0.6, w * 0.2);
+    g.stroke();
+    g.restore();
+  }
 
   const BLINK = 0.2;
 
@@ -240,7 +294,10 @@
       palette = palette.filter((c) => colorKey(c) !== ground);
       this.palette = palette.length ? palette : [[166, 39, 73], [102, 164, 200], [185, 229, 251], [240, 78, 98]];
       // Linework, grid and readouts: whichever brand tone reads against the ground.
-      this.ink = luminance(this.soil) > 0.6 ? OCEAN : POWDER;
+      this.isLight = luminance(this.soil) > 0.6;
+      this.ink = this.isLight ? OCEAN : POWDER;
+      // Distance fog, the way old renderers faked depth.
+      this.fog = this.isLight ? WHITE : mix(this.soil, POWDER, 0.2);
       this.duration = clamp(parseFloat(d.duration) || 12, 2, 60);
       this.density = DENSITY[d.density] || DENSITY.lush;
       this.logoScale = clamp(parseFloat(d.logoScale) || 0.55, 0.2, 1);
@@ -376,48 +433,47 @@
 
       this.canvas.width = Math.round(W * this.dpr);
       this.canvas.height = Math.round(H * this.dpr);
+      this.rs = renderScale(W);
       const layer = () => {
         const c = document.createElement('canvas');
-        c.width = this.canvas.width;
-        c.height = this.canvas.height;
+        c.width = Math.ceil(W * this.rs);
+        c.height = Math.ceil(H * this.rs);
         return c;
       };
       this.scene = layer();
-      this.farLayer = layer();
-      this.glowLayer = CAN_FILTER ? layer() : null;
+      this.low = layer();
       this.paintGround();
       this.paintFilm();
       this.dirty = true;
     }
 
+    /* The default floor of a 3D scene: a checkerboard, centered on the middle specimen. */
     paintGround() {
-      const { w: W, h: H, dpr } = this;
+      const { w: W, h: H, rs } = this;
       this.ground = document.createElement('canvas');
-      this.ground.width = this.canvas.width;
-      this.ground.height = this.canvas.height;
+      this.ground.width = this.scene.width;
+      this.ground.height = this.scene.height;
       const g = this.ground.getContext('2d');
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.setTransform(rs, 0, 0, rs, 0, 0);
       g.fillStyle = rgba(this.soil);
       g.fillRect(0, 0, W, H);
-
-      // A measured grid centered on the middle specimen.
-      const step = 24;
-      const ox = (W / 2) % step;
-      const oy = (H / 2) % step;
-      g.fillStyle = rgba(this.ink, 0.16);
-      for (let y = oy; y < H; y += step) {
-        for (let x = ox; x < W; x += step) g.fillRect(x - 0.5, y - 0.5, 1, 1);
+      const step = 40;
+      const ox = ((W / 2) % (step * 2)) - step * 2;
+      const oy = ((H / 2) % (step * 2)) - step * 2;
+      g.fillStyle = rgba(tone(this.soil, this.isLight ? -0.06 : 0.08));
+      for (let y = oy, row = 0; y < H; y += step, row++) {
+        for (let x = ox + (row % 2) * step; x < W; x += step * 2) g.fillRect(x, y, step, step);
       }
-      g.strokeStyle = rgba(this.ink, 0.22);
+      g.strokeStyle = rgba(this.ink, 0.12);
       g.lineWidth = 1;
       g.beginPath();
-      for (let y = oy; y < H; y += step * 5) {
-        for (let x = ox; x < W; x += step * 5) {
-          g.moveTo(x - 3, y);
-          g.lineTo(x + 3, y);
-          g.moveTo(x, y - 3);
-          g.lineTo(x, y + 3);
-        }
+      for (let x = ox; x < W; x += step) {
+        g.moveTo(x, 0);
+        g.lineTo(x, H);
+      }
+      for (let y = oy; y < H; y += step) {
+        g.moveTo(0, y);
+        g.lineTo(W, y);
       }
       g.stroke();
     }
@@ -467,16 +523,6 @@
       if (this.grainLayer && !this.grainLayer.style.backgroundImage) {
         this.grainLayer.style.backgroundImage = `url(${tile.toDataURL()})`;
       }
-      this.shadowSprite = document.createElement('canvas');
-      this.shadowSprite.width = 64;
-      this.shadowSprite.height = 64;
-      const sg = this.shadowSprite.getContext('2d');
-      const sgr = sg.createRadialGradient(32, 32, 0, 32, 32, 32);
-      const sc = light ? OCEAN : tone(this.soil, -0.85);
-      sgr.addColorStop(0, rgba(sc, light ? 0.3 : 0.7));
-      sgr.addColorStop(1, rgba(sc, 0));
-      sg.fillStyle = sgr;
-      sg.fillRect(0, 0, 64, 64);
     }
 
     generate() {
@@ -856,8 +902,6 @@
     /* ---------------- drawing ---------------- */
 
     render() {
-      const g = this.ctx;
-      const { dpr } = this;
       const now = performance.now();
 
       // The field is only redrawn while something is growing, at most ~22 times a second.
@@ -867,126 +911,107 @@
         this.drawScene();
       }
 
-      g.setTransform(1, 0, 0, 1, 0, 0);
-      g.globalAlpha = 1;
-      g.drawImage(this.scene, 0, 0);
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      this.drawEyes(g);
-      this.drawOverlay(g);
+      const lo = this.low.getContext('2d');
+      lo.setTransform(1, 0, 0, 1, 0, 0);
+      lo.drawImage(this.scene, 0, 0);
+      lo.setTransform(this.rs, 0, 0, this.rs, 0, 0);
+      this.drawEyes(lo);
 
+      // Scaled up with no smoothing: every edge stair-steps.
+      const g = this.ctx;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.imageSmoothingEnabled = false;
+      g.drawImage(this.low, 0, 0, this.canvas.width, this.canvas.height);
+      g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this.drawOverlay(g);
     }
 
     drawScene() {
-      const { dpr } = this;
-      const W = this.canvas.width;
-      const H = this.canvas.height;
       const s = this.scene.getContext('2d');
       s.setTransform(1, 0, 0, 1, 0, 0);
+      s.globalAlpha = 1;
       s.drawImage(this.ground, 0, 0);
+      s.setTransform(this.rs, 0, 0, this.rs, 0, 0);
 
-      // The deep layer, drawn apart and laid down out of focus.
-      const fl = this.farLayer.getContext('2d');
-      fl.setTransform(1, 0, 0, 1, 0, 0);
-      fl.clearRect(0, 0, W, H);
-      fl.setTransform(dpr, 0, 0, dpr, 0, 0);
       const far = this.flowers.filter((f) => f.far && f.p > 0);
       const near = this.flowers.filter((f) => !f.far && f.p > 0);
-      for (const f of far) this.drawFoliage(fl, f, f.p);
-      for (const f of far) if (f.p > STAGE.bud[0]) this.drawBloom(fl, f, f.p);
-      s.save();
-      if (CAN_FILTER) s.filter = `blur(${3.2 * dpr}px) brightness(0.6) saturate(0.85)`;
-      else s.globalAlpha = 0.45;
-      s.drawImage(this.farLayer, 0, 0);
-      s.restore();
-      s.fillStyle = rgba(this.soil, 0.25);
-      s.fillRect(0, 0, W, H);
+      for (const f of far) this.drawFoliage(s, f, f.p);
+      for (const f of far) if (f.p > STAGE.bud[0]) this.drawBloom(s, f, f.p);
+      s.fillStyle = rgba(this.fog, 0.5);
+      s.fillRect(0, 0, this.w, this.h);
 
-      s.setTransform(dpr, 0, 0, dpr, 0, 0);
       for (const f of near) this.drawFoliage(s, f, f.p);
-      for (const f of near) {
-        if (f.p <= STAGE.bud[0]) continue;
-        const sh = range(f.p, STAGE.bud[0], STAGE.open[1]);
-        s.globalAlpha = sh;
-        s.drawImage(this.shadowSprite, f.x + f.r * 0.1 - f.r * 1.25, f.y + f.r * 0.16 - f.r * 1.25, f.r * 2.5, f.r * 2.5);
-        s.globalAlpha = 1;
-        this.drawBloom(s, f, f.p);
-      }
+      for (const f of near) if (f.p > STAGE.bud[0]) this.drawBloom(s, f, f.p);
 
-      // Linework and the center specimen bleed light.
-      if (this.glowLayer) {
-        const gl = this.glowLayer.getContext('2d');
-        gl.setTransform(1, 0, 0, 1, 0, 0);
-        gl.clearRect(0, 0, W, H);
-        gl.setTransform(dpr, 0, 0, dpr, 0, 0);
-        for (const f of near) {
-          if (f.p > STAGE.bud[0] && (f.isHero || f.style === 'line' || f.style === 'dots' || f.style === 'orbit')) this.drawBloom(gl, f, f.p);
-        }
-        s.save();
-        s.setTransform(1, 0, 0, 1, 0, 0);
-        s.filter = `blur(${7 * dpr}px)`;
-        s.globalCompositeOperation = 'lighter';
-        s.globalAlpha = 0.5;
-        s.drawImage(this.glowLayer, 0, 0);
-        s.restore();
-      }
+      if (this.bloomed && !this.isLight) this.drawFlare(s);
     }
 
+    /* Low-poly leaves: two flat-shaded faces split along the midrib. */
     drawFoliage(g, f, p) {
       const seedIn = range(p, STAGE.seed[0], STAGE.seed[1]);
       const sprout = range(p, STAGE.sprout[0], STAGE.sprout[1]);
       const leaves = range(p, STAGE.leaves[0], STAGE.leaves[1]);
       const { x, y, r } = f;
+      const c = this.foliage;
 
       for (const leaf of f.leaves) {
         const lp = smooth(range(leaves, leaf.delay, leaf.delay + 0.65));
         if (lp <= 0) continue;
         const len = leaf.len * lp;
-        const w = leaf.w * lp;
-        const c = Math.cos(leaf.a);
-        const s = Math.sin(leaf.a);
-        const tx = x + c * len;
-        const ty = y + s * len;
-        const mx = x + c * len * 0.5;
-        const my = y + s * len * 0.5;
-        // Leaves are drawn as hairline construction lines, not filled shapes.
+        const w = leaf.w * lp * 0.8;
+        const ax = Math.cos(leaf.a);
+        const ay = Math.sin(leaf.a);
+        const tx = x + ax * len;
+        const ty = y + ay * len;
+        const mx = x + ax * len * 0.42;
+        const my = y + ay * len * 0.42;
+        const L = [mx - ay * w, my + ax * w];
+        const R = [mx + ay * w, my - ax * w];
+        const face = (pts, fill) => {
+          g.beginPath();
+          g.moveTo(pts[0][0], pts[0][1]);
+          for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
+          g.closePath();
+          g.fillStyle = fill;
+          g.fill();
+        };
+        g.save();
+        g.translate(3, 4);
+        face([[x, y], L, [tx, ty], R], 'rgba(0,0,0,0.32)');
+        g.restore();
+        face([[x, y], L, [tx, ty]], rgba(tone(c, 0.2)));
+        face([[x, y], [tx, ty], R], rgba(tone(c, -0.3)));
+        g.strokeStyle = rgba(tone(c, 0.55));
+        g.lineWidth = 0.8;
         g.beginPath();
         g.moveTo(x, y);
-        g.quadraticCurveTo(mx - s * w, my + c * w, tx, ty);
-        g.quadraticCurveTo(mx + s * w, my - c * w, x, y);
-        g.moveTo(x, y);
         g.lineTo(tx, ty);
-        g.strokeStyle = rgba(this.foliage, 0.85);
-        g.lineWidth = 1;
         g.stroke();
-        g.fillStyle = rgba(this.foliage);
-        g.fillRect(tx - 1.5, ty - 1.5, 3, 3);
       }
 
       if (sprout > 0 && leaves < 1) {
-        const len = r * 0.2 * sprout;
-        g.strokeStyle = rgba(this.foliage);
-        g.lineWidth = 1.2;
-        g.beginPath();
+        const len = r * 0.22 * sprout;
         for (const off of [-0.5, 0.5]) {
-          g.moveTo(x, y);
-          g.lineTo(x + Math.cos(f.seedAngle + off) * len, y + Math.sin(f.seedAngle + off) * len);
+          const ex = x + Math.cos(f.seedAngle + off) * len;
+          const ey = y + Math.sin(f.seedAngle + off) * len;
+          tube(g, () => {
+            g.beginPath();
+            g.moveTo(x, y);
+            g.lineTo(ex, ey);
+          }, c, 2.4);
         }
-        g.stroke();
       }
 
-      if (seedIn > 0 && leaves < 1) {
-        g.fillStyle = rgba(this.ink, seedIn);
-        g.beginPath();
-        g.arc(x, y, 1.8, 0, TAU);
-        g.fill();
-      }
+      if (seedIn > 0 && leaves < 1) sphere(g, x, y, 3.2 * seedIn, this.heroAccent);
     }
 
-    armPath(g, f, arm, e) {
+    armPath(g, f, arm, e, ox, oy) {
       const L = Math.max(arm.back + 1, arm.len * e);
       const k = Math.tan(arm.cut);
       const c = Math.cos(f.rot + arm.a);
       const s = Math.sin(f.rot + arm.a);
+      const dx = ox || 0;
+      const dy = oy || 0;
       const pts = [
         [arm.back, -arm.hw0],
         [L + k * arm.hw1, -arm.hw1],
@@ -995,38 +1020,45 @@
       ];
       g.beginPath();
       pts.forEach(([px, py], i) => {
-        const X = f.x + px * c - py * s;
-        const Y = f.y + px * s + py * c;
+        const X = f.x + dx + px * c - py * s;
+        const Y = f.y + dy + px * s + py * c;
         if (i) g.lineTo(X, Y);
         else g.moveTo(X, Y);
       });
       g.closePath();
+      return pts.map(([px, py]) => [f.x + dx + px * c - py * s, f.y + dy + px * s + py * c]);
     }
 
-    /* A solid arm with depth: shade at the root, sheen along its length. */
-    shadedArm(g, f, arm, e, color) {
-      const a = f.rot + arm.a;
-      const c = Math.cos(a);
-      const s = Math.sin(a);
-      const L = arm.len * e;
-      this.armPath(g, f, arm, e);
-      const grad = g.createLinearGradient(f.x, f.y, f.x + c * Math.max(1, L), f.y + s * Math.max(1, L));
-      grad.addColorStop(0, rgba(tone(color, -0.55)));
-      grad.addColorStop(0.32, rgba(tone(color, -0.08)));
-      grad.addColorStop(0.78, rgba(tone(color, 0.1)));
-      grad.addColorStop(1, rgba(tone(color, -0.18)));
-      g.fillStyle = grad;
-      g.fill();
-      g.strokeStyle = rgba(tone(color, -0.6), 0.8);
-      g.lineWidth = 1;
-      g.stroke();
-      if (L > arm.len * 0.3) {
-        const o = -arm.hw0 * 0.45;
-        g.beginPath();
-        g.moveTo(f.x + c * L * 0.28 - s * o, f.y + s * L * 0.28 + c * o);
-        g.lineTo(f.x + c * L * 0.86 - s * o, f.y + s * L * 0.86 + c * o);
-        g.strokeStyle = 'rgba(255,255,255,0.22)';
-        g.lineWidth = 1.4;
+    /* Arms extruded into thick plastic: hard shadow, stacked sides, glossy top. */
+    extrudeArms(g, f, arms, color, reach, depth) {
+      const d = depth || f.r * 0.07;
+      const live = arms.map((arm) => [arm, reach(arm)]).filter(([, e]) => e > 0);
+      g.fillStyle = 'rgba(0,0,0,0.38)';
+      for (const [arm, e] of live) {
+        this.armPath(g, f, arm, e, d * 2.2, d * 2.8);
+        g.fill();
+      }
+      for (let k = 4; k >= 1; k--) {
+        g.fillStyle = rgba(tone(color, -0.35 - k * 0.06));
+        for (const [arm, e] of live) {
+          this.armPath(g, f, arm, e, (d * k) / 4, (d * k * 1.3) / 4);
+          g.fill();
+        }
+      }
+      for (const [arm, e] of live) {
+        const a = f.rot + arm.a;
+        const L = Math.max(1, arm.len * e);
+        this.armPath(g, f, arm, e);
+        g.fillStyle = banded(g.createLinearGradient(f.x, f.y, f.x + Math.cos(a) * L, f.y + Math.sin(a) * L), [
+          [0.22, rgba(tone(color, -0.32))],
+          [0.56, rgba(color)],
+          [0.64, rgba(tone(color, 0.62))],
+          [0.9, rgba(tone(color, 0.12))],
+          [1, rgba(tone(color, -0.12))],
+        ]);
+        g.fill();
+        g.strokeStyle = 'rgba(0,0,0,0.4)';
+        g.lineWidth = 1;
         g.stroke();
       }
     }
@@ -1037,14 +1069,9 @@
       const { x, y, r } = f;
       const reach = (arm) => smooth(range(openP, arm.delay, arm.delay + 0.6));
 
-      // Bud: a small ring that the arms replace.
-      if (openP < 1) {
-        g.strokeStyle = rgba(f.color, budP * (1 - openP));
-        g.lineWidth = 1.2;
-        g.beginPath();
-        g.arc(x, y, r * 0.15 * budP, 0, TAU);
-        g.stroke();
-      }
+      // Bud: a plastic ball the arms push out from under.
+      const budR = r * 0.2 * smooth(budP) * (1 - smooth(range(openP, 0.2, 0.7)));
+      if (budR > 0.5) sphere(g, x, y, budR, f.color);
       if (openP <= 0) return;
 
       switch (f.style) {
@@ -1052,49 +1079,46 @@
           this.drawHero(g, f, openP, reach);
           return;
         case 'solid':
-        case 'outline':
+          this.extrudeArms(g, f, f.arms, f.color, reach);
+          break;
+        case 'outline': {
+          // A wireframe pass: polygon edges, triangulation and vertices.
+          g.strokeStyle = rgba(f.color);
+          g.fillStyle = rgba(f.color, 0.1);
+          g.lineWidth = 1;
           for (const arm of f.arms) {
             const e = reach(arm);
             if (e <= 0) continue;
-            if (f.style === 'solid') {
-              this.shadedArm(g, f, arm, e, f.color);
-            } else {
-              this.armPath(g, f, arm, e);
-              g.fillStyle = rgba(this.soil, 0.85);
-              g.fill();
-              g.strokeStyle = rgba(f.color);
-              g.lineWidth = 1.3;
-              g.stroke();
-            }
+            const pts = this.armPath(g, f, arm, e);
+            g.fill();
+            g.moveTo(pts[0][0], pts[0][1]);
+            g.lineTo(pts[2][0], pts[2][1]);
+            g.moveTo((pts[0][0] + pts[3][0]) / 2, (pts[0][1] + pts[3][1]) / 2);
+            g.lineTo((pts[1][0] + pts[2][0]) / 2, (pts[1][1] + pts[2][1]) / 2);
+            g.stroke();
+            g.fillStyle = rgba(tone(f.color, 0.5));
+            for (const [px, py] of pts) g.fillRect(px - 1.5, py - 1.5, 3, 3);
+            g.fillStyle = rgba(f.color, 0.1);
           }
           break;
-        case 'line': {
-          g.strokeStyle = rgba(f.color);
-          g.fillStyle = rgba(f.color);
-          g.lineWidth = 1.3;
-          g.beginPath();
-          const tips = [];
+        }
+        case 'line':
           for (const arm of f.arms) {
             const e = reach(arm);
             if (e <= 0) continue;
             const c = Math.cos(f.rot + arm.a);
             const s = Math.sin(f.rot + arm.a);
-            g.moveTo(x + c * r * 0.08, y + s * r * 0.08);
-            g.lineTo(x + c * arm.len * e, y + s * arm.len * e);
-            tips.push([x + c * arm.len * e, y + s * arm.len * e]);
+            const ex = x + c * arm.len * e;
+            const ey = y + s * arm.len * e;
+            tube(g, () => {
+              g.beginPath();
+              g.moveTo(x + c * r * 0.08, y + s * r * 0.08);
+              g.lineTo(ex, ey);
+            }, f.color, 3.4);
+            sphere(g, ex, ey, 3.4, f.color, false);
           }
-          g.stroke();
-          g.beginPath();
-          for (const [tx, ty] of tips) {
-            g.moveTo(tx + 2, ty);
-            g.arc(tx, ty, 2, 0, TAU);
-          }
-          g.fill();
           break;
-        }
-        case 'dots': {
-          g.fillStyle = rgba(f.color);
-          g.beginPath();
+        case 'dots':
           for (const arm of f.arms) {
             const e = reach(arm);
             const m = Math.floor(arm.len / f.dotStep);
@@ -1102,46 +1126,30 @@
             const s = Math.sin(f.rot + arm.a);
             for (let j = 1; j <= m; j++) {
               if (j * f.dotStep > arm.len * e) break;
-              const rr = f.dotStep * 0.4 * (1 - (j / m) * 0.55);
-              const dx = x + c * j * f.dotStep;
-              const dy = y + s * j * f.dotStep;
-              g.moveTo(dx + rr, dy);
-              g.arc(dx, dy, rr, 0, TAU);
+              sphere(g, x + c * j * f.dotStep, y + s * j * f.dotStep, f.dotStep * 0.42 * (1 - (j / m) * 0.5), f.color);
             }
           }
-          g.fill();
           break;
-        }
         case 'orbit': {
           const ring = smooth(range(openP, 0, 0.7));
-          g.strokeStyle = rgba(f.color);
-          g.lineWidth = 1.3;
-          g.beginPath();
-          g.arc(x, y, f.ring, f.rot, f.rot + TAU * ring);
-          g.stroke();
-          g.beginPath();
-          const ends = [];
+          tube(g, () => {
+            g.beginPath();
+            g.arc(x, y, f.ring, f.rot, f.rot + TAU * ring);
+          }, f.color, 4);
           for (const arm of f.arms) {
             const e = reach(arm);
             if (e <= 0) continue;
-            const c = Math.cos(f.rot + arm.a);
-            const s = Math.sin(f.rot + arm.a);
-            g.moveTo(x - c * arm.len * e, y - s * arm.len * e);
-            g.lineTo(x + c * arm.len * e, y + s * arm.len * e);
-            ends.push([x + c * arm.len * e, y + s * arm.len * e], [x - c * arm.len * e, y - s * arm.len * e]);
+            const c = Math.cos(f.rot + arm.a) * arm.len * e;
+            const s = Math.sin(f.rot + arm.a) * arm.len * e;
+            tube(g, () => {
+              g.beginPath();
+              g.moveTo(x - c, y - s);
+              g.lineTo(x + c, y + s);
+            }, f.color, 3);
+            sphere(g, x + c, y + s, 3.6, f.color, false);
+            sphere(g, x - c, y - s, 3.6, f.color, false);
           }
-          g.stroke();
-          g.fillStyle = rgba(f.color);
-          g.beginPath();
-          for (const [ex, ey] of ends) {
-            g.moveTo(ex + 2.4, ey);
-            g.arc(ex, ey, 2.4, 0, TAU);
-          }
-          g.fill();
-          g.fillStyle = rgba(f.color2);
-          g.beginPath();
-          g.arc(x, y, r * 0.09 * openP, 0, TAU);
-          g.fill();
+          sphere(g, x, y, r * 0.1 * openP, f.color2);
           break;
         }
         default:
@@ -1150,23 +1158,22 @@
 
       const ce = range(openP, 0.6, 0.9);
       if (f.center && ce > 0) {
-        const cr = r * 0.11 * ce;
-        g.strokeStyle = rgba(f.color2);
-        g.fillStyle = rgba(f.color2);
-        g.lineWidth = 1.3;
-        g.beginPath();
+        const cr = r * 0.12 * ce;
         if (f.center === 'dot') {
-          g.arc(x, y, cr, 0, TAU);
-          g.fill();
+          sphere(g, x, y, cr, f.color2);
         } else if (f.center === 'ring') {
-          g.arc(x, y, cr * 1.3, 0, TAU);
-          g.stroke();
+          tube(g, () => {
+            g.beginPath();
+            g.arc(x, y, cr * 1.3, 0, TAU);
+          }, f.color2, 3);
         } else {
-          g.moveTo(x - cr * 1.4, y);
-          g.lineTo(x + cr * 1.4, y);
-          g.moveTo(x, y - cr * 1.4);
-          g.lineTo(x, y + cr * 1.4);
-          g.stroke();
+          tube(g, () => {
+            g.beginPath();
+            g.moveTo(x - cr * 1.4, y);
+            g.lineTo(x + cr * 1.4, y);
+            g.moveTo(x, y - cr * 1.4);
+            g.lineTo(x, y + cr * 1.4);
+          }, f.color2, 3);
         }
       }
     }
@@ -1174,51 +1181,110 @@
     drawHero(g, f, openP, reach) {
       const { x, y, r } = f;
 
-      // A measuring dial around the center specimen.
+      // A chrome dial ring around the center specimen.
       const dial = smooth(range(openP, 0, 0.8));
-      const R1 = r * 1.14;
-      g.strokeStyle = rgba(this.ink, 0.7);
+      const R1 = r * 1.16;
+      tube(g, () => {
+        g.beginPath();
+        g.arc(x, y, R1, -Math.PI / 2, -Math.PI / 2 + TAU * dial);
+      }, POWDER, 6);
+      g.strokeStyle = rgba(this.ink, 0.8);
       g.lineWidth = 1;
-      g.beginPath();
-      g.arc(x, y, R1, -Math.PI / 2, -Math.PI / 2 + TAU * dial);
-      g.stroke();
-      g.strokeStyle = rgba(this.ink, 0.35);
-      g.beginPath();
-      g.arc(x, y, r * 1.26, -Math.PI / 2, -Math.PI / 2 + TAU * dial);
-      g.stroke();
-      g.strokeStyle = rgba(this.ink, 0.7);
       g.beginPath();
       const ticks = Math.floor(72 * dial);
       for (let i = 0; i < ticks; i++) {
         const a = -Math.PI / 2 + (i / 72) * TAU;
-        const len = i % 6 === 0 ? 8 : 4;
-        g.moveTo(x + Math.cos(a) * R1, y + Math.sin(a) * R1);
-        g.lineTo(x + Math.cos(a) * (R1 + len), y + Math.sin(a) * (R1 + len));
+        const len = i % 6 === 0 ? 10 : 5;
+        g.moveTo(x + Math.cos(a) * (R1 + 5), y + Math.sin(a) * (R1 + 5));
+        g.lineTo(x + Math.cos(a) * (R1 + 5 + len), y + Math.sin(a) * (R1 + 5 + len));
       }
       g.stroke();
 
-      const layer = (arms, color) => {
-        for (const arm of arms) {
-          const e = reach(arm);
-          if (e > 0) this.shadedArm(g, f, arm, e, color);
-        }
-      };
-      layer(f.backArms, this.heroAccent);
-      layer(f.arms, f.color);
+      this.extrudeArms(g, f, f.backArms, this.heroAccent, reach, r * 0.08);
+      this.extrudeArms(g, f, f.arms, f.color, reach, r * 0.1);
 
-      // A disc for the logo to sit on, so a wordmark stays legible.
+      // A thick plastic disc for the logo to sit on.
       const disc = smooth(range(openP, 0.55, 0.9));
       if (disc > 0) {
-        const dr = r * this.logoScale * 1.02;
-        const dg = g.createRadialGradient(x - dr * 0.3, y - dr * 0.35, dr * 0.1, x, y, dr);
-        dg.addColorStop(0, rgba(tone(f.color, 0.12)));
-        dg.addColorStop(0.7, rgba(f.color));
-        dg.addColorStop(1, rgba(tone(f.color, -0.35)));
-        g.fillStyle = dg;
+        const dr = r * this.logoScale * 1.02 * disc;
+        const d = r * 0.06;
+        g.fillStyle = 'rgba(0,0,0,0.4)';
         g.beginPath();
-        g.arc(x, y, r * this.logoScale * 1.02 * disc, 0, TAU);
+        g.arc(x + d * 2.2, y + d * 2.8, dr, 0, TAU);
+        g.fill();
+        for (let k = 4; k >= 1; k--) {
+          g.fillStyle = rgba(tone(f.color, -0.35 - k * 0.06));
+          g.beginPath();
+          g.arc(x + (d * k) / 4, y + (d * k * 1.3) / 4, dr, 0, TAU);
+          g.fill();
+        }
+        g.fillStyle = banded(g.createRadialGradient(x - dr * 0.4, y - dr * 0.45, 0, x - dr * 0.1, y - dr * 0.1, dr * 1.2), [
+          [0.1, rgba(tone(f.color, 0.7))],
+          [0.32, rgba(tone(f.color, 0.18))],
+          [0.72, rgba(f.color)],
+          [1, rgba(tone(f.color, -0.3))],
+        ]);
+        g.beginPath();
+        g.arc(x, y, dr, 0, TAU);
         g.fill();
       }
+    }
+
+    /* A cheap lens flare from a light off the top left, through the center. */
+    drawFlare(g) {
+      const lx = this.w * 0.16;
+      const ly = this.h * 0.1;
+      const dx = this.w / 2 - lx;
+      const dy = this.h / 2 - ly;
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      const glow = g.createRadialGradient(lx, ly, 0, lx, ly, 120);
+      glow.addColorStop(0, 'rgba(255,255,255,0.75)');
+      glow.addColorStop(0.15, rgba(POWDER, 0.35));
+      glow.addColorStop(1, rgba(POWDER, 0));
+      g.fillStyle = glow;
+      g.fillRect(lx - 120, ly - 120, 240, 240);
+      g.strokeStyle = rgba(POWDER, 0.3);
+      g.lineWidth = 1.5;
+      g.beginPath();
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * TAU + 0.2;
+        const len = i % 2 ? 60 : 150;
+        g.moveTo(lx, ly);
+        g.lineTo(lx + Math.cos(a) * len, ly + Math.sin(a) * len);
+      }
+      g.stroke();
+      const parts = [
+        [0.3, 14, POWDER, 0.22, 'disc'],
+        [0.55, 32, this.foliage, 0.14, 'hex'],
+        [0.78, 8, this.heroColor, 0.3, 'disc'],
+        [1.3, 70, POWDER, 0.1, 'ring'],
+        [1.5, 22, this.heroAccent, 0.2, 'hex'],
+        [1.85, 46, this.foliage, 0.1, 'disc'],
+      ];
+      for (const [k, rad, c, a, shape] of parts) {
+        const px = lx + dx * k;
+        const py = ly + dy * k;
+        g.beginPath();
+        if (shape === 'hex') {
+          for (let i = 0; i < 6; i++) {
+            const t = (i / 6) * TAU;
+            g[i ? 'lineTo' : 'moveTo'](px + Math.cos(t) * rad, py + Math.sin(t) * rad);
+          }
+          g.closePath();
+        } else {
+          g.arc(px, py, rad, 0, TAU);
+        }
+        if (shape === 'ring') {
+          g.strokeStyle = rgba(c, a);
+          g.lineWidth = 4;
+          g.stroke();
+        } else {
+          g.fillStyle = rgba(c, a);
+          g.fill();
+        }
+      }
+      g.restore();
     }
 
     drawEyes(g) {
@@ -1236,7 +1302,7 @@
       }
     }
 
-    /* A wet, human eye in the middle of a specimen, seen from above. */
+    /* A CGI eyeball: banded plastic shading and a hard square window reflection. */
     drawEye(g, f, e, open) {
       const { w, h } = e;
       const skin = f.color;
@@ -1244,7 +1310,15 @@
       g.translate(f.x, f.y);
       g.rotate(e.rot);
 
-      g.fillStyle = rgba(tone(skin, -0.5), 0.92);
+      g.fillStyle = 'rgba(0,0,0,0.4)';
+      g.beginPath();
+      g.ellipse(w * 0.15, h * 0.35, w * 1.22, h * 1.8, 0, 0, TAU);
+      g.fill();
+      g.fillStyle = banded(g.createRadialGradient(-w * 0.4, -h * 0.8, 0, 0, 0, w * 1.3), [
+        [0.3, rgba(tone(skin, 0.25))],
+        [0.7, rgba(tone(skin, -0.15))],
+        [1, rgba(tone(skin, -0.5))],
+      ]);
       g.beginPath();
       g.ellipse(0, 0, w * 1.2, h * 1.75, 0, 0, TAU);
       g.fill();
@@ -1259,7 +1333,7 @@
 
       if (open < 0.06) {
         g.strokeStyle = rgba(tone(skin, -0.75));
-        g.lineWidth = 1.5;
+        g.lineWidth = 1.6;
         g.beginPath();
         g.moveTo(-w, 0);
         g.quadraticCurveTo(0, h * 0.4, w, 0);
@@ -1277,63 +1351,48 @@
       lid(open);
       g.save();
       g.clip();
-      const sclera = g.createRadialGradient(-w * 0.15, -h * 0.2, 0, 0, 0, w);
-      sclera.addColorStop(0, rgba(tone(POWDER, 0.55)));
-      sclera.addColorStop(0.65, rgba(POWDER));
-      sclera.addColorStop(1, rgba(mix(POWDER, OCEAN, 0.5)));
-      g.fillStyle = sclera;
+      g.fillStyle = banded(g.createRadialGradient(-w * 0.3, -h * 0.5, 0, 0, 0, w * 1.05), [
+        [0.18, rgba(WHITE)],
+        [0.5, rgba(tone(POWDER, 0.45))],
+        [0.8, rgba(POWDER)],
+        [1, rgba(mix(POWDER, OCEAN, 0.45))],
+      ]);
       g.fillRect(-w, -h * 2, w * 2, h * 4);
 
       const ir = h * 1.05;
       const ix = e.px * w * 0.55;
       const iy = e.py * h * 0.6;
-      const iris = g.createRadialGradient(ix, iy, 0, ix, iy, ir);
-      iris.addColorStop(0, rgba(tone(e.iris, 0.3)));
-      iris.addColorStop(0.55, rgba(e.iris));
-      iris.addColorStop(0.88, rgba(tone(e.iris, -0.45)));
-      iris.addColorStop(1, rgba(tone(e.iris, -0.75)));
-      g.fillStyle = iris;
+      g.fillStyle = banded(g.createRadialGradient(ix, iy, 0, ix, iy, ir), [
+        [0.3, rgba(tone(e.iris, 0.35))],
+        [0.7, rgba(e.iris)],
+        [0.9, rgba(tone(e.iris, -0.35))],
+        [1, rgba(tone(e.iris, -0.7))],
+      ]);
       g.beginPath();
       g.arc(ix, iy, ir, 0, TAU);
       g.fill();
-      g.strokeStyle = rgba(tone(e.iris, -0.5), 0.35);
-      g.lineWidth = 0.6;
-      g.beginPath();
-      for (let i = 0; i < 14; i++) {
-        const a = (i / 14) * TAU;
-        g.moveTo(ix + Math.cos(a) * ir * e.pupil, iy + Math.sin(a) * ir * e.pupil);
-        g.lineTo(ix + Math.cos(a + 0.12) * ir * 0.92, iy + Math.sin(a + 0.12) * ir * 0.92);
-      }
-      g.stroke();
-      g.fillStyle = rgba(tone(OCEAN, -0.75));
+      g.fillStyle = rgba(tone(OCEAN, -0.8));
       g.beginPath();
       g.arc(ix, iy, ir * e.pupil, 0, TAU);
       g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.92)';
-      g.beginPath();
-      g.arc(ix - ir * 0.34, iy - ir * 0.38, ir * 0.2, 0, TAU);
-      g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.45)';
-      g.beginPath();
-      g.arc(ix + ir * 0.3, iy + ir * 0.28, ir * 0.08, 0, TAU);
-      g.fill();
-      const shade = g.createLinearGradient(0, -h * 1.4, 0, h * 0.2);
-      shade.addColorStop(0, 'rgba(0,0,0,0.5)');
-      shade.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = shade;
-      g.fillRect(-w, -h * 2, w * 2, h * 2.2);
+
+      // The studio window reflected in every eye.
+      const q = ir * 0.17;
+      const wx = ix - ir * 0.62;
+      const wy = iy - ir * 0.66;
+      g.fillStyle = 'rgba(255,255,255,0.95)';
+      g.fillRect(wx, wy, q, q);
+      g.fillRect(wx + q * 1.25, wy, q, q);
+      g.fillRect(wx, wy + q * 1.25, q, q);
+      g.fillRect(wx + q * 1.25, wy + q * 1.25, q, q);
+
+      g.fillStyle = 'rgba(0,0,0,0.38)';
+      g.fillRect(-w, -h * 2, w * 2, h * 2 - h * 0.7 * open);
       g.restore();
 
       lid(open);
       g.strokeStyle = rgba(tone(skin, -0.7));
-      g.lineWidth = 1.4;
-      g.stroke();
-      g.beginPath();
-      const cy = -h * 1.25 * open - h * 0.3;
-      g.moveTo(-w * 0.8, cy + h * 0.6);
-      g.quadraticCurveTo(0, cy - h * 0.25, w * 0.8, cy + h * 0.6);
-      g.strokeStyle = rgba(tone(skin, -0.7), 0.45);
-      g.lineWidth = 1;
+      g.lineWidth = 1.6;
       g.stroke();
       g.restore();
     }
