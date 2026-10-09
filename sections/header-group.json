@@ -13,6 +13,7 @@
   "sections": {
     "header": {
       "type": "header",
+      "disabled": true,
       "settings": {
         "logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png",
         "logo_width": 100,
