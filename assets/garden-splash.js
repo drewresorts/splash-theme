@@ -1,19 +1,15 @@
 /**
  * Garden splash
  *
- * A top-down garden made like a cut-and-paste collage. Every flower is a
- * roughly scissored asterisk (after the Duet mark) built from scraps of
- * construction paper, halftone print, newsprint, stripes and tissue. Each one
- * grows seed → sprout → leaves → crumpled bud → bloom, stepping along at a
- * stop-motion frame rate, until the scraps overlap and fill the screen. The
- * fuchsia flower in the middle opens last and the logo is pasted on top of it
- * (a DOM element positioned over the canvas).
+ * A top-down field of abstract specimens plotted on a grid. Each specimen is
+ * an asterisk (after the Duet mark) drawn in one of several notations: solid,
+ * outline, line, dot-matrix or orbital. Each grows seed → sprout → leaves →
+ * bud → bloom, arms plotted outward, until the specimens overlap and fill the
+ * screen. The center specimen resolves last and the logo appears on it.
  *
- * Interaction (mouse, pen and touch share one code path):
- *  - moving through the garden pushes the paper flowers aside
- *  - pressing and dragging "waters" the beds so nearby flowers grow faster
- *  - tapping sends a ripple out; a growing flower blooms immediately and an
- *    open flower throws off its arms and is re-cut from new paper
+ * Motion is kept to the growth itself. Interaction is utilitarian: a
+ * crosshair readout, hover to inspect a specimen, press and drag to
+ * accelerate growth, tap to resequence a specimen.
  */
 (function () {
   'use strict';
@@ -26,14 +22,6 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const range = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
   const smooth = (t) => t * t * (3 - 2 * t);
-  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-  const easeOutBack = (t) => {
-    if (t <= 0) return 0;
-    if (t >= 1) return 1;
-    const c1 = 1.7;
-    const c3 = c1 + 1;
-    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-  };
   const between = (rng, pair) => lerp(pair[0], pair[1], rng());
   const pick = (rng, list) => list[Math.floor(rng() * list.length)];
 
@@ -47,16 +35,6 @@
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
-
-  /* ------------------------------------------------------------------ */
-  /* Color helpers                                                       */
-  /* ------------------------------------------------------------------ */
-
-  const WHITE = [255, 255, 255];
-  const BLACK = [0, 0, 0];
-  // Everything is drawn from the Duet palette: "paper" is Powder, "ink" is Ocean.
-  const PAPER = [185, 229, 251];
-  const INK = [25, 31, 107];
 
   function parseColor(input) {
     if (!input) return null;
@@ -76,451 +54,56 @@
     return null;
   }
 
-  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-  const tone = (c, amt) => (amt >= 0 ? mix(c, WHITE, amt) : mix(c, BLACK, -amt));
   const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a === undefined ? 1 : a})`;
   const colorKey = (c) => `${c[0] | 0},${c[1] | 0},${c[2] | 0}`;
+  const hex = (c) => '#' + c.map((v) => (v | 0).toString(16).padStart(2, '0')).join('').toUpperCase();
   const luminance = (c) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
 
-  /* ------------------------------------------------------------------ */
-  /* Scissor-cut geometry                                                */
-  /* ------------------------------------------------------------------ */
+  const WHITE = [255, 255, 255];
+  const BLACK = [0, 0, 0];
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const tone = (c, amt) => (amt >= 0 ? mix(c, WHITE, amt) : mix(c, BLACK, -amt));
 
-  /* Points between a and b that make a straight cut look hand-scissored. */
-  function facetEdge(a, b, rng, amt, out) {
-    const dx = b[0] - a[0];
-    const dy = b[1] - a[1];
-    const len = Math.hypot(dx, dy);
-    if (len < 6) return;
-    const nx = -dy / len;
-    const ny = dx / len;
-    const n = 1 + Math.floor(rng() * 2);
-    for (let i = 1; i <= n; i++) {
-      const t = (i + (rng() - 0.5) * 0.5) / (n + 1);
-      const o = (rng() - 0.5) * amt * len;
-      out.push([a[0] + dx * t + nx * o, a[1] + dy * t + ny * o]);
+  const POWDER = [185, 229, 251];
+  const OCEAN = [25, 31, 107];
+
+  /* Canvas filters (blur) power the depth of field and glow; Safari < 18 goes without. */
+  const CAN_FILTER = (() => {
+    try {
+      const c = document.createElement('canvas').getContext('2d');
+      c.filter = 'blur(2px)';
+      return c.filter === 'blur(2px)';
+    } catch (e) {
+      return false;
     }
-  }
+  })();
 
-  /* Points between a and b that make a ragged, torn edge. */
-  function tornEdge(a, b, rng, amp, out) {
-    const dx = b[0] - a[0];
-    const dy = b[1] - a[1];
-    const len = Math.hypot(dx, dy);
-    const nx = -dy / (len || 1);
-    const ny = dx / (len || 1);
-    const steps = Math.max(3, Math.round(len / Math.max(1, amp * 1.5)));
-    for (let i = 1; i < steps; i++) {
-      const t = (i + (rng() - 0.5) * 0.6) / steps;
-      const o = (rng() - 0.5) * 2 * amp;
-      out.push([a[0] + dx * t + nx * o, a[1] + dy * t + ny * o]);
-    }
-  }
+  const BLINK = 0.2;
 
-  function roughen(corners, rng, amt) {
-    const out = [];
-    for (let i = 0; i < corners.length; i++) {
-      out.push(corners[i]);
-      facetEdge(corners[i], corners[(i + 1) % corners.length], rng, amt, out);
-    }
-    return out;
-  }
+  /* Notations a specimen can be drawn in, with how often each appears. */
+  const STYLES = [
+    ['solid', 0.4],
+    ['outline', 0.15],
+    ['line', 0.16],
+    ['dots', 0.15],
+    ['orbit', 0.14],
+  ];
+  const STYLE_CODE = { solid: 'SOL', outline: 'OUT', line: 'LIN', dots: 'DOT', orbit: 'ORB', hero: 'D✱' };
 
-  /* A circle cut with scissors: a handful of flat facets. */
-  function cutCircle(cx, cy, r, rng, n, jitter) {
-    const pts = [];
-    for (let i = 0; i < n; i++) {
-      const a = ((i + (rng() - 0.5) * 0.5) / n) * TAU;
-      const rr = r * (1 + (rng() - 0.5) * jitter);
-      pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
-    }
-    return pts;
-  }
+  const DENSITY = {
+    airy: { size: 1.18, spacing: 1.32 },
+    lush: { size: 1, spacing: 1.18 },
+    overgrown: { size: 0.84, spacing: 1.1 },
+  };
 
-  /* A circle torn out by hand: many small ragged steps. */
-  function tornCircle(cx, cy, r, rng, amp) {
-    const n = Math.max(20, Math.round((TAU * r) / Math.max(1.5, amp * 1.3)));
-    const pts = [];
-    let drift = 0;
-    for (let i = 0; i < n; i++) {
-      drift = drift * 0.7 + (rng() - 0.5) * amp * 0.9;
-      const a = ((i + (rng() - 0.5) * 0.4) / n) * TAU;
-      const rr = r + drift + (rng() - 0.5) * amp;
-      pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
-    }
-    return pts;
-  }
-
-  /* One arm of an asterisk: a chunky strip running out from under the middle. */
-  function armShape(len, w, rng, torn) {
-    const back = -w * lerp(0.3, 0.55, rng());
-    const hw0 = (w / 2) * lerp(0.9, 1.06, rng());
-    const hw1 = (w / 2) * lerp(0.86, 1.14, rng());
-    const cut = (rng() - 0.5) * 0.95;
-    const bTop = [back, -hw0];
-    const bBot = [back + (rng() - 0.5) * w * 0.3, hw0];
-    const tTop = [len + Math.tan(cut) * hw1, -hw1];
-    const tBot = [len - Math.tan(cut) * hw1, hw1];
-
-    const head = [bTop];
-    facetEdge(bTop, tTop, rng, 0.03, head);
-    head.push(tTop);
-    const tail = [tBot];
-    facetEdge(tBot, bBot, rng, 0.03, tail);
-    tail.push(bBot);
-
-    if (!torn) {
-      const end = [];
-      facetEdge(tTop, tBot, rng, 0.08, end);
-      return { poly: head.concat(end, tail), under: null };
-    }
-
-    // Torn ends show the white core of the paper beyond the printed face.
-    const amp = w * 0.08;
-    const e = amp * 1.4;
-    const face = [];
-    tornEdge(tTop, tBot, rng, amp, face);
-    const core = [];
-    tornEdge([tTop[0] + e, tTop[1]], [tBot[0] + e, tBot[1]], rng, amp, core);
-    return {
-      poly: head.concat(face, tail),
-      under: head.concat([[tTop[0] + e, tTop[1]]], core, [[tBot[0] + e, tBot[1]]], tail),
-    };
-  }
-
-  function leafShape(len, w, rng) {
-    const top = [];
-    const bottom = [];
-    const n = 4 + Math.floor(rng() * 2);
-    const bulge = lerp(0.6, 0.85, rng());
-    for (let i = 1; i < n; i++) {
-      const t = i / n;
-      const y = (w / 2) * Math.sin(Math.PI * Math.pow(t, bulge));
-      top.push([len * t + (rng() - 0.5) * w * 0.15, -y * lerp(0.85, 1.12, rng())]);
-      bottom.push([len * t + (rng() - 0.5) * w * 0.15, y * lerp(0.85, 1.12, rng())]);
-    }
-    return [[0, 0]].concat(top, [[len, (rng() - 0.5) * w * 0.2]], bottom.reverse());
-  }
-
-  function bladeShape(len, w, rng) {
-    return roughen(
-      [
-        [0, -w * 0.5],
-        [len * lerp(0.7, 0.85, rng()), -w * 0.46],
-        [len, (rng() - 0.5) * w * 0.5],
-        [len * lerp(0.75, 0.9, rng()), w * 0.46],
-        [0, w * 0.5],
-      ],
-      rng,
-      0.03
-    );
-  }
-
-  function tapeShape(cx, cy, len, w, angle, rng) {
-    const c = Math.cos(angle);
-    const s = Math.sin(angle);
-    const amp = w * 0.09;
-    const local = [[-len / 2, -w / 2]];
-    local.push([len / 2, -w / 2]);
-    tornEdge([len / 2, -w / 2], [len / 2, w / 2], rng, amp, local);
-    local.push([len / 2, w / 2], [-len / 2, w / 2]);
-    tornEdge([-len / 2, w / 2], [-len / 2, -w / 2], rng, amp, local);
-    return local.map(([x, y]) => [cx + x * c - y * s, cy + x * s + y * c]);
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Paper                                                               */
-  /* ------------------------------------------------------------------ */
-
-  const MATERIALS = ['paper', 'paper', 'paper', 'halftone', 'halftone', 'newsprint', 'stripes', 'dots', 'check', 'crayon', 'tissue'];
-  const LEAF_MATERIALS = ['paper', 'paper', 'halftone', 'newsprint', 'stripes', 'crayon'];
-
-  function tracePath(g, pts) {
-    g.beginPath();
-    g.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
-    g.closePath();
-  }
-
-  function bounds(pts) {
-    let x0 = Infinity;
-    let y0 = Infinity;
-    let x1 = -Infinity;
-    let y1 = -Infinity;
-    for (const [x, y] of pts) {
-      if (x < x0) x0 = x;
-      if (y < y0) y0 = y;
-      if (x > x1) x1 = x;
-      if (y > y1) y1 = y;
-    }
-    return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
-  }
-
-  function faceColor(material, c) {
-    return material === 'newsprint' ? PAPER : c;
-  }
-
-  /* Print, pattern and grain on a scrap. Assumes it is already clipped to the shape. */
-  function texture(g, o, b) {
-    const rng = o.rng;
-    const c = o.color;
-    const c2 = o.color2 || INK;
-    const cx = (b.x0 + b.x1) / 2;
-    const cy = (b.y0 + b.y1) / 2;
-    const R = Math.hypot(b.w, b.h) / 2 + 2;
-
-    g.save();
-    g.translate(cx, cy);
-    g.rotate(rng() * Math.PI);
-
-    switch (o.material) {
-      case 'halftone': {
-        const sp = lerp(3.2, 4.8, rng());
-        g.fillStyle = rgba(c2, 0.8);
-        g.beginPath();
-        let row = 0;
-        for (let y = -R; y < R; y += sp, row++) {
-          for (let x = -R + (row % 2) * (sp / 2); x < R; x += sp) {
-            const t = (x + R) / (2 * R);
-            const rr = sp * 0.44 * (0.2 + 0.8 * t);
-            g.moveTo(x + rr, y);
-            g.arc(x, y, rr, 0, TAU);
-          }
-        }
-        g.fill();
-        break;
-      }
-      case 'stripes': {
-        const sp = lerp(5, 9, rng());
-        g.fillStyle = rgba(c2, 0.88);
-        for (let x = -R; x < R; x += sp) g.fillRect(x, -R, sp * lerp(0.35, 0.5, rng()), R * 2);
-        break;
-      }
-      case 'dots': {
-        const sp = lerp(7, 10, rng());
-        const rr = sp * lerp(0.16, 0.26, rng());
-        g.fillStyle = rgba(c2, 0.9);
-        g.beginPath();
-        let row = 0;
-        for (let y = -R; y < R; y += sp, row++) {
-          for (let x = -R + (row % 2) * (sp / 2); x < R; x += sp) {
-            g.moveTo(x + rr, y);
-            g.arc(x, y, rr, 0, TAU);
-          }
-        }
-        g.fill();
-        break;
-      }
-      case 'check': {
-        const sp = lerp(5, 8, rng());
-        g.fillStyle = rgba(c2, 0.3);
-        for (let x = -R; x < R; x += sp * 2) g.fillRect(x, -R, sp, R * 2);
-        for (let y = -R; y < R; y += sp * 2) g.fillRect(-R, y, R * 2, sp);
-        break;
-      }
-      case 'crayon': {
-        g.strokeStyle = rgba(c2, 0.5);
-        g.lineWidth = lerp(1, 1.6, rng());
-        g.lineJoin = 'round';
-        g.beginPath();
-        let side = -1;
-        g.moveTo(-R, -R);
-        for (let y = -R; y < R; y += lerp(2.2, 3.4, rng())) {
-          g.lineTo(side * R * lerp(0.7, 1, rng()), y);
-          side = -side;
-        }
-        g.stroke();
-        break;
-      }
-      case 'newsprint': {
-        g.fillStyle = rgba(INK, 0.5);
-        for (let y = -R; y < R; y += 2.9) {
-          if (rng() < 0.07) {
-            g.fillStyle = rgba(c, 0.85);
-            g.fillRect(-R, y, R * 2, 4.2);
-            g.fillStyle = rgba(INK, 0.5);
-            y += 3;
-            continue;
-          }
-          let x = -R + rng() * 3;
-          while (x < R) {
-            const wl = lerp(1.2, 6.5, rng());
-            g.fillRect(x, y, wl, 1.1);
-            x += wl + lerp(0.9, 1.7, rng());
-          }
-        }
-        break;
-      }
-      case 'tissue': {
-        g.lineWidth = 0.8;
-        for (let i = 0; i < 7; i++) {
-          g.strokeStyle = i % 2 ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.1)';
-          g.beginPath();
-          g.moveTo((rng() - 0.5) * R * 2, -R);
-          g.lineTo((rng() - 0.5) * R * 2, R);
-          g.stroke();
-        }
-        break;
-      }
-      default:
-        break;
-    }
-    g.restore();
-
-    // Paper grain and the odd fibre.
-    const grains = Math.min(520, Math.round((b.w * b.h) / 16));
-    const dark = luminance(c) > 0.5 ? 'rgba(40,30,20,0.08)' : 'rgba(255,250,240,0.07)';
-    for (let i = 0; i < grains; i++) {
-      g.fillStyle = i % 3 ? dark : 'rgba(255,255,255,0.08)';
-      const s = lerp(0.5, 1.2, rng());
-      g.fillRect(b.x0 + rng() * b.w, b.y0 + rng() * b.h, s, s);
-    }
-    g.strokeStyle = 'rgba(255,255,255,0.12)';
-    g.lineWidth = 0.5;
-    const fibres = Math.min(14, Math.round((b.w * b.h) / 900));
-    for (let i = 0; i < fibres; i++) {
-      const x = b.x0 + rng() * b.w;
-      const y = b.y0 + rng() * b.h;
-      g.beginPath();
-      g.moveTo(x, y);
-      g.quadraticCurveTo(x + (rng() - 0.5) * 8, y + (rng() - 0.5) * 8, x + (rng() - 0.5) * 12, y + (rng() - 0.5) * 12);
-      g.stroke();
-    }
-
-    // A fold down the middle: one half catches less light.
-    if (o.fold) {
-      g.fillStyle = 'rgba(0,0,0,0.13)';
-      g.fillRect(b.x0 - 2, 0, b.w + 4, b.h + 4);
-      g.strokeStyle = 'rgba(255,255,255,0.35)';
-      g.lineWidth = 0.9;
-      g.beginPath();
-      g.moveTo(b.x0, -0.4);
-      g.lineTo(b.x1, -0.4);
-      g.stroke();
-    }
-
-    // Crumpled paper: creases catching and losing the light.
-    if (o.crumple) {
-      for (let i = 0; i < 6; i++) {
-        const a = rng() * TAU;
-        const r = Math.max(b.w, b.h);
-        const x = (rng() - 0.5) * b.w * 0.6;
-        const y = (rng() - 0.5) * b.h * 0.6;
-        const ex = Math.cos(a) * r;
-        const ey = Math.sin(a) * r;
-        g.fillStyle = 'rgba(0,0,0,0.12)';
-        g.beginPath();
-        g.moveTo(x, y);
-        g.lineTo(x + ex, y + ey);
-        g.lineTo(x + Math.cos(a + 0.9) * r, y + Math.sin(a + 0.9) * r);
-        g.fill();
-        g.strokeStyle = 'rgba(255,255,255,0.4)';
-        g.lineWidth = 0.7;
-        g.beginPath();
-        g.moveTo(x - ex, y - ey);
-        g.lineTo(x + ex, y + ey);
-        g.stroke();
-      }
-    }
-  }
-
-  /*
-   * Paints one scrap into a context that is already transformed into the
-   * scrap's local units. shadow = [dx, dy] in device pixels of that context.
-   */
-  function paintScrap(g, o, shadow, deviceScale) {
-    g.shadowOffsetX = shadow[0];
-    g.shadowOffsetY = shadow[1];
-    g.shadowBlur = 2.4 * deviceScale;
-    g.shadowColor = o.shadowColor || 'rgba(14,8,4,0.42)';
-
-    if (o.under) {
-      tracePath(g, o.under);
-      g.fillStyle = rgba(PAPER);
-      g.fill();
-      g.shadowColor = 'transparent';
-    }
-
-    g.globalAlpha = o.alpha || 1;
-    tracePath(g, o.poly);
-    g.fillStyle = rgba(faceColor(o.material, o.color));
-    g.fill();
-    g.shadowColor = 'transparent';
-    g.shadowBlur = 0;
-    g.shadowOffsetX = 0;
-    g.shadowOffsetY = 0;
-
-    g.save();
-    tracePath(g, o.poly);
-    g.clip();
-    texture(g, o, bounds(o.poly));
-    g.restore();
-    g.globalAlpha = 1;
-  }
-
-  /*
-   * Cuts a scrap out into its own little canvas. worldAngle is how the scrap
-   * will sit on screen, so its baked shadow falls toward the bottom right.
-   */
-  function makeScrap(o, scale, worldAngle) {
-    const b = bounds(o.under ? o.poly.concat(o.under) : o.poly);
-    const pad = 5;
-    const w = b.w + pad * 2;
-    const h = b.h + pad * 2;
-    const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.ceil(w * scale));
-    c.height = Math.max(1, Math.ceil(h * scale));
-    const g = c.getContext('2d');
-    g.setTransform(scale, 0, 0, scale, (pad - b.x0) * scale, (pad - b.y0) * scale);
-    const ca = Math.cos(-worldAngle);
-    const sa = Math.sin(-worldAngle);
-    const sx = 1.5;
-    const sy = 2.6;
-    paintScrap(g, o, [(sx * ca - sy * sa) * scale, (sx * sa + sy * ca) * scale], scale);
-    return { img: c, x: b.x0 - pad, y: b.y0 - pad, w: c.width / scale, h: c.height / scale };
-  }
-
-  function paintSoil(g, W, H, soil, rng) {
-    g.fillStyle = rgba(soil);
-    g.fillRect(0, 0, W, H);
-
-    const blobs = Math.round((W * H) / 26000) + 12;
-    for (let i = 0; i < blobs; i++) {
-      const x = rng() * W;
-      const y = rng() * H;
-      const r = 40 + rng() * 160;
-      const c = rng() < 0.5 ? tone(soil, 0.1 + rng() * 0.08) : tone(soil, -0.25);
-      const grad = g.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, rgba(c, 0.28));
-      grad.addColorStop(1, rgba(c, 0));
-      g.fillStyle = grad;
-      g.fillRect(x - r, y - r, r * 2, r * 2);
-    }
-
-    const specks = Math.round((W * H) / 70);
-    for (let i = 0; i < specks; i++) {
-      const v = rng();
-      g.fillStyle = rgba(v < 0.55 ? tone(soil, -0.4) : tone(soil, 0.12 + rng() * 0.25), 0.5);
-      const s = 0.6 + rng() * 1.8;
-      g.fillRect(rng() * W, rng() * H, s, s);
-    }
-
-    const pebbles = Math.round((W * H) / 7000);
-    for (let i = 0; i < pebbles; i++) {
-      const x = rng() * W;
-      const y = rng() * H;
-      const rx = 1.5 + rng() * 3.5;
-      const c = tone(soil, 0.18 + rng() * 0.3);
-      g.fillStyle = rgba(tone(c, -0.5), 0.5);
-      g.beginPath();
-      g.ellipse(x + 0.8, y + 1, rx, rx * 0.7, rng() * TAU, 0, TAU);
-      g.fill();
-      g.fillStyle = rgba(c, 0.85);
-      g.beginPath();
-      g.ellipse(x, y, rx, rx * 0.7, rng() * TAU, 0, TAU);
-      g.fill();
-    }
-  }
+  /* Growth milestones on a specimen's 0 → 1 progress. */
+  const STAGE = {
+    seed: [0, 0.06],
+    sprout: [0.05, 0.22],
+    leaves: [0.16, 0.48],
+    bud: [0.4, 0.58],
+    open: [0.56, 1],
+  };
 
   /* Bridson's Poisson-disc sampling: evenly spread, never on a grid. */
   function poissonDisc(x0, y0, x1, y1, minDist, rng, seedPoint) {
@@ -576,55 +159,6 @@
     return pts;
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Flowers                                                             */
-  /* ------------------------------------------------------------------ */
-
-  /*
-   * Asterisk varieties. arms: count range; len/w: arm length and width as a
-   * fraction of the flower radius. inner: an optional second, smaller asterisk
-   * pasted on top. center: chance of a punched or torn paper dot in the middle.
-   */
-  const TYPES = {
-    aster: { size: 1.06, arms: [5, 5], len: [0.86, 1.04], w: [0.3, 0.4], center: 0.2 },
-    spoke: { size: 1, arms: [6, 8], len: [0.84, 1.02], w: [0.18, 0.26], center: 0.55 },
-    double: { size: 1.1, arms: [5, 6], len: [0.88, 1.04], w: [0.26, 0.34], inner: [4, 5], innerLen: [0.48, 0.62], innerW: [0.2, 0.28], center: 0.35 },
-    burst: { size: 0.98, arms: [9, 12], len: [0.8, 1], w: [0.09, 0.14], center: 1, centerSize: [0.22, 0.3] },
-    mini: { size: 1, arms: [4, 5], len: [0.8, 1], w: [0.3, 0.42], center: 0.25 },
-    hero: { size: 1, arms: [5, 5], len: [0.98, 1.06], w: [0.32, 0.38], center: 1 },
-  };
-
-  const MAIN_TYPES = [
-    ['aster', 0.32],
-    ['spoke', 0.22],
-    ['double', 0.26],
-    ['burst', 0.2],
-  ];
-
-  const DENSITY = {
-    airy: { size: 1.18, spacing: 1.32 },
-    lush: { size: 1, spacing: 1.18 },
-    overgrown: { size: 0.84, spacing: 1.1 },
-  };
-
-  /* Growth milestones on a flower's 0 → 1 progress. */
-  const STAGE = {
-    seed: [0, 0.07],
-    sprout: [0.06, 0.26],
-    leaves: [0.18, 0.5],
-    bud: [0.42, 0.62],
-    open: [0.6, 1],
-  };
-
-  /* Stop-motion: growth is shown on "twos and threes", pieces boil in place. */
-  const GROWTH_FPS = 12;
-  const BOIL_FPS = 7;
-  const JITTER = Array.from({ length: 64 }, (_, i) => Math.sin(i * 12.9898) * 43758.5453 % 1);
-
-  /* ------------------------------------------------------------------ */
-  /* The element                                                         */
-  /* ------------------------------------------------------------------ */
-
   class GardenSplash extends HTMLElement {
     connectedCallback() {
       this.canvas = this.querySelector('[data-garden-canvas]');
@@ -632,11 +166,15 @@
       this.ctx = this.canvas.getContext('2d');
       if (!this.ctx) return;
 
-      this.float = this.querySelector('[data-garden-float]');
       this.logo = this.querySelector('[data-garden-logo]');
       this.nav = this.querySelector('[data-garden-nav]');
-      this.navToggle = this.querySelector('[data-garden-nav-toggle]');
-      this.replantButton = this.querySelector('[data-garden-replant]');
+      this.navToggles = Array.from(this.querySelectorAll('[data-garden-nav-toggle]'));
+      this.menuButton = this.querySelector('[data-garden-menu]');
+      this.resetButton = this.querySelector('[data-garden-replant]');
+      this.bloomReadout = this.querySelector('[data-garden-bloom]');
+      this.filmCanvas = this.querySelector('[data-garden-film]');
+      this.grainLayer = this.querySelector('[data-garden-grain]');
+      this.coordReadout = this.querySelector('[data-garden-coords]');
 
       this.readConfig();
       this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -645,17 +183,15 @@
       this.seed = (Math.random() * 2 ** 31) | 0;
       this.elapsed = this.reduced ? this.duration * 1.2 : 0;
       this.flowers = [];
-      this.particles = [];
-      this.confetti = [];
-      this.ripples = [];
-      this.pointer = { x: 0, y: 0, vx: 0, vy: 0, active: false, down: false, id: null, t: 0, sx: 0, sy: 0, st: 0, emit: 0 };
-      this.frameTimes = [];
-      this.maxDpr = 2;
+      this.pings = [];
+      this.pointer = { x: 0, y: 0, active: false, down: false, id: null, sx: 0, sy: 0, st: 0, type: 'mouse' };
+      this.inspected = null;
+      this.inspectUntil = 0;
+      this.dirty = true;
       this.running = false;
       this.visible = true;
       this.bloomed = false;
-      this.growthTick = -1;
-      this.boilTick = 0;
+      this.lastReadout = -1;
 
       this.bindEvents();
       this.resize(true);
@@ -675,15 +211,12 @@
         if (this.visible) this.start();
       });
       this.intersectionObserver.observe(this);
-
-      this.hintTimer = window.setTimeout(() => this.classList.add('has-interacted'), (this.duration + 8) * 1000);
       this.start();
     }
 
     disconnectedCallback() {
       this.running = false;
       cancelAnimationFrame(this.raf);
-      clearTimeout(this.hintTimer);
       clearTimeout(this.resizeTimer);
       if (this.resizeObserver) this.resizeObserver.disconnect();
       if (this.intersectionObserver) this.intersectionObserver.disconnect();
@@ -694,22 +227,23 @@
       const d = this.dataset;
       this.heroColor = parseColor(d.centerColor) || [240, 78, 98];
       this.heroAccent = parseColor(d.centerAccent) || [166, 39, 73];
+      this.foliage = parseColor(d.foliageColor) || [102, 164, 200];
+      this.soil = parseColor(d.soilColor) || OCEAN;
       let palette = [];
       try {
         palette = JSON.parse(d.palette || '[]').map(parseColor).filter(Boolean);
       } catch (e) {
         palette = [];
       }
-      this.palette = palette.length ? palette : [[166, 39, 73], [102, 164, 200], [25, 31, 107], [185, 229, 251], [240, 78, 98], [185, 229, 251]];
-      this.foliage = parseColor(d.foliageColor) || [102, 164, 200];
-      this.soil = parseColor(d.soilColor) || [25, 31, 107];
+      // A specimen the same color as the ground would vanish, so leave that color out.
+      const ground = colorKey(this.soil);
+      palette = palette.filter((c) => colorKey(c) !== ground);
+      this.palette = palette.length ? palette : [[166, 39, 73], [102, 164, 200], [185, 229, 251], [240, 78, 98]];
+      // Linework, grid and readouts: whichever brand tone reads against the ground.
+      this.ink = luminance(this.soil) > 0.6 ? OCEAN : POWDER;
       this.duration = clamp(parseFloat(d.duration) || 12, 2, 60);
       this.density = DENSITY[d.density] || DENSITY.lush;
       this.logoScale = clamp(parseFloat(d.logoScale) || 0.55, 0.2, 1);
-      this.leafColors = [this.foliage, this.foliage, PAPER];
-      this.sproutColor = this.foliage;
-      // Colors printed onto scraps (dots, stripes, checks): only brand colors.
-      this.printColors = this.palette.concat([this.heroColor, this.heroAccent, PAPER, INK]);
     }
 
     /* ---------------- events ---------------- */
@@ -724,9 +258,9 @@
       const onDown = (e) => {
         if (isUi(e) || this.classList.contains('is-nav-open')) return;
         const [x, y] = local(e);
-        const p = this.pointer;
-        Object.assign(p, { x, y, vx: 0, vy: 0, active: true, down: true, id: e.pointerId, t: e.timeStamp, sx: x, sy: y, st: e.timeStamp, type: e.pointerType });
+        Object.assign(this.pointer, { x, y, active: true, down: true, id: e.pointerId, sx: x, sy: y, st: e.timeStamp, type: e.pointerType });
         this.markInteracted();
+        this.updateCoords();
         try {
           this.setPointerCapture(e.pointerId);
         } catch (err) {
@@ -737,18 +271,16 @@
         const p = this.pointer;
         if (e.pointerType !== 'mouse' && !(p.down && p.id === e.pointerId)) return;
         if (this.classList.contains('is-nav-open')) return;
-        const [x, y] = local(e);
-        const dt = Math.max(8, e.timeStamp - (p.t || e.timeStamp - 16)) / 1000;
-        if (p.active) {
-          p.vx = lerp(p.vx, (x - p.x) / dt, 0.45);
-          p.vy = lerp(p.vy, (y - p.y) / dt, 0.45);
+        if (isUi(e) && !p.down) {
+          p.active = false;
+          return;
         }
+        const [x, y] = local(e);
         p.x = x;
         p.y = y;
-        p.t = e.timeStamp;
         p.active = true;
         p.type = e.pointerType;
-        if (e.pointerType === 'mouse' && Math.hypot(p.vx, p.vy) > 220) this.markInteracted();
+        this.updateCoords();
       };
       const onUp = (e) => {
         const p = this.pointer;
@@ -767,11 +299,8 @@
       const onKey = (e) => {
         if (e.key === 'Escape' && this.classList.contains('is-nav-open')) this.toggleNav(false);
       };
-      const onNavClick = (e) => {
-        if (e.target === this.nav) this.toggleNav(false);
-      };
       const onToggle = () => this.toggleNav();
-      const onReplant = () => this.replant();
+      const onReset = () => this.replant();
       const onMotion = () => {
         this.reduced = this.motionQuery.matches;
       };
@@ -781,13 +310,9 @@
       this.addEventListener('pointerup', onUp);
       this.addEventListener('pointercancel', onLeave);
       this.addEventListener('pointerleave', onLeave);
-      this.addEventListener('contextmenu', (e) => {
-        if (!isUi(e)) e.preventDefault();
-      });
       document.addEventListener('keydown', onKey);
-      if (this.navToggle) this.navToggle.addEventListener('click', onToggle);
-      if (this.nav) this.nav.addEventListener('click', onNavClick);
-      if (this.replantButton) this.replantButton.addEventListener('click', onReplant);
+      this.navToggles.forEach((el) => el.addEventListener('click', onToggle));
+      if (this.resetButton) this.resetButton.addEventListener('click', onReset);
       this.motionQuery.addEventListener('change', onMotion);
 
       this.unbind = () => {
@@ -800,19 +325,29 @@
       if (!this.classList.contains('has-interacted')) this.classList.add('has-interacted');
     }
 
+    updateCoords() {
+      if (!this.coordReadout) return;
+      const p = this.pointer;
+      const x = String(Math.round(p.x - this.w / 2)).padStart(5, ' ');
+      const y = String(Math.round(this.h / 2 - p.y)).padStart(5, ' ');
+      this.coordReadout.textContent = `X${x}  Y${y}`;
+    }
+
     toggleNav(force) {
-      if (!this.nav || !this.navToggle) return;
+      if (!this.nav) return;
       const open = typeof force === 'boolean' ? force : !this.classList.contains('is-nav-open');
       this.classList.toggle('is-nav-open', open);
-      this.navToggle.setAttribute('aria-expanded', String(open));
+      this.navToggles.forEach((el) => el.setAttribute('aria-expanded', String(open)));
+      if (this.menuButton) {
+        this.menuButton.textContent = open ? this.menuButton.dataset.closeLabel : this.menuButton.dataset.openLabel;
+      }
       this.pointer.active = false;
       this.pointer.down = false;
       if (open) {
         const first = this.nav.querySelector('a');
-        if (first) window.setTimeout(() => first.focus({ preventScroll: true }), 120);
-        this.burst(this.center, 26);
-      } else if (this.contains(document.activeElement)) {
-        this.navToggle.focus({ preventScroll: true });
+        if (first) first.focus({ preventScroll: true });
+      } else if (this.contains(document.activeElement) && this.menuButton) {
+        this.menuButton.focus({ preventScroll: true });
       }
     }
 
@@ -829,67 +364,119 @@
       const H = Math.max(1, Math.round(rect.height));
       if (!initial && W === this.w && H === this.h) return;
 
-      // Small height-only changes (mobile browser chrome) keep the same garden.
+      // Small height-only changes (mobile browser chrome) keep the same field.
       const relayout = initial || !this.flowers.length || W !== this.w || Math.abs(H - this.h) > 90;
       const shiftY = relayout ? 0 : (H - this.h) / 2;
       this.w = W;
       this.h = H;
-      this.dpr = Math.min(window.devicePixelRatio || 1, this.maxDpr);
+      this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-      if (relayout) {
-        this.generate();
-      } else {
-        this.flowers.forEach((f) => (f.y += shiftY));
-      }
-      this.rebuildGraphics();
+      if (relayout) this.generate();
+      else this.flowers.forEach((f) => (f.y += shiftY));
+
+      this.canvas.width = Math.round(W * this.dpr);
+      this.canvas.height = Math.round(H * this.dpr);
+      const layer = () => {
+        const c = document.createElement('canvas');
+        c.width = this.canvas.width;
+        c.height = this.canvas.height;
+        return c;
+      };
+      this.scene = layer();
+      this.farLayer = layer();
+      this.glowLayer = CAN_FILTER ? layer() : null;
+      this.paintGround();
+      this.paintFilm();
+      this.dirty = true;
     }
 
-    rebuildGraphics() {
+    paintGround() {
       const { w: W, h: H, dpr } = this;
-      this.canvas.width = Math.round(W * dpr);
-      this.canvas.height = Math.round(H * dpr);
-      // Scraps are cut a little under full resolution on big screens to save memory.
-      this.scrapScale = clamp(dpr, 1, this.base > 70 ? 1.25 : 1.5);
-      this.flowers.forEach((f) => {
-        f.parts = null;
-        f.leafParts = null;
-        f.grounded = false;
-      });
-
       this.ground = document.createElement('canvas');
       this.ground.width = this.canvas.width;
       this.ground.height = this.canvas.height;
       const g = this.ground.getContext('2d');
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      paintSoil(g, W, H, this.soil, mulberry32(this.seed ^ 0x51ed));
+      g.fillStyle = rgba(this.soil);
+      g.fillRect(0, 0, W, H);
 
-      // Shared little scraps: seeds, sprout leaves and confetti.
-      const rng = mulberry32(this.seed ^ 0xc0ffee);
-      const s = this.scrapScale;
-      this.seedScraps = new Map();
-      this.sproutScraps = Array.from({ length: 6 }, () =>
-        makeScrap({ poly: leafShape(20, 13, rng), material: rng() < 0.7 ? 'paper' : 'halftone', color: this.sproutColor, color2: INK, rng }, s * 1.5, rng() * TAU)
-      );
-      this.confettiScraps = Array.from({ length: 18 }, (_, i) => {
-        const color = i % 4 === 3 ? PAPER : pick(rng, this.palette.concat([this.heroColor, this.heroColor]));
-        const poly = rng() < 0.5 ? cutCircle(0, 0, 5, rng, 7, 0.25) : roughen([[-5, -3.5], [5, -4], [4.5, 3.5], [-4.5, 4]], rng, 0.1);
-        return makeScrap({ poly, material: 'paper', color, rng }, s * 1.5, rng() * TAU);
-      });
-
-      // Bake foliage that has already finished growing.
-      this.flowers.forEach((f) => this.maybeGround(f));
+      // A measured grid centered on the middle specimen.
+      const step = 24;
+      const ox = (W / 2) % step;
+      const oy = (H / 2) % step;
+      g.fillStyle = rgba(this.ink, 0.16);
+      for (let y = oy; y < H; y += step) {
+        for (let x = ox; x < W; x += step) g.fillRect(x - 0.5, y - 0.5, 1, 1);
+      }
+      g.strokeStyle = rgba(this.ink, 0.22);
+      g.lineWidth = 1;
+      g.beginPath();
+      for (let y = oy; y < H; y += step * 5) {
+        for (let x = ox; x < W; x += step * 5) {
+          g.moveTo(x - 3, y);
+          g.lineTo(x + 3, y);
+          g.moveTo(x, y - 3);
+          g.lineTo(x, y + 3);
+        }
+      }
+      g.stroke();
     }
 
-    seedScrap(color, variant) {
-      const key = `${colorKey(color)}|${variant}`;
-      let sc = this.seedScraps.get(key);
-      if (!sc) {
-        const rng = mulberry32(variant * 7919 + color[0] * 31 + color[1] * 7 + color[2]);
-        const seedColor = variant % 2 === 0 ? this.heroAccent : color;
-        sc = makeScrap({ poly: cutCircle(0, 0, 10, rng, 8, 0.2), material: 'paper', color: seedColor, rng }, this.scrapScale * 1.2, rng() * TAU);
-        this.seedScraps.set(key, sc);
+    /* Film finish over the field: soft flash from above, vignette, scanlines, grain. */
+    paintFilm() {
+      const { w: W, h: H, dpr } = this;
+      const light = luminance(this.soil) > 0.6;
+      // Painted once into its own layer above the field; the browser composites it.
+      const film = this.filmCanvas || document.createElement('canvas');
+      film.width = this.canvas.width;
+      film.height = this.canvas.height;
+      const g = film.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const flash = g.createRadialGradient(W * 0.5, H * 0.08, 0, W * 0.5, H * 0.08, Math.max(W, H) * 0.7);
+      flash.addColorStop(0, rgba(POWDER, light ? 0 : 0.12));
+      flash.addColorStop(1, rgba(POWDER, 0));
+      g.fillStyle = flash;
+      g.fillRect(0, 0, W, H);
+
+      const dark = light ? OCEAN : tone(this.soil, -0.8);
+      const vig = g.createRadialGradient(W / 2, H * 0.48, Math.min(W, H) * 0.22, W / 2, H * 0.48, Math.hypot(W, H) * 0.62);
+      vig.addColorStop(0, rgba(dark, 0));
+      vig.addColorStop(1, rgba(dark, light ? 0.32 : 0.82));
+      g.fillStyle = vig;
+      g.fillRect(0, 0, W, H);
+
+      g.fillStyle = 'rgba(0,0,0,0.07)';
+      for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+
+      // A tile of film grain, shifted every few frames.
+      const size = 160;
+      const tile = document.createElement('canvas');
+      tile.width = size;
+      tile.height = size;
+      const tg = tile.getContext('2d');
+      const img = tg.createImageData(size, size);
+      for (let i = 0; i < img.data.length; i += 4) {
+        const v = Math.random() * 255;
+        img.data[i] = v;
+        img.data[i + 1] = v;
+        img.data[i + 2] = v;
+        img.data[i + 3] = 22;
       }
-      return sc;
+      tg.putImageData(img, 0, 0);
+      if (this.grainLayer && !this.grainLayer.style.backgroundImage) {
+        this.grainLayer.style.backgroundImage = `url(${tile.toDataURL()})`;
+      }
+      this.shadowSprite = document.createElement('canvas');
+      this.shadowSprite.width = 64;
+      this.shadowSprite.height = 64;
+      const sg = this.shadowSprite.getContext('2d');
+      const sgr = sg.createRadialGradient(32, 32, 0, 32, 32, 32);
+      const sc = light ? OCEAN : tone(this.soil, -0.85);
+      sgr.addColorStop(0, rgba(sc, light ? 0.3 : 0.7));
+      sgr.addColorStop(1, rgba(sc, 0));
+      sg.fillStyle = sgr;
+      sg.fillRect(0, 0, 64, 64);
     }
 
     generate() {
@@ -901,7 +488,7 @@
 
       const cx = W / 2;
       const cy = H / 2;
-      const heroR = clamp(Math.min(W, H) * 0.24, base * 1.85, base * 2.9);
+      const heroR = clamp(Math.min(W, H) * 0.22, base * 1.8, base * 2.8);
       this.heroR = heroR;
 
       const margin = base * 0.7;
@@ -909,250 +496,220 @@
       const maxDist = Math.hypot(W / 2 + margin, H / 2 + margin);
       const D = this.duration;
       const flowers = [];
-
-      const pickType = () => {
-        let v = rng();
-        for (const [name, weight] of MAIN_TYPES) {
-          if ((v -= weight) <= 0) return name;
-        }
-        return 'aster';
-      };
+      let id = 1;
 
       for (const [x, y] of pts) {
         const dist = Math.hypot(x - cx, y - cy);
-        if (dist < heroR * 0.8) continue;
-        const type = pickType();
-        const r = base * TYPES[type].size * lerp(0.84, 1.14, rng());
+        if (dist < heroR * 1.05) continue;
+        // Some specimens sit deeper in the field, out of focus.
+        const far = rng() < 0.38;
+        const r = base * lerp(0.88, 1.16, rng()) * (far ? 0.86 : 1);
         const dn = clamp(dist / maxDist, 0, 1);
-        // Outer beds start first, the wave closes in on the center.
+        // Outer field starts first, the wave closes in on the center.
         const startAt = D * (0.02 + 0.5 * (0.45 * (1 - dn) + 0.55 * rng()));
-        flowers.push(this.makeFlower(x, y, r, type, rng, { z: 0.3 + rng() * 0.7, startAt, dur: D * lerp(0.36, 0.5, rng()) }));
+        const f = this.makeFlower(x, y, r, rng, { id: id++, z: far ? rng() * 0.25 - 1 : 0.3 + rng() * 0.7, startAt, dur: D * lerp(0.36, 0.5, rng()) });
+        f.far = far;
+        flowers.push(f);
       }
 
-      // Small asterisks tucked into whatever gaps are left.
+      // Small specimens in whatever gaps are left.
       for (let tries = 0; tries < 3500; tries++) {
         const x = -margin * 0.5 + rng() * (W + margin);
         const y = -margin * 0.5 + rng() * (H + margin);
         const rf = base * lerp(0.36, 0.52, rng());
-        if (Math.hypot(x - cx, y - cy) < heroR * 0.95) continue;
+        if (Math.hypot(x - cx, y - cy) < heroR * 1.2) continue;
         let ok = true;
         for (let i = 0; i < flowers.length; i++) {
           const f = flowers[i];
-          const lim = f.r * (f.type === 'mini' ? 1.1 : 0.62) + rf * 0.45;
-          const dx = f.x - x;
-          const dy = f.y - y;
-          if (dx * dx + dy * dy < lim * lim) {
+          const lim = f.r * (f.small ? 1.1 : 0.62) + rf * 0.45;
+          if ((f.x - x) ** 2 + (f.y - y) ** 2 < lim * lim) {
             ok = false;
             break;
           }
         }
         if (!ok) continue;
-        flowers.push(this.makeFlower(x, y, rf, 'mini', rng, { z: rng() * 0.3, startAt: D * lerp(0.4, 0.75, rng()), dur: D * lerp(0.25, 0.35, rng()) }));
+        flowers.push(this.makeFlower(x, y, rf, rng, { id: id++, small: true, z: rng() * 0.3, startAt: D * lerp(0.4, 0.75, rng()), dur: D * lerp(0.25, 0.35, rng()) }));
       }
 
-      this.center = this.makeFlower(cx, cy, heroR, 'hero', rng, { z: 2, startAt: D * 0.24, dur: D * 0.68, color: this.heroColor });
+      this.center = this.makeFlower(cx, cy, heroR, rng, { id: 0, hero: true, z: 2, startAt: D * 0.24, dur: D * 0.68 });
       flowers.push(this.center);
 
       flowers.sort((a, b) => a.z - b.z);
       this.flowers = flowers;
+      this.assignEyes(rng);
       this.bloomed = false;
+      this.inspected = null;
       this.classList.remove('is-bloomed');
-      this.syncProgress();
+      const t = this.elapsed;
+      flowers.forEach((f) => (f.p = clamp((t - f.startAt) / f.dur, 0, 1)));
 
-      if (this.float) this.float.style.setProperty('--garden-logo-size', `${Math.round(heroR * 2 * this.logoScale)}px`);
+      this.style.setProperty('--garden-logo-size', `${Math.round(heroR * 2 * this.logoScale)}px`);
     }
 
-    makeFlower(x, y, r, type, rng, opts) {
+    /*
+     * Some specimens open an eye where their center would be. Only ones whose
+     * middle is not covered by a higher specimen (or the center) get one.
+     */
+    assignEyes(rng) {
+      this.eyes = [];
+      const near = this.flowers.filter((f) => !f.far && !f.isHero);
+      const irises = [this.foliage, this.heroAccent, this.heroColor].concat(this.palette).filter((c) => colorKey(c) !== colorKey(this.soil));
+      for (const f of near) {
+        f.eye = null;
+        if (f.small || rng() > 0.55) continue;
+        let hidden = Math.hypot(f.x - this.center.x, f.y - this.center.y) < this.heroR * 1.3;
+        for (const o of near) {
+          if (hidden) break;
+          if (o !== f && o.z > f.z && (o.x - f.x) ** 2 + (o.y - f.y) ** 2 < (o.r * 0.85) ** 2) hidden = true;
+        }
+        if (hidden) continue;
+        f.eye = {
+          w: f.r * 0.33,
+          h: f.r * 0.18,
+          rot: (rng() - 0.5) * 0.3,
+          iris: pick(rng, irises),
+          px: 0,
+          py: 0,
+          pupil: 0.5,
+          delay: rng() * 0.05,
+          nextBlink: this.elapsed + 2 + rng() * 8,
+          blinkAt: -1,
+        };
+        f.center = null;
+        this.eyes.push(f);
+      }
+    }
+
+    makeFlower(x, y, r, rng, opts) {
       const f = {
+        id: opts.id,
         x,
         y,
         r,
-        type,
-        def: TYPES[type],
-        color: opts.color || pick(rng, this.palette),
         z: opts.z,
+        small: !!opts.small,
+        isHero: !!opts.hero,
         startAt: opts.startAt,
         dur: Math.max(0.5, opts.dur),
         p: 0,
-        pd: 0,
         boost: 1,
-        ox: 0,
-        oy: 0,
-        vx: 0,
-        vy: 0,
-        rot0: rng() * TAU,
-        rot: 0,
-        vrot: 0,
-        pulse: 0,
-        vpulse: 0,
-        phase: rng() * TAU,
-        j: Math.floor(rng() * 64),
-        kickAt: -1,
-        kick: null,
-        parts: null,
-        leafParts: null,
-        grounded: false,
-        isHero: type === 'hero',
+        rot: rng() * TAU,
         seedAngle: rng() * TAU,
-        seedVariant: Math.floor(rng() * 4),
-        partSeed: (rng() * 2 ** 31) | 0,
         rng: mulberry32((rng() * 2 ** 31) | 0),
       };
 
-      const leafCount = type === 'mini' ? 3 : type === 'hero' ? 8 : 3 + Math.floor(rng() * 3);
+      const leafCount = f.isHero ? 0 : f.small ? 2 : 2 + Math.floor(rng() * 3);
       f.leaves = [];
       for (let i = 0; i < leafCount; i++) {
         f.leaves.push({
-          a: f.rot0 + (i / leafCount) * TAU + (rng() - 0.5) * 0.8,
-          len: r * (type === 'hero' ? lerp(1.08, 1.26, rng()) : lerp(1.05, 1.45, rng())),
-          w: lerp(0.85, 1.15, rng()),
-          delay: (i / leafCount) * 0.35,
+          a: f.rot + (i / leafCount) * TAU + (rng() - 0.5) * 0.9,
+          len: r * lerp(1.05, 1.4, rng()),
+          w: r * lerp(0.36, 0.5, rng()),
+          delay: (i / Math.max(1, leafCount)) * 0.35,
         });
       }
+
+      this.sequence(f, rng);
       return f;
     }
 
-    syncProgress() {
-      const t = this.elapsed;
-      this.flowers.forEach((f) => {
-        f.p = clamp((t - f.startAt) / f.dur, 0, 1);
-        f.pd = f.p;
-      });
+    /* Decides how a specimen is drawn: notation, color and arm geometry. */
+    sequence(f, rng) {
+      const r = f.r;
+      if (f.isHero) {
+        f.style = 'hero';
+        f.color = this.heroColor;
+        f.arms = this.solidArms(5, r, [0.98, 1.06], [0.32, 0.38], rng, 0, 0.42);
+        f.backArms = this.solidArms(5, r, [0.9, 0.98], [0.26, 0.32], rng, Math.PI / 5, 0.3);
+        f.n = 5;
+        return;
+      }
+
+      let v = rng();
+      f.style = 'solid';
+      for (const [name, weight] of STYLES) {
+        if ((v -= weight) <= 0) {
+          f.style = name;
+          break;
+        }
+      }
+      if (f.small && (f.style === 'orbit' || f.style === 'line')) f.style = 'solid';
+
+      f.color = pick(rng, this.palette);
+      const alt = this.palette.filter((p) => colorKey(p) !== colorKey(f.color));
+      f.color2 = alt.length ? pick(rng, alt) : this.ink;
+      f.center = rng() < 0.5 ? pick(rng, ['dot', 'ring', 'cross']) : null;
+
+      switch (f.style) {
+        case 'solid':
+        case 'outline':
+          f.n = rng() < 0.7 ? 5 : pick(rng, [4, 6]);
+          f.arms = this.solidArms(f.n, r, [0.86, 1.04], [0.28, 0.4], rng, 0, 0.42);
+          break;
+        case 'line':
+          f.n = 8 + Math.floor(rng() * 9);
+          f.arms = this.evenArms(f.n, r, [0.82, 1.02], rng);
+          break;
+        case 'dots':
+          f.n = 6 + Math.floor(rng() * 5);
+          f.arms = this.evenArms(f.n, r, [0.84, 1.02], rng);
+          f.dotStep = r * lerp(0.1, 0.13, rng());
+          break;
+        case 'orbit':
+          f.n = 3 + Math.floor(rng() * 3);
+          f.arms = this.evenArms(f.n, r, [0.92, 1.04], rng);
+          f.ring = r * lerp(0.5, 0.68, rng());
+          break;
+        default:
+          break;
+      }
+    }
+
+    solidArms(n, r, lenR, wR, rng, offset, spread) {
+      const arms = [];
+      for (let i = 0; i < n; i++) {
+        const w = r * between(rng, wR);
+        arms.push({
+          a: offset + (i / n) * TAU + (rng() - 0.5) * (TAU / n) * spread,
+          len: r * between(rng, lenR),
+          back: -w * lerp(0.3, 0.5, rng()),
+          hw0: (w / 2) * lerp(0.92, 1.05, rng()),
+          hw1: (w / 2) * lerp(0.88, 1.12, rng()),
+          cut: (rng() - 0.5) * 0.9,
+          skew: (rng() - 0.5) * w * 0.25,
+          delay: (i / n) * 0.35,
+        });
+      }
+      return arms;
+    }
+
+    evenArms(n, r, lenR, rng) {
+      const arms = [];
+      for (let i = 0; i < n; i++) {
+        arms.push({ a: (i / n) * TAU, len: r * between(rng, lenR), delay: (i / n) * 0.3 });
+      }
+      return arms;
     }
 
     replant() {
-      this.markInteracted();
       if (this.classList.contains('is-nav-open')) this.toggleNav(false);
+      this.markInteracted();
       this.seed = (Math.random() * 2 ** 31) | 0;
       this.elapsed = this.reduced ? this.duration * 1.2 : 0;
-      this.particles.length = 0;
-      this.confetti.length = 0;
-      this.ripples.length = 0;
+      this.pings.length = 0;
       this.generate();
-      this.rebuildGraphics();
+      this.paintGround();
+      this.dirty = true;
       this.start();
-    }
-
-    /* ---------------- cutting the paper ---------------- */
-
-    secondColor(rng, c) {
-      const others = this.printColors.filter((p) => colorKey(p) !== colorKey(c));
-      return others.length ? pick(rng, others) : luminance(c) > 0.6 ? INK : PAPER;
-    }
-
-    ensureLeaves(f) {
-      if (f.leafParts) return f.leafParts;
-      const rng = mulberry32(f.partSeed ^ 0x1eaf);
-      const s = f.isHero ? this.dpr : this.scrapScale;
-      f.leafParts = f.leaves.map((leaf) => {
-        const color = pick(rng, this.leafColors);
-        const len = leaf.len;
-        const w = f.r * 0.5 * leaf.w;
-        const poly = rng() < 0.6 ? leafShape(len, w, rng) : bladeShape(len, w * 0.7, rng);
-        return makeScrap(
-          { poly, material: pick(rng, LEAF_MATERIALS), color, color2: this.secondColor(rng, color), fold: rng() < 0.5, rng },
-          s,
-          leaf.a
-        );
-      });
-      return f.leafParts;
-    }
-
-    ensureBloom(f) {
-      if (f.parts) return f.parts;
-      const rng = mulberry32(f.partSeed);
-      const def = f.def;
-      const r = f.r;
-      const s = f.isHero ? this.dpr : this.scrapScale;
-      const material = f.isHero ? 'paper' : pick(rng, MATERIALS);
-      const color2 = this.secondColor(rng, f.color);
-      const parts = { arms: [], center: null, tape: [], bud: null };
-
-      const addArms = (count, lenR, wR, color, mat, c2, layer, delay0, spread, angleOff) => {
-        const order = Array.from({ length: count }, (_, i) => i).sort(() => rng() - 0.5);
-        for (let i = 0; i < count; i++) {
-          const a = angleOff + (i / count) * TAU + (rng() - 0.5) * (TAU / count) * spread;
-          const len = r * between(rng, lenR);
-          const w = r * between(rng, wR);
-          const shape = armShape(len, w, rng, rng() < (f.isHero ? 0.15 : 0.22));
-          // Now and then one arm is cut from a different scrap.
-          const odd = !f.isHero && rng() < 0.14;
-          const scrap = makeScrap(
-            {
-              poly: shape.poly,
-              under: shape.under,
-              material: odd ? pick(rng, MATERIALS) : mat,
-              color,
-              color2: c2,
-              fold: rng() < 0.16,
-              alpha: mat === 'tissue' ? 0.82 : 1,
-              rng,
-            },
-            s,
-            f.rot0 + a
-          );
-          parts.arms.push({ scrap, a, layer, delay: delay0 + (order[i] / count) * 0.4, j: Math.floor(rng() * 64) });
-        }
-      };
-
-      const count = Math.round(between(rng, def.arms));
-      if (f.isHero) {
-        // The Duet asterisk, duochrome: wine pasted behind, fuchsia on top.
-        addArms(5, [0.9, 0.98], [0.26, 0.32], this.heroAccent, 'halftone', this.heroColor, 0, 0, 0.3, Math.PI / 5);
-        addArms(5, def.len, def.w, f.color, 'paper', color2, 1, 0.18, 0.42, 0);
-      } else {
-        addArms(count, def.len, def.w, f.color, material, color2, 0, 0, 0.45, 0);
-        if (def.inner) {
-          const c = this.secondColor(rng, f.color);
-          addArms(Math.round(between(rng, def.inner)), def.innerLen, def.innerW, c, pick(rng, MATERIALS), this.secondColor(rng, c), 1, 0.25, 0.5, rng() * TAU);
-        }
-      }
-
-      if (f.isHero) {
-        // Torn cream paper for the logo to be pasted onto.
-        const dr = r * this.logoScale * 1.12;
-        parts.center = makeScrap({ poly: tornCircle(0, 0, dr, rng, Math.max(1.2, r * 0.016)), material: 'paper', color: PAPER, rng }, s, f.rot0);
-        for (let i = 0; i < 2; i++) {
-          const a = rng() * TAU;
-          const poly = tapeShape(Math.cos(a) * dr * 0.92, Math.sin(a) * dr * 0.92, r * 0.36, r * 0.11, a + Math.PI / 2 + (rng() - 0.5) * 0.6, rng);
-          parts.tape.push(makeScrap({ poly, material: 'tissue', color: PAPER, alpha: 0.78, shadowColor: 'rgba(14,8,4,0.18)', rng }, s, f.rot0));
-        }
-      } else if (rng() < def.center) {
-        const cr = r * (def.centerSize ? between(rng, def.centerSize) : lerp(0.14, 0.24, rng()));
-        const c = this.secondColor(rng, f.color);
-        const poly = rng() < 0.35 ? tornCircle(0, 0, cr, rng, Math.max(0.8, cr * 0.06)) : cutCircle(0, 0, cr, rng, 9 + Math.floor(rng() * 5), 0.12);
-        parts.center = makeScrap({ poly, material: rng() < 0.6 ? 'paper' : pick(rng, ['halftone', 'dots', 'newsprint']), color: c, color2: this.secondColor(rng, c), rng }, s, f.rot0);
-      }
-
-      if (!f.isHero && f.type !== 'mini' && rng() < 0.12) {
-        const poly = tapeShape((rng() - 0.5) * r * 0.6, (rng() - 0.5) * r * 0.6, r * lerp(0.6, 0.9, rng()), r * 0.2, rng() * TAU, rng);
-        parts.tape.push(makeScrap({ poly, material: 'tissue', color: PAPER, alpha: 0.75, shadowColor: 'rgba(14,8,4,0.18)', rng }, s, f.rot0));
-      }
-
-      parts.bud = makeScrap(
-        { poly: cutCircle(0, 0, r * (f.isHero ? 0.36 : 0.3), rng, 9, 0.3), material: f.isHero ? 'paper' : material, color: f.color, color2, crumple: true, rng },
-        s,
-        f.rot0
-      );
-
-      f.parts = parts;
-      return parts;
     }
 
     /* ---------------- interaction ---------------- */
 
-    hitTest(x, y) {
-      for (let i = this.flowers.length - 1; i >= 0; i--) {
-        const f = this.flowers[i];
-        const reach = f.p >= STAGE.open[0] ? 0.9 : f.p >= STAGE.bud[0] ? 0.4 : 0;
-        if (!reach) continue;
-        const dx = x - (f.x + f.ox);
-        const dy = y - (f.y + f.oy);
-        if (dx * dx + dy * dy < f.r * reach * (f.r * reach)) return f;
-      }
+    nearest(x, y, reach) {
       let best = null;
-      let bd = this.base * this.base;
+      let bd = reach * reach;
       for (const f of this.flowers) {
+        if (f.isHero && this.bloomed) continue;
         const d2 = (x - f.x) ** 2 + (y - f.y) ** 2;
         if (d2 < bd) {
           bd = d2;
@@ -1163,109 +720,29 @@
     }
 
     tap(x, y) {
-      this.ripple(x, y, 1);
-      const f = this.hitTest(x, y);
+      this.pings.push({ x, y, t: 0 });
+      const f = this.nearest(x, y, this.base * 1.1);
       if (!f) return;
-      const t = this.elapsed;
+      this.inspected = f;
+      this.inspectUntil = this.elapsed + 2.5;
 
       if (f.p < 1) {
-        f.startAt = Math.min(f.startAt, t);
-        f.boost = Math.max(f.boost, f.isHero ? 9 : 12);
-        f.vpulse += 2.5;
-        this.burst(f, 8);
-        return;
+        f.startAt = Math.min(f.startAt, this.elapsed);
+        f.boost = Math.max(f.boost, 10);
+      } else if (!f.isHero) {
+        // Resequence: new notation and color, replotted from the bud.
+        const was = colorKey(f.color);
+        for (let i = 0; i < 6 && colorKey(f.color) === was; i++) this.sequence(f, f.rng);
+        if (f.eye) f.center = null;
+        f.p = STAGE.bud[0];
+        f.boost = 4;
       }
-
-      if (f.isHero) {
-        f.vpulse += 3.5;
-        f.vrot += 1.2;
-        this.burst(f, 30);
-        return;
+      // Every eye nearby flinches, in a ripple out from the tap.
+      for (const o of this.eyes) {
+        const d = Math.hypot(o.x - x, o.y - y);
+        if (d < this.base * 6) o.eye.blinkAt = this.elapsed + d / (this.base * 14);
       }
-
-      this.rebloom(f);
-    }
-
-    rebloom(f) {
-      // Throw off the old arms...
-      if (f.parts && !this.reduced) {
-        const rot = f.rot0 + f.rot;
-        for (const arm of f.parts.arms) {
-          const a = rot + arm.a;
-          const speed = lerp(80, 240, f.rng());
-          this.particles.push({
-            scrap: arm.scrap,
-            x: f.x + f.ox,
-            y: f.y + f.oy,
-            vx: Math.cos(a) * speed,
-            vy: Math.sin(a) * speed,
-            rot: a,
-            vrot: (f.rng() - 0.5) * 5,
-            life: 0,
-            ttl: lerp(0.9, 1.5, f.rng()),
-          });
-        }
-        if (this.particles.length > 160) this.particles.splice(0, this.particles.length - 160);
-      }
-
-      // ...and cut it again from fresh paper.
-      const others = this.palette.filter((c) => colorKey(c) !== colorKey(f.color));
-      if (others.length) f.color = pick(f.rng, others);
-      f.partSeed = (f.rng() * 2 ** 31) | 0;
-      f.parts = null;
-      f.p = 0.46;
-      f.pd = f.p;
-      f.boost = 3.2;
-      f.vpulse += 2;
-      f.vrot += (f.rng() - 0.5) * 3;
-      this.burst(f, 10);
-    }
-
-    ripple(x, y, strength) {
-      const jit = Array.from({ length: 26 }, () => Math.random() - 0.5);
-      this.ripples.push({ x, y, t: 0, s: strength, jit, spin: Math.random() * TAU });
-      if (this.ripples.length > 6) this.ripples.shift();
-      const reach = this.base * 5.5 * strength;
-      const speed = this.base * 9;
-      for (const f of this.flowers) {
-        const dx = f.x - x;
-        const dy = f.y - y;
-        const d = Math.hypot(dx, dy);
-        if (d > reach || d < 1) continue;
-        const fall = 1 - d / reach;
-        const push = fall * this.base * 5.5 * strength;
-        f.kickAt = this.elapsed + d / speed;
-        f.kick = { x: (dx / d) * push, y: (dy / d) * push, spin: (Math.random() - 0.5) * 3 * fall, pulse: 1.4 * fall };
-        if (f.p < 1 && !f.isHero) {
-          f.startAt = Math.min(f.startAt, this.elapsed + d / speed);
-          f.boost = Math.max(f.boost, 1 + 3.5 * fall);
-        }
-      }
-    }
-
-    burst(f, n) {
-      if (this.reduced || !f) return;
-      for (let i = 0; i < n; i++) {
-        const a = Math.random() * TAU;
-        const sp = lerp(40, 180, Math.random());
-        this.addConfetti(f.x + f.ox + Math.cos(a) * f.r * 0.25, f.y + f.oy + Math.sin(a) * f.r * 0.25, Math.cos(a) * sp, Math.sin(a) * sp);
-      }
-    }
-
-    addConfetti(x, y, vx, vy) {
-      this.confetti.push({
-        scrap: this.confettiScraps[Math.floor(Math.random() * this.confettiScraps.length)],
-        x,
-        y,
-        vx,
-        vy,
-        rot: Math.random() * TAU,
-        vrot: (Math.random() - 0.5) * 9,
-        life: 0,
-        ttl: lerp(0.8, 1.6, Math.random()),
-        size: lerp(0.5, 1.1, Math.random()),
-      });
-      if (this.confetti.length > 240) this.confetti.splice(0, this.confetti.length - 240);
+      this.dirty = true;
     }
 
     /* ---------------- loop ---------------- */
@@ -1282,7 +759,6 @@
         }
         const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
         this.last = now;
-        this.watchPerformance(dt);
         this.update(dt);
         this.render();
         this.raf = requestAnimationFrame(loop);
@@ -1290,318 +766,650 @@
       this.raf = requestAnimationFrame(loop);
     }
 
-    watchPerformance(dt) {
-      // Drop to 1× resolution on devices that cannot keep up.
-      if (this.dpr <= 1 || this.elapsed < 1.5) return;
-      const ft = this.frameTimes;
-      ft.push(dt);
-      if (ft.length < 90) return;
-      const avg = ft.reduce((a, b) => a + b, 0) / ft.length;
-      ft.length = 0;
-      if (avg > 0.03) {
-        this.maxDpr = 1;
-        this.dpr = 1;
-        this.rebuildGraphics();
-      }
-    }
-
     update(dt) {
       this.elapsed += dt;
       const t = this.elapsed;
       const ptr = this.pointer;
-      const base = this.base;
-      const reduced = this.reduced;
-      const reach = base * 2.7;
-      const speedPtr = Math.hypot(ptr.vx, ptr.vy);
-      const gust = 0.65 + 0.35 * Math.sin(t * 0.23);
-
-      // Growth is only shown on stop-motion frames; the scraps boil in between.
-      const growthTick = Math.floor(t * GROWTH_FPS);
-      const showGrowth = growthTick !== this.growthTick;
-      this.growthTick = growthTick;
-      if (!reduced) this.boilTick = Math.floor(t * BOIL_FPS);
-
-      if (ptr.active && !ptr.down && ptr.type !== 'mouse') ptr.active = false;
-      const decay = Math.exp(-dt * 7);
-      ptr.vx *= decay;
-      ptr.vy *= decay;
-
-      // Quick strokes leave a trail of paper confetti.
-      if (ptr.active && !reduced && speedPtr > 180) {
-        ptr.emit += dt * Math.min(60, speedPtr / 12) * (ptr.down ? 1.6 : 1);
-        while (ptr.emit > 1) {
-          ptr.emit -= 1;
-          this.addConfetti(
-            ptr.x + (Math.random() - 0.5) * 18,
-            ptr.y + (Math.random() - 0.5) * 18,
-            ptr.vx * 0.12 + (Math.random() - 0.5) * 50,
-            ptr.vy * 0.12 + (Math.random() - 0.5) * 50
-          );
-        }
-      }
+      const reach = this.base * 2.4;
+      let total = 0;
+      let growing = false;
 
       for (const f of this.flowers) {
+        // Press and drag to accelerate growth under the pointer.
+        if (ptr.down && f.p < 1) {
+          const d = Math.hypot(f.x - ptr.x, f.y - ptr.y);
+          if (d < reach) {
+            f.startAt = Math.min(f.startAt, t);
+            f.boost = Math.max(f.boost, 1 + 5 * (1 - d / reach));
+          }
+        }
         if (t >= f.startAt && f.p < 1) {
           f.p = Math.min(1, f.p + (dt / f.dur) * f.boost);
           if (f.p >= 1) f.boost = 1;
+          this.dirty = true;
+          growing = true;
         }
-        if (showGrowth || reduced) f.pd = f.p;
-        this.maybeGround(f);
+        total += f.p;
+      }
+      this.growing = growing;
+      this.updateEyes(dt);
 
+      if (!this.bloomed && this.center && this.center.p >= 0.96) {
+        this.bloomed = true;
+        this.classList.add('is-bloomed');
+      }
+
+      const tick = Math.floor(t * 8);
+      if (this.bloomReadout && tick !== this.lastReadout) {
+        this.lastReadout = tick;
+        const pct = this.flowers.length ? Math.round((total / this.flowers.length) * 100) : 0;
+        this.bloomReadout.textContent = String(pct).padStart(3, '0') + '%';
+      }
+
+      if (ptr.active && ptr.type === 'mouse' && !ptr.down) {
+        this.inspected = this.nearest(ptr.x, ptr.y, this.base * 1.1);
+      } else if (this.inspected && t > this.inspectUntil) {
+        this.inspected = null;
+      }
+
+      for (const pg of this.pings) pg.t += dt;
+      this.pings = this.pings.filter((pg) => pg.t < 0.25);
+    }
+
+    /* Where the eyes look: the pointer, otherwise mostly straight at the viewer. */
+    lookTarget(t) {
+      const ptr = this.pointer;
+      if (this.classList.contains('is-nav-open')) return null;
+      if (ptr.active) return ptr;
+      if (this.bloomed && t % 17 > 12) return this.center;
+      return null;
+    }
+
+    updateEyes(dt) {
+      const t = this.elapsed;
+      const target = this.lookTarget(t);
+      const ptr = this.pointer;
+      const k = 1 - Math.exp(-dt * (this.reduced ? 30 : 9));
+      for (const f of this.eyes) {
+        const e = f.eye;
+        if (t > e.nextBlink) {
+          e.blinkAt = t;
+          e.nextBlink = t + (Math.random() < 0.15 ? 0.4 : 2.5 + Math.random() * 9);
+        }
         let tx = 0;
         let ty = 0;
-        let tr = 0;
-        const head = range(f.p, STAGE.bud[0], STAGE.open[1]);
-
-        if (!reduced && head > 0) {
-          const amp = base * 0.03 * gust * (f.isHero ? 0.35 : 1);
-          tx += (Math.sin(t * 0.9 + f.x * 0.006 + f.y * 0.003) * 0.7 + Math.sin(t * 2.1 + f.phase) * 0.3) * amp;
-          ty += (Math.cos(t * 0.7 + f.y * 0.005 - f.x * 0.002) * 0.7 + Math.cos(t * 1.8 + f.phase) * 0.3) * amp * 0.8;
-          tr += Math.sin(t * 0.8 + f.phase) * 0.04 * gust;
-        }
-
-        if (ptr.active && head > 0) {
-          const dx = f.x - ptr.x;
-          const dy = f.y - ptr.y;
+        if (target) {
+          const dx = target.x - f.x;
+          const dy = target.y - f.y;
           const d = Math.hypot(dx, dy) || 1;
-          if (d < reach && !reduced) {
-            let fall = 1 - d / reach;
-            fall *= fall;
-            const give = f.isHero ? 0.25 : 1;
-            tx += (dx / d) * fall * base * 0.55 * give;
-            ty += (dy / d) * fall * base * 0.55 * give;
-            f.vx += ptr.vx * fall * dt * 3 * give;
-            f.vy += ptr.vy * fall * dt * 3 * give;
-            f.vrot += ((dx * ptr.vy - dy * ptr.vx) / (d * base)) * fall * dt * 0.9 * give;
-          }
+          const m = Math.min(1, d / (this.base * 4));
+          tx = (dx / d) * m;
+          ty = (dy / d) * m;
         }
-
-        // Watering: pressing and dragging wakes up and hurries the beds.
-        if (ptr.down && f.p < 1) {
-          const d = Math.hypot(f.x - ptr.x, f.y - ptr.y);
-          if (d < reach * 1.1) {
-            const fall = 1 - d / (reach * 1.1);
-            f.startAt = Math.min(f.startAt, t);
-            f.boost = Math.max(f.boost, 1 + 4.5 * fall);
-          }
-        }
-
-        if (f.kick && t >= f.kickAt) {
-          if (!reduced) {
-            f.vx += f.kick.x;
-            f.vy += f.kick.y;
-            f.vrot += f.kick.spin;
-            f.vpulse += f.kick.pulse;
-          }
-          f.kick = null;
-        }
-
-        // Springs back toward the resting position.
-        const k = f.isHero ? 70 : 55;
-        const c = f.isHero ? 11 : 8.5;
-        f.vx += ((tx - f.ox) * k - f.vx * c) * dt;
-        f.vy += ((ty - f.oy) * k - f.vy * c) * dt;
-        f.ox += f.vx * dt;
-        f.oy += f.vy * dt;
-        const lim = base * 0.95;
-        f.ox = clamp(f.ox, -lim, lim);
-        f.oy = clamp(f.oy, -lim, lim);
-        f.vrot += ((tr - f.rot) * 30 - f.vrot * 6) * dt;
-        f.rot += f.vrot * dt;
-        f.vpulse += (-f.pulse * 400 - f.vpulse * 12) * dt;
-        f.pulse = clamp(f.pulse + f.vpulse * dt, -0.2, 0.35);
+        e.px += (tx - e.px) * k;
+        e.py += (ty - e.py) * k;
+        const close = ptr.active && Math.hypot(ptr.x - f.x, ptr.y - f.y) < this.base * 1.4;
+        e.pupil += ((close ? 0.28 : 0.52) - e.pupil) * k;
       }
-
-      if (!this.bloomed && this.center && this.center.p >= 0.94) this.reveal();
-
-      for (const p of this.particles) {
-        p.life += dt;
-        const drag = Math.exp(-dt * 1.4);
-        p.vx *= drag;
-        p.vy *= drag;
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.rot += p.vrot * dt;
-      }
-      this.particles = this.particles.filter((p) => p.life < p.ttl);
-
-      for (const p of this.confetti) {
-        p.life += dt;
-        const drag = Math.exp(-dt * 2.2);
-        p.vx *= drag;
-        p.vy *= drag;
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.rot += p.vrot * dt;
-        p.vrot *= drag;
-      }
-      this.confetti = this.confetti.filter((p) => p.life < p.ttl);
-
-      for (const r of this.ripples) r.t += dt;
-      this.ripples = this.ripples.filter((r) => r.t < 1.2);
-    }
-
-    reveal() {
-      this.bloomed = true;
-      this.classList.add('is-bloomed');
-      if (this.reduced) return;
-      const c = this.center;
-      this.ripple(c.x, c.y, 0.8);
-      this.burst(c, 46);
-    }
-
-    maybeGround(f) {
-      if (f.grounded || f.p < STAGE.leaves[1] + 0.02) return;
-      // Leaves are finished and the seed/sprout are gone: paste them into the ground layer.
-      const g = this.ground.getContext('2d');
-      this.drawFoliage(g, f, 1, this.dpr, f.x * this.dpr, f.y * this.dpr, 0);
-      f.grounded = true;
-      f.leafParts = null;
     }
 
     /* ---------------- drawing ---------------- */
 
-    put(g, sc, k, tx, ty, angle) {
-      if (k <= 0.001) return;
-      const c = Math.cos(angle) * k;
-      const s = Math.sin(angle) * k;
-      g.setTransform(c, s, -s, c, tx, ty);
-      g.drawImage(sc.img, sc.x, sc.y, sc.w, sc.h);
-    }
-
-    boil(index) {
-      return this.reduced ? 0 : JITTER[(index + this.boilTick * 7) & 63];
-    }
-
-    drawFoliage(g, f, p, k, tx, ty, wobble) {
-      const seedIn = range(p, STAGE.seed[0], STAGE.seed[1]);
-      if (seedIn <= 0) return;
-      const sprout = range(p, STAGE.sprout[0], STAGE.sprout[1]);
-      const leaves = range(p, STAGE.leaves[0], STAGE.leaves[1]);
-      const r = f.r;
-
-      if (leaves > 0) {
-        const parts = this.ensureLeaves(f);
-        f.leaves.forEach((leaf, i) => {
-          const lp = range(leaves, leaf.delay, leaf.delay + 0.65);
-          if (lp <= 0) return;
-          this.put(g, parts[i], k * easeOutBack(lp), tx, ty, leaf.a + (1 - lp) * 0.5 + wobble * 0.02 * this.boil(f.j + i));
-        });
-      }
-
-      // Two little cut-paper seed leaves, later hidden under the rosette.
-      if (sprout > 0 && leaves < 1) {
-        g.globalAlpha = 1 - range(leaves, 0.55, 1);
-        const sc = this.sproutScraps[f.j % this.sproutScraps.length];
-        const size = (r * 0.34 * easeOutBack(sprout)) / 20;
-        this.put(g, sc, k * size, tx, ty, f.seedAngle);
-        this.put(g, sc, k * size, tx, ty, f.seedAngle + Math.PI);
-        g.globalAlpha = 1;
-      }
-
-      // The seed (a punched paper dot) drops in, then gets pushed aside.
-      if (sprout < 0.9) {
-        const drop = 1 + 1.6 * (1 - easeOutCubic(seedIn));
-        g.globalAlpha = Math.min(1, seedIn * 1.4) * (1 - range(sprout, 0.35, 0.9));
-        const sc = this.seedScrap(f.color, f.seedVariant);
-        const nudge = sprout * r * 0.12;
-        const c = Math.cos(f.seedAngle + Math.PI / 2);
-        const s = Math.sin(f.seedAngle + Math.PI / 2);
-        this.put(g, sc, k * ((r * 0.13) / 10) * drop, tx + c * nudge * k, ty + s * nudge * k, f.seedAngle + sprout);
-        g.globalAlpha = 1;
-      }
-    }
-
-    drawBloom(g, f, p, k, tx, ty, rot) {
-      const budP = range(p, STAGE.bud[0], STAGE.bud[1]);
-      if (budP <= 0) return;
-      const openP = range(p, STAGE.open[0], STAGE.open[1]);
-      const parts = this.ensureBloom(f);
-
-      // A crumpled ball of paper that the arms unfold out of.
-      const budS = easeOutBack(budP) * (1 - smooth(range(openP, 0.15, 0.6)));
-      if (budS > 0.01) this.put(g, parts.bud, k * budS, tx, ty, rot + (1 - budP) * 1.2);
-
-      for (const arm of parts.arms) {
-        const s = easeOutBack(range(openP, arm.delay, arm.delay + 0.45));
-        if (s <= 0.01) continue;
-        this.put(g, arm.scrap, k * s, tx, ty, rot + arm.a + (1 - Math.min(1, s)) * 0.6 + this.boil(arm.j) * 0.025);
-      }
-
-      if (parts.center) {
-        const s = easeOutBack(range(openP, f.isHero ? 0.6 : 0.55, f.isHero ? 0.88 : 0.85));
-        if (s > 0.01) this.put(g, parts.center, k * s, tx, ty, rot + this.boil(f.j + 3) * 0.02);
-      }
-
-      if (parts.tape.length) {
-        const s = range(openP, 0.9, 1);
-        if (s > 0) {
-          g.globalAlpha = s;
-          for (const tape of parts.tape) this.put(g, tape, k * lerp(1.3, 1, s), tx, ty, rot);
-          g.globalAlpha = 1;
-        }
-      }
-    }
-
     render() {
       const g = this.ctx;
       const { dpr } = this;
+      const now = performance.now();
+
+      // The field is only redrawn while something is growing, at most ~22 times a second.
+      if (this.dirty && (!this.growing || now - (this.lastScene || 0) > 45)) {
+        this.dirty = false;
+        this.lastScene = now;
+        this.drawScene();
+      }
 
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.globalAlpha = 1;
-      g.drawImage(this.ground, 0, 0);
+      g.drawImage(this.scene, 0, 0);
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.drawEyes(g);
+      this.drawOverlay(g);
 
-      for (const f of this.flowers) {
-        if (!f.grounded && f.pd > 0) this.drawFoliage(g, f, f.pd, dpr, f.x * dpr, f.y * dpr, 1);
+    }
+
+    drawScene() {
+      const { dpr } = this;
+      const W = this.canvas.width;
+      const H = this.canvas.height;
+      const s = this.scene.getContext('2d');
+      s.setTransform(1, 0, 0, 1, 0, 0);
+      s.drawImage(this.ground, 0, 0);
+
+      // The deep layer, drawn apart and laid down out of focus.
+      const fl = this.farLayer.getContext('2d');
+      fl.setTransform(1, 0, 0, 1, 0, 0);
+      fl.clearRect(0, 0, W, H);
+      fl.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const far = this.flowers.filter((f) => f.far && f.p > 0);
+      const near = this.flowers.filter((f) => !f.far && f.p > 0);
+      for (const f of far) this.drawFoliage(fl, f, f.p);
+      for (const f of far) if (f.p > STAGE.bud[0]) this.drawBloom(fl, f, f.p);
+      s.save();
+      if (CAN_FILTER) s.filter = `blur(${3.2 * dpr}px) brightness(0.6) saturate(0.85)`;
+      else s.globalAlpha = 0.45;
+      s.drawImage(this.farLayer, 0, 0);
+      s.restore();
+      s.fillStyle = rgba(this.soil, 0.25);
+      s.fillRect(0, 0, W, H);
+
+      s.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const f of near) this.drawFoliage(s, f, f.p);
+      for (const f of near) {
+        if (f.p <= STAGE.bud[0]) continue;
+        const sh = range(f.p, STAGE.bud[0], STAGE.open[1]);
+        s.globalAlpha = sh;
+        s.drawImage(this.shadowSprite, f.x + f.r * 0.1 - f.r * 1.25, f.y + f.r * 0.16 - f.r * 1.25, f.r * 2.5, f.r * 2.5);
+        s.globalAlpha = 1;
+        this.drawBloom(s, f, f.p);
       }
 
-      for (const f of this.flowers) {
-        if (f.pd < STAGE.bud[0]) continue;
-        const scale = 1 + f.pulse;
-        const nudge = this.boil(f.j) * 0.5 * dpr;
-        const x = (f.x + f.ox) * dpr + nudge;
-        const y = (f.y + f.oy) * dpr - nudge;
-        this.drawBloom(g, f, f.pd, dpr * scale, x, y, f.rot0 + f.rot);
+      // Linework and the center specimen bleed light.
+      if (this.glowLayer) {
+        const gl = this.glowLayer.getContext('2d');
+        gl.setTransform(1, 0, 0, 1, 0, 0);
+        gl.clearRect(0, 0, W, H);
+        gl.setTransform(dpr, 0, 0, dpr, 0, 0);
+        for (const f of near) {
+          if (f.p > STAGE.bud[0] && (f.isHero || f.style === 'line' || f.style === 'dots' || f.style === 'orbit')) this.drawBloom(gl, f, f.p);
+        }
+        s.save();
+        s.setTransform(1, 0, 0, 1, 0, 0);
+        s.filter = `blur(${7 * dpr}px)`;
+        s.globalCompositeOperation = 'lighter';
+        s.globalAlpha = 0.5;
+        s.drawImage(this.glowLayer, 0, 0);
+        s.restore();
       }
+    }
 
-      for (const p of this.particles) {
-        const life = p.life / p.ttl;
-        g.globalAlpha = 1 - life * life;
-        this.put(g, p.scrap, dpr * (1 + life * 0.6), p.x * dpr, p.y * dpr, p.rot);
-      }
+    drawFoliage(g, f, p) {
+      const seedIn = range(p, STAGE.seed[0], STAGE.seed[1]);
+      const sprout = range(p, STAGE.sprout[0], STAGE.sprout[1]);
+      const leaves = range(p, STAGE.leaves[0], STAGE.leaves[1]);
+      const { x, y, r } = f;
 
-      for (const p of this.confetti) {
-        const life = p.life / p.ttl;
-        g.globalAlpha = Math.min(1, (1 - life) * 2.5);
-        this.put(g, p.scrap, dpr * p.size, p.x * dpr, p.y * dpr, p.rot);
-      }
-
-      // Ripples drawn like a quick loop of white pencil.
-      g.setTransform(1, 0, 0, 1, 0, 0);
-      g.strokeStyle = rgba(PAPER);
-      g.lineJoin = 'round';
-      for (const rp of this.ripples) {
-        const life = rp.t / 1.2;
-        const rad = this.base * (0.3 + 5.2 * easeOutCubic(life)) * rp.s * dpr;
-        const n = rp.jit.length;
-        g.globalAlpha = (1 - life) * 0.6;
-        g.lineWidth = (1 - life) * 2.6 * dpr + 0.5;
+      for (const leaf of f.leaves) {
+        const lp = smooth(range(leaves, leaf.delay, leaf.delay + 0.65));
+        if (lp <= 0) continue;
+        const len = leaf.len * lp;
+        const w = leaf.w * lp;
+        const c = Math.cos(leaf.a);
+        const s = Math.sin(leaf.a);
+        const tx = x + c * len;
+        const ty = y + s * len;
+        const mx = x + c * len * 0.5;
+        const my = y + s * len * 0.5;
+        // Leaves are drawn as hairline construction lines, not filled shapes.
         g.beginPath();
-        for (let i = 0; i <= n + 2; i++) {
-          const a = rp.spin + (i / n) * TAU;
-          const rr = rad * (1 + rp.jit[i % n] * 0.06) * (1 + i * 0.004);
-          const x = rp.x * dpr + Math.cos(a) * rr;
-          const y = rp.y * dpr + Math.sin(a) * rr;
-          if (i === 0) g.moveTo(x, y);
-          else g.lineTo(x, y);
+        g.moveTo(x, y);
+        g.quadraticCurveTo(mx - s * w, my + c * w, tx, ty);
+        g.quadraticCurveTo(mx + s * w, my - c * w, x, y);
+        g.moveTo(x, y);
+        g.lineTo(tx, ty);
+        g.strokeStyle = rgba(this.foliage, 0.85);
+        g.lineWidth = 1;
+        g.stroke();
+        g.fillStyle = rgba(this.foliage);
+        g.fillRect(tx - 1.5, ty - 1.5, 3, 3);
+      }
+
+      if (sprout > 0 && leaves < 1) {
+        const len = r * 0.2 * sprout;
+        g.strokeStyle = rgba(this.foliage);
+        g.lineWidth = 1.2;
+        g.beginPath();
+        for (const off of [-0.5, 0.5]) {
+          g.moveTo(x, y);
+          g.lineTo(x + Math.cos(f.seedAngle + off) * len, y + Math.sin(f.seedAngle + off) * len);
         }
         g.stroke();
       }
-      g.globalAlpha = 1;
 
-      if (this.float && this.center) {
-        const c = this.center;
-        this.float.style.transform = `translate(${c.ox.toFixed(2)}px, ${c.oy.toFixed(2)}px) rotate(${(c.rot * 0.5).toFixed(4)}rad) scale(${(1 + c.pulse * 0.6).toFixed(4)})`;
+      if (seedIn > 0 && leaves < 1) {
+        g.fillStyle = rgba(this.ink, seedIn);
+        g.beginPath();
+        g.arc(x, y, 1.8, 0, TAU);
+        g.fill();
+      }
+    }
+
+    armPath(g, f, arm, e) {
+      const L = Math.max(arm.back + 1, arm.len * e);
+      const k = Math.tan(arm.cut);
+      const c = Math.cos(f.rot + arm.a);
+      const s = Math.sin(f.rot + arm.a);
+      const pts = [
+        [arm.back, -arm.hw0],
+        [L + k * arm.hw1, -arm.hw1],
+        [L - k * arm.hw1, arm.hw1],
+        [arm.back + arm.skew, arm.hw0],
+      ];
+      g.beginPath();
+      pts.forEach(([px, py], i) => {
+        const X = f.x + px * c - py * s;
+        const Y = f.y + px * s + py * c;
+        if (i) g.lineTo(X, Y);
+        else g.moveTo(X, Y);
+      });
+      g.closePath();
+    }
+
+    /* A solid arm with depth: shade at the root, sheen along its length. */
+    shadedArm(g, f, arm, e, color) {
+      const a = f.rot + arm.a;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const L = arm.len * e;
+      this.armPath(g, f, arm, e);
+      const grad = g.createLinearGradient(f.x, f.y, f.x + c * Math.max(1, L), f.y + s * Math.max(1, L));
+      grad.addColorStop(0, rgba(tone(color, -0.55)));
+      grad.addColorStop(0.32, rgba(tone(color, -0.08)));
+      grad.addColorStop(0.78, rgba(tone(color, 0.1)));
+      grad.addColorStop(1, rgba(tone(color, -0.18)));
+      g.fillStyle = grad;
+      g.fill();
+      g.strokeStyle = rgba(tone(color, -0.6), 0.8);
+      g.lineWidth = 1;
+      g.stroke();
+      if (L > arm.len * 0.3) {
+        const o = -arm.hw0 * 0.45;
+        g.beginPath();
+        g.moveTo(f.x + c * L * 0.28 - s * o, f.y + s * L * 0.28 + c * o);
+        g.lineTo(f.x + c * L * 0.86 - s * o, f.y + s * L * 0.86 + c * o);
+        g.strokeStyle = 'rgba(255,255,255,0.22)';
+        g.lineWidth = 1.4;
+        g.stroke();
+      }
+    }
+
+    drawBloom(g, f, p) {
+      const budP = range(p, STAGE.bud[0], STAGE.bud[1]);
+      const openP = range(p, STAGE.open[0], STAGE.open[1]);
+      const { x, y, r } = f;
+      const reach = (arm) => smooth(range(openP, arm.delay, arm.delay + 0.6));
+
+      // Bud: a small ring that the arms replace.
+      if (openP < 1) {
+        g.strokeStyle = rgba(f.color, budP * (1 - openP));
+        g.lineWidth = 1.2;
+        g.beginPath();
+        g.arc(x, y, r * 0.15 * budP, 0, TAU);
+        g.stroke();
+      }
+      if (openP <= 0) return;
+
+      switch (f.style) {
+        case 'hero':
+          this.drawHero(g, f, openP, reach);
+          return;
+        case 'solid':
+        case 'outline':
+          for (const arm of f.arms) {
+            const e = reach(arm);
+            if (e <= 0) continue;
+            if (f.style === 'solid') {
+              this.shadedArm(g, f, arm, e, f.color);
+            } else {
+              this.armPath(g, f, arm, e);
+              g.fillStyle = rgba(this.soil, 0.85);
+              g.fill();
+              g.strokeStyle = rgba(f.color);
+              g.lineWidth = 1.3;
+              g.stroke();
+            }
+          }
+          break;
+        case 'line': {
+          g.strokeStyle = rgba(f.color);
+          g.fillStyle = rgba(f.color);
+          g.lineWidth = 1.3;
+          g.beginPath();
+          const tips = [];
+          for (const arm of f.arms) {
+            const e = reach(arm);
+            if (e <= 0) continue;
+            const c = Math.cos(f.rot + arm.a);
+            const s = Math.sin(f.rot + arm.a);
+            g.moveTo(x + c * r * 0.08, y + s * r * 0.08);
+            g.lineTo(x + c * arm.len * e, y + s * arm.len * e);
+            tips.push([x + c * arm.len * e, y + s * arm.len * e]);
+          }
+          g.stroke();
+          g.beginPath();
+          for (const [tx, ty] of tips) {
+            g.moveTo(tx + 2, ty);
+            g.arc(tx, ty, 2, 0, TAU);
+          }
+          g.fill();
+          break;
+        }
+        case 'dots': {
+          g.fillStyle = rgba(f.color);
+          g.beginPath();
+          for (const arm of f.arms) {
+            const e = reach(arm);
+            const m = Math.floor(arm.len / f.dotStep);
+            const c = Math.cos(f.rot + arm.a);
+            const s = Math.sin(f.rot + arm.a);
+            for (let j = 1; j <= m; j++) {
+              if (j * f.dotStep > arm.len * e) break;
+              const rr = f.dotStep * 0.4 * (1 - (j / m) * 0.55);
+              const dx = x + c * j * f.dotStep;
+              const dy = y + s * j * f.dotStep;
+              g.moveTo(dx + rr, dy);
+              g.arc(dx, dy, rr, 0, TAU);
+            }
+          }
+          g.fill();
+          break;
+        }
+        case 'orbit': {
+          const ring = smooth(range(openP, 0, 0.7));
+          g.strokeStyle = rgba(f.color);
+          g.lineWidth = 1.3;
+          g.beginPath();
+          g.arc(x, y, f.ring, f.rot, f.rot + TAU * ring);
+          g.stroke();
+          g.beginPath();
+          const ends = [];
+          for (const arm of f.arms) {
+            const e = reach(arm);
+            if (e <= 0) continue;
+            const c = Math.cos(f.rot + arm.a);
+            const s = Math.sin(f.rot + arm.a);
+            g.moveTo(x - c * arm.len * e, y - s * arm.len * e);
+            g.lineTo(x + c * arm.len * e, y + s * arm.len * e);
+            ends.push([x + c * arm.len * e, y + s * arm.len * e], [x - c * arm.len * e, y - s * arm.len * e]);
+          }
+          g.stroke();
+          g.fillStyle = rgba(f.color);
+          g.beginPath();
+          for (const [ex, ey] of ends) {
+            g.moveTo(ex + 2.4, ey);
+            g.arc(ex, ey, 2.4, 0, TAU);
+          }
+          g.fill();
+          g.fillStyle = rgba(f.color2);
+          g.beginPath();
+          g.arc(x, y, r * 0.09 * openP, 0, TAU);
+          g.fill();
+          break;
+        }
+        default:
+          break;
+      }
+
+      const ce = range(openP, 0.6, 0.9);
+      if (f.center && ce > 0) {
+        const cr = r * 0.11 * ce;
+        g.strokeStyle = rgba(f.color2);
+        g.fillStyle = rgba(f.color2);
+        g.lineWidth = 1.3;
+        g.beginPath();
+        if (f.center === 'dot') {
+          g.arc(x, y, cr, 0, TAU);
+          g.fill();
+        } else if (f.center === 'ring') {
+          g.arc(x, y, cr * 1.3, 0, TAU);
+          g.stroke();
+        } else {
+          g.moveTo(x - cr * 1.4, y);
+          g.lineTo(x + cr * 1.4, y);
+          g.moveTo(x, y - cr * 1.4);
+          g.lineTo(x, y + cr * 1.4);
+          g.stroke();
+        }
+      }
+    }
+
+    drawHero(g, f, openP, reach) {
+      const { x, y, r } = f;
+
+      // A measuring dial around the center specimen.
+      const dial = smooth(range(openP, 0, 0.8));
+      const R1 = r * 1.14;
+      g.strokeStyle = rgba(this.ink, 0.7);
+      g.lineWidth = 1;
+      g.beginPath();
+      g.arc(x, y, R1, -Math.PI / 2, -Math.PI / 2 + TAU * dial);
+      g.stroke();
+      g.strokeStyle = rgba(this.ink, 0.35);
+      g.beginPath();
+      g.arc(x, y, r * 1.26, -Math.PI / 2, -Math.PI / 2 + TAU * dial);
+      g.stroke();
+      g.strokeStyle = rgba(this.ink, 0.7);
+      g.beginPath();
+      const ticks = Math.floor(72 * dial);
+      for (let i = 0; i < ticks; i++) {
+        const a = -Math.PI / 2 + (i / 72) * TAU;
+        const len = i % 6 === 0 ? 8 : 4;
+        g.moveTo(x + Math.cos(a) * R1, y + Math.sin(a) * R1);
+        g.lineTo(x + Math.cos(a) * (R1 + len), y + Math.sin(a) * (R1 + len));
+      }
+      g.stroke();
+
+      const layer = (arms, color) => {
+        for (const arm of arms) {
+          const e = reach(arm);
+          if (e > 0) this.shadedArm(g, f, arm, e, color);
+        }
+      };
+      layer(f.backArms, this.heroAccent);
+      layer(f.arms, f.color);
+
+      // A disc for the logo to sit on, so a wordmark stays legible.
+      const disc = smooth(range(openP, 0.55, 0.9));
+      if (disc > 0) {
+        const dr = r * this.logoScale * 1.02;
+        const dg = g.createRadialGradient(x - dr * 0.3, y - dr * 0.35, dr * 0.1, x, y, dr);
+        dg.addColorStop(0, rgba(tone(f.color, 0.12)));
+        dg.addColorStop(0.7, rgba(f.color));
+        dg.addColorStop(1, rgba(tone(f.color, -0.35)));
+        g.fillStyle = dg;
+        g.beginPath();
+        g.arc(x, y, r * this.logoScale * 1.02 * disc, 0, TAU);
+        g.fill();
+      }
+    }
+
+    drawEyes(g) {
+      const t = this.elapsed;
+      for (const f of this.eyes) {
+        if (f.p < 0.9) continue;
+        const e = f.eye;
+        let b = 1;
+        if (e.blinkAt >= 0 && t >= e.blinkAt) {
+          const bt = (t - e.blinkAt) / BLINK;
+          if (bt >= 1) e.blinkAt = -1;
+          else b = Math.abs(Math.cos(Math.PI * bt));
+        }
+        this.drawEye(g, f, e, smooth(range(f.p, 0.9 + e.delay, 1)) * b);
+      }
+    }
+
+    /* A wet, human eye in the middle of a specimen, seen from above. */
+    drawEye(g, f, e, open) {
+      const { w, h } = e;
+      const skin = f.color;
+      g.save();
+      g.translate(f.x, f.y);
+      g.rotate(e.rot);
+
+      g.fillStyle = rgba(tone(skin, -0.5), 0.92);
+      g.beginPath();
+      g.ellipse(0, 0, w * 1.2, h * 1.75, 0, 0, TAU);
+      g.fill();
+
+      const lid = (ap) => {
+        g.beginPath();
+        g.moveTo(-w, 0);
+        g.bezierCurveTo(-w * 0.45, -h * 1.4 * ap, w * 0.45, -h * 1.4 * ap, w, 0);
+        g.bezierCurveTo(w * 0.45, h * 1.15 * ap, -w * 0.45, h * 1.15 * ap, -w, 0);
+        g.closePath();
+      };
+
+      if (open < 0.06) {
+        g.strokeStyle = rgba(tone(skin, -0.75));
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.moveTo(-w, 0);
+        g.quadraticCurveTo(0, h * 0.4, w, 0);
+        for (let i = 1; i < 6; i++) {
+          const lx = -w + (i / 6) * w * 2;
+          const ly = h * 0.4 * (1 - Math.abs(lx / w) ** 2);
+          g.moveTo(lx, ly);
+          g.lineTo(lx * 1.1, ly + h * 0.35);
+        }
+        g.stroke();
+        g.restore();
+        return;
+      }
+
+      lid(open);
+      g.save();
+      g.clip();
+      const sclera = g.createRadialGradient(-w * 0.15, -h * 0.2, 0, 0, 0, w);
+      sclera.addColorStop(0, rgba(tone(POWDER, 0.55)));
+      sclera.addColorStop(0.65, rgba(POWDER));
+      sclera.addColorStop(1, rgba(mix(POWDER, OCEAN, 0.5)));
+      g.fillStyle = sclera;
+      g.fillRect(-w, -h * 2, w * 2, h * 4);
+
+      const ir = h * 1.05;
+      const ix = e.px * w * 0.55;
+      const iy = e.py * h * 0.6;
+      const iris = g.createRadialGradient(ix, iy, 0, ix, iy, ir);
+      iris.addColorStop(0, rgba(tone(e.iris, 0.3)));
+      iris.addColorStop(0.55, rgba(e.iris));
+      iris.addColorStop(0.88, rgba(tone(e.iris, -0.45)));
+      iris.addColorStop(1, rgba(tone(e.iris, -0.75)));
+      g.fillStyle = iris;
+      g.beginPath();
+      g.arc(ix, iy, ir, 0, TAU);
+      g.fill();
+      g.strokeStyle = rgba(tone(e.iris, -0.5), 0.35);
+      g.lineWidth = 0.6;
+      g.beginPath();
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * TAU;
+        g.moveTo(ix + Math.cos(a) * ir * e.pupil, iy + Math.sin(a) * ir * e.pupil);
+        g.lineTo(ix + Math.cos(a + 0.12) * ir * 0.92, iy + Math.sin(a + 0.12) * ir * 0.92);
+      }
+      g.stroke();
+      g.fillStyle = rgba(tone(OCEAN, -0.75));
+      g.beginPath();
+      g.arc(ix, iy, ir * e.pupil, 0, TAU);
+      g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.92)';
+      g.beginPath();
+      g.arc(ix - ir * 0.34, iy - ir * 0.38, ir * 0.2, 0, TAU);
+      g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.45)';
+      g.beginPath();
+      g.arc(ix + ir * 0.3, iy + ir * 0.28, ir * 0.08, 0, TAU);
+      g.fill();
+      const shade = g.createLinearGradient(0, -h * 1.4, 0, h * 0.2);
+      shade.addColorStop(0, 'rgba(0,0,0,0.5)');
+      shade.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = shade;
+      g.fillRect(-w, -h * 2, w * 2, h * 2.2);
+      g.restore();
+
+      lid(open);
+      g.strokeStyle = rgba(tone(skin, -0.7));
+      g.lineWidth = 1.4;
+      g.stroke();
+      g.beginPath();
+      const cy = -h * 1.25 * open - h * 0.3;
+      g.moveTo(-w * 0.8, cy + h * 0.6);
+      g.quadraticCurveTo(0, cy - h * 0.25, w * 0.8, cy + h * 0.6);
+      g.strokeStyle = rgba(tone(skin, -0.7), 0.45);
+      g.lineWidth = 1;
+      g.stroke();
+      g.restore();
+    }
+
+    drawOverlay(g) {
+      const ink = this.ink;
+      const ptr = this.pointer;
+
+      // Crosshair across the field at the pointer.
+      if (ptr.active && !this.classList.contains('is-nav-open')) {
+        g.strokeStyle = rgba(ink, 0.22);
+        g.lineWidth = 1;
+        g.beginPath();
+        const px = Math.round(ptr.x) + 0.5;
+        const py = Math.round(ptr.y) + 0.5;
+        g.moveTo(px, 0);
+        g.lineTo(px, py - 10);
+        g.moveTo(px, py + 10);
+        g.lineTo(px, this.h);
+        g.moveTo(0, py);
+        g.lineTo(px - 10, py);
+        g.moveTo(px + 10, py);
+        g.lineTo(this.w, py);
+        g.stroke();
+
+        if (ptr.down) {
+          g.setLineDash([3, 4]);
+          g.strokeStyle = rgba(ink, 0.6);
+          g.beginPath();
+          g.arc(ptr.x, ptr.y, this.base * 2.4, 0, TAU);
+          g.stroke();
+          g.setLineDash([]);
+        }
+      }
+
+      // Bracket and readout on the inspected specimen.
+      const f = this.inspected;
+      if (f) {
+        const h = f.r * 1.08;
+        const c = Math.min(10, h * 0.4);
+        g.strokeStyle = rgba(ink, 0.95);
+        g.lineWidth = 1;
+        g.beginPath();
+        for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          const cx = f.x + sx * h;
+          const cy = f.y + sy * h;
+          g.moveTo(cx - sx * c, cy);
+          g.lineTo(cx, cy);
+          g.lineTo(cx, cy - sy * c);
+        }
+        g.stroke();
+
+        const label = [
+          `✱${String(f.id).padStart(4, '0')}`,
+          `${STYLE_CODE[f.style]}-${f.n}`,
+          hex(f.color),
+          `${String(Math.round(f.p * 100)).padStart(3, '0')}%`,
+          f.eye ? (this.pointer.active ? 'WATCHING' : 'AWAKE') : f.isHero ? 'PRIMARY' : 'BLIND',
+        ].join('  ');
+        g.font = '500 10px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+        const tw = g.measureText(label).width;
+        const lx = clamp(f.x - h, 4, this.w - tw - 12);
+        const ly = clamp(f.y + h + 6, 4, this.h - 20);
+        g.fillStyle = rgba(this.soil);
+        g.fillRect(lx, ly, tw + 8, 15);
+        g.fillStyle = rgba(ink);
+        g.fillText(label, lx + 4, ly + 11);
+      }
+
+      for (const pg of this.pings) {
+        const life = pg.t / 0.25;
+        g.strokeStyle = rgba(ink, 1 - life);
+        g.lineWidth = 1;
+        g.beginPath();
+        g.arc(pg.x, pg.y, 4 + life * 18, 0, TAU);
+        g.stroke();
       }
     }
   }
