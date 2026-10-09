@@ -54,9 +54,9 @@
 
   const WHITE = [255, 255, 255];
   const BLACK = [0, 0, 0];
-  const PAPER = [244, 239, 228];
-  const INK = [24, 22, 30];
-  const KRAFT = [190, 146, 96];
+  // Everything is drawn from the Duet palette: "paper" is Powder, "ink" is Ocean.
+  const PAPER = [185, 229, 251];
+  const INK = [25, 31, 107];
 
   function parseColor(input) {
     if (!input) return null;
@@ -257,7 +257,7 @@
   }
 
   function faceColor(material, c) {
-    return material === 'newsprint' ? mix(c, PAPER, 0.62) : c;
+    return material === 'newsprint' ? PAPER : c;
   }
 
   /* Print, pattern and grain on a scrap. Assumes it is already clipped to the shape. */
@@ -480,73 +480,45 @@
     return { img: c, x: b.x0 - pad, y: b.y0 - pad, w: c.width / scale, h: c.height / scale };
   }
 
-  function paintGround(g, W, H, soil, rng) {
+  function paintSoil(g, W, H, soil, rng) {
     g.fillStyle = rgba(soil);
     g.fillRect(0, 0, W, H);
 
-    const blobs = Math.round((W * H) / 30000) + 10;
+    const blobs = Math.round((W * H) / 26000) + 12;
     for (let i = 0; i < blobs; i++) {
       const x = rng() * W;
       const y = rng() * H;
-      const r = 50 + rng() * 170;
-      const c = rng() < 0.5 ? tone(soil, 0.12) : tone(soil, -0.3);
+      const r = 40 + rng() * 160;
+      const c = rng() < 0.5 ? tone(soil, 0.1 + rng() * 0.08) : tone(soil, -0.25);
       const grad = g.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, rgba(c, 0.3));
+      grad.addColorStop(0, rgba(c, 0.28));
       grad.addColorStop(1, rgba(c, 0));
       g.fillStyle = grad;
       g.fillRect(x - r, y - r, r * 2, r * 2);
     }
 
-    // Torn scraps of brown paper and old newsprint glued down as soil.
-    const scraps = Math.round((W * H) / 42000) + 6;
-    for (let i = 0; i < scraps; i++) {
-      const x = rng() * W;
-      const y = rng() * H;
-      const sw = 40 + rng() * 140;
-      const sh = 30 + rng() * 90;
-      const corners = [[-sw / 2, -sh / 2], [sw / 2, -sh / 2], [sw / 2, sh / 2], [-sw / 2, sh / 2]];
-      const poly = [];
-      corners.forEach((p, k) => {
-        poly.push(p);
-        tornEdge(p, corners[(k + 1) % 4], rng, 2.6, poly);
-      });
-      const news = rng() < 0.25;
-      g.save();
-      g.translate(x, y);
-      g.rotate(rng() * TAU);
-      paintScrap(
-        g,
-        { poly, material: news ? 'newsprint' : 'paper', color: news ? PAPER : tone(soil, rng() < 0.5 ? 0.1 : -0.18), alpha: news ? 0.22 : 0.75, rng },
-        [0, 0],
-        1
-      );
-      g.restore();
-    }
-
-    const specks = Math.round((W * H) / 90);
+    const specks = Math.round((W * H) / 70);
     for (let i = 0; i < specks; i++) {
-      g.fillStyle = rgba(rng() < 0.6 ? tone(soil, -0.4) : tone(soil, 0.2 + rng() * 0.25), 0.45);
-      const s = 0.6 + rng() * 1.6;
+      const v = rng();
+      g.fillStyle = rgba(v < 0.55 ? tone(soil, -0.4) : tone(soil, 0.12 + rng() * 0.25), 0.5);
+      const s = 0.6 + rng() * 1.8;
       g.fillRect(rng() * W, rng() * H, s, s);
     }
 
-    // A few loose pencil loops, as if someone sketched the beds first.
-    g.strokeStyle = rgba(PAPER, 0.1);
-    g.lineWidth = 1.2;
-    const loops = 4 + Math.floor(rng() * 4);
-    for (let i = 0; i < loops; i++) {
-      let x = rng() * W;
-      let y = rng() * H;
+    const pebbles = Math.round((W * H) / 7000);
+    for (let i = 0; i < pebbles; i++) {
+      const x = rng() * W;
+      const y = rng() * H;
+      const rx = 1.5 + rng() * 3.5;
+      const c = tone(soil, 0.18 + rng() * 0.3);
+      g.fillStyle = rgba(tone(c, -0.5), 0.5);
       g.beginPath();
-      g.moveTo(x, y);
-      for (let k = 0; k < 14; k++) {
-        const nx = x + (rng() - 0.5) * 120;
-        const ny = y + (rng() - 0.5) * 120;
-        g.quadraticCurveTo(x + (rng() - 0.5) * 80, y + (rng() - 0.5) * 80, nx, ny);
-        x = nx;
-        y = ny;
-      }
-      g.stroke();
+      g.ellipse(x + 0.8, y + 1, rx, rx * 0.7, rng() * TAU, 0, TAU);
+      g.fill();
+      g.fillStyle = rgba(c, 0.85);
+      g.beginPath();
+      g.ellipse(x, y, rx, rx * 0.7, rng() * TAU, 0, TAU);
+      g.fill();
     }
   }
 
@@ -728,16 +700,16 @@
       } catch (e) {
         palette = [];
       }
-      this.palette = palette.length ? palette : [[166, 39, 73], [102, 164, 200], [25, 31, 107], [185, 229, 251], [244, 239, 228], [26, 24, 30]];
-      this.foliage = parseColor(d.foliageColor) || [62, 104, 66];
-      this.soil = parseColor(d.soilColor) || [52, 38, 30];
+      this.palette = palette.length ? palette : [[166, 39, 73], [102, 164, 200], [25, 31, 107], [185, 229, 251], [240, 78, 98], [185, 229, 251]];
+      this.foliage = parseColor(d.foliageColor) || [102, 164, 200];
+      this.soil = parseColor(d.soilColor) || [25, 31, 107];
       this.duration = clamp(parseFloat(d.duration) || 12, 2, 60);
       this.density = DENSITY[d.density] || DENSITY.lush;
       this.logoScale = clamp(parseFloat(d.logoScale) || 0.55, 0.2, 1);
-      this.leafColors = [tone(this.foliage, -0.18), this.foliage, mix(this.foliage, [150, 170, 80], 0.35)];
-      this.sproutColor = mix(this.foliage, [150, 200, 90], 0.45);
-      // Second colors printed onto scraps: the palette, plus paper white and ink.
-      this.printColors = this.palette.concat([PAPER, PAPER, INK]);
+      this.leafColors = [this.foliage, this.foliage, PAPER];
+      this.sproutColor = this.foliage;
+      // Colors printed onto scraps (dots, stripes, checks): only brand colors.
+      this.printColors = this.palette.concat([this.heroColor, this.heroAccent, PAPER, INK]);
     }
 
     /* ---------------- events ---------------- */
@@ -889,14 +861,14 @@
       this.ground.height = this.canvas.height;
       const g = this.ground.getContext('2d');
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      paintGround(g, W, H, this.soil, mulberry32(this.seed ^ 0x51ed));
+      paintSoil(g, W, H, this.soil, mulberry32(this.seed ^ 0x51ed));
 
       // Shared little scraps: seeds, sprout leaves and confetti.
       const rng = mulberry32(this.seed ^ 0xc0ffee);
       const s = this.scrapScale;
       this.seedScraps = new Map();
       this.sproutScraps = Array.from({ length: 6 }, () =>
-        makeScrap({ poly: leafShape(20, 13, rng), material: rng() < 0.7 ? 'paper' : 'halftone', color: this.sproutColor, color2: tone(this.sproutColor, -0.3), rng }, s * 1.5, rng() * TAU)
+        makeScrap({ poly: leafShape(20, 13, rng), material: rng() < 0.7 ? 'paper' : 'halftone', color: this.sproutColor, color2: INK, rng }, s * 1.5, rng() * TAU)
       );
       this.confettiScraps = Array.from({ length: 18 }, (_, i) => {
         const color = i % 4 === 3 ? PAPER : pick(rng, this.palette.concat([this.heroColor, this.heroColor]));
@@ -913,8 +885,8 @@
       let sc = this.seedScraps.get(key);
       if (!sc) {
         const rng = mulberry32(variant * 7919 + color[0] * 31 + color[1] * 7 + color[2]);
-        const kraft = variant % 2 === 0;
-        sc = makeScrap({ poly: cutCircle(0, 0, 10, rng, 8, 0.2), material: 'paper', color: kraft ? KRAFT : color, rng }, this.scrapScale * 1.2, rng() * TAU);
+        const seedColor = variant % 2 === 0 ? this.heroAccent : color;
+        sc = makeScrap({ poly: cutCircle(0, 0, 10, rng, 8, 0.2), material: 'paper', color: seedColor, rng }, this.scrapScale * 1.2, rng() * TAU);
         this.seedScraps.set(key, sc);
       }
       return sc;
@@ -1064,9 +1036,8 @@
     /* ---------------- cutting the paper ---------------- */
 
     secondColor(rng, c) {
-      let c2 = pick(rng, this.printColors);
-      if (colorKey(c2) === colorKey(c)) c2 = luminance(c) > 0.6 ? INK : PAPER;
-      return c2;
+      const others = this.printColors.filter((p) => colorKey(p) !== colorKey(c));
+      return others.length ? pick(rng, others) : luminance(c) > 0.6 ? INK : PAPER;
     }
 
     ensureLeaves(f) {
@@ -1079,7 +1050,7 @@
         const w = f.r * 0.5 * leaf.w;
         const poly = rng() < 0.6 ? leafShape(len, w, rng) : bladeShape(len, w * 0.7, rng);
         return makeScrap(
-          { poly, material: pick(rng, LEAF_MATERIALS), color, color2: rng() < 0.5 ? tone(color, -0.35) : PAPER, fold: rng() < 0.5, rng },
+          { poly, material: pick(rng, LEAF_MATERIALS), color, color2: this.secondColor(rng, color), fold: rng() < 0.5, rng },
           s,
           leaf.a
         );
@@ -1094,7 +1065,7 @@
       const r = f.r;
       const s = f.isHero ? this.dpr : this.scrapScale;
       const material = f.isHero ? 'paper' : pick(rng, MATERIALS);
-      const color2 = f.isHero ? tone(f.color, -0.3) : this.secondColor(rng, f.color);
+      const color2 = this.secondColor(rng, f.color);
       const parts = { arms: [], center: null, tape: [], bud: null };
 
       const addArms = (count, lenR, wR, color, mat, c2, layer, delay0, spread, angleOff) => {
@@ -1127,7 +1098,7 @@
       const count = Math.round(between(rng, def.arms));
       if (f.isHero) {
         // The Duet asterisk, duochrome: wine pasted behind, fuchsia on top.
-        addArms(5, [0.9, 0.98], [0.26, 0.32], this.heroAccent, 'halftone', tone(this.heroAccent, -0.35), 0, 0, 0.3, Math.PI / 5);
+        addArms(5, [0.9, 0.98], [0.26, 0.32], this.heroAccent, 'halftone', this.heroColor, 0, 0, 0.3, Math.PI / 5);
         addArms(5, def.len, def.w, f.color, 'paper', color2, 1, 0.18, 0.42, 0);
       } else {
         addArms(count, def.len, def.w, f.color, material, color2, 0, 0, 0.45, 0);
@@ -1144,7 +1115,7 @@
         for (let i = 0; i < 2; i++) {
           const a = rng() * TAU;
           const poly = tapeShape(Math.cos(a) * dr * 0.92, Math.sin(a) * dr * 0.92, r * 0.36, r * 0.11, a + Math.PI / 2 + (rng() - 0.5) * 0.6, rng);
-          parts.tape.push(makeScrap({ poly, material: 'tissue', color: [236, 222, 186], alpha: 0.78, shadowColor: 'rgba(14,8,4,0.18)', rng }, s, f.rot0));
+          parts.tape.push(makeScrap({ poly, material: 'tissue', color: PAPER, alpha: 0.78, shadowColor: 'rgba(14,8,4,0.18)', rng }, s, f.rot0));
         }
       } else if (rng() < def.center) {
         const cr = r * (def.centerSize ? between(rng, def.centerSize) : lerp(0.14, 0.24, rng()));
@@ -1155,7 +1126,7 @@
 
       if (!f.isHero && f.type !== 'mini' && rng() < 0.12) {
         const poly = tapeShape((rng() - 0.5) * r * 0.6, (rng() - 0.5) * r * 0.6, r * lerp(0.6, 0.9, rng()), r * 0.2, rng() * TAU, rng);
-        parts.tape.push(makeScrap({ poly, material: 'tissue', color: [236, 222, 186], alpha: 0.75, shadowColor: 'rgba(14,8,4,0.18)', rng }, s, f.rot0));
+        parts.tape.push(makeScrap({ poly, material: 'tissue', color: PAPER, alpha: 0.75, shadowColor: 'rgba(14,8,4,0.18)', rng }, s, f.rot0));
       }
 
       parts.bud = makeScrap(

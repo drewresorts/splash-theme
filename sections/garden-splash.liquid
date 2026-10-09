@@ -129,10 +129,12 @@
 
 {% stylesheet %}
   .garden-splash {
-    --garden-paper: #f4efe4;
-    --garden-ink: #18161e;
-    --garden-ocean: #191f6b;
     --garden-powder: #b9e5fb;
+    --garden-ocean: #191f6b;
+    --garden-wine: #a62749;
+    --garden-teal: #66a4c8;
+    --garden-paper: var(--garden-powder);
+    --garden-ink: var(--garden-ocean);
     position: relative;
     display: block;
     width: 100%;
@@ -143,7 +145,7 @@
     isolation: isolate;
     background:
       radial-gradient(circle at 50% 50%, var(--garden-coral, #f04e62) 0 16%, transparent 16.5%),
-      var(--garden-soil, #34261e);
+      var(--garden-soil, #191f6b);
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
@@ -152,7 +154,7 @@
   }
 
   .garden-splash.is-ready {
-    background: var(--garden-soil, #34261e);
+    background: var(--garden-soil, #191f6b);
   }
 
   .garden-splash__canvas {
@@ -324,7 +326,8 @@
   }
 
   .garden-splash__nav-item:nth-child(3n + 2) > .garden-splash__nav-link {
-    background: var(--garden-powder);
+    background: var(--garden-teal);
+    color: var(--garden-ocean);
   }
 
   .garden-splash__nav-item:nth-child(3n + 3) > .garden-splash__nav-link {
@@ -334,8 +337,8 @@
 
   .garden-splash__nav-link:hover,
   .garden-splash__nav-link:focus-visible {
-    background: var(--garden-ink);
-    color: var(--garden-paper);
+    background: var(--garden-wine);
+    color: var(--garden-powder);
   }
 
   .garden-splash__nav-link:focus-visible {
@@ -493,7 +496,7 @@
     },
     {
       "type": "header",
-      "content": "Flowers"
+      "content": "Colors"
     },
     {
       "type": "color",
@@ -535,25 +538,25 @@
       "type": "color",
       "id": "color_5",
       "label": "Garden color 5",
-      "default": "#F4EFE4"
+      "default": "#F04E62"
     },
     {
       "type": "color",
       "id": "color_6",
       "label": "Garden color 6",
-      "default": "#18161E"
+      "default": "#B9E5FB"
     },
     {
       "type": "color",
       "id": "foliage_color",
       "label": "Leaves",
-      "default": "#3E6842"
+      "default": "#66A4C8"
     },
     {
       "type": "color",
       "id": "soil_color",
-      "label": "Soil",
-      "default": "#34261E"
+      "label": "Background",
+      "default": "#191F6B"
     },
     {
       "type": "header",
