@@ -105,7 +105,7 @@ const STAGE = {
 };
 
 /* Heights above the z = 0 plane, where screen and world units match. */
-const FLOOR_Z = -140;
+const FLOOR_Z = -140; // where seeds land and stems start; no ground is drawn
 const FOV = 50;
 const BLINK = 0.2;
 
@@ -263,29 +263,214 @@ function eyeTexture(iris) {
   return tex;
 }
 
-/* A small, visibly tiling soil texture, like a cheap ground plane. */
-function groundTexture(soil, light) {
-  const c = document.createElement('canvas');
-  c.width = 64;
-  c.height = 64;
-  const g = c.getContext('2d');
-  g.fillStyle = rgba(soil);
-  g.fillRect(0, 0, 64, 64);
-  const rng = mulberry32(7);
-  for (let i = 0; i < 380; i++) {
-    const v = rng();
-    g.fillStyle = rgba(tone(soil, v < 0.5 ? (light ? -0.12 : -0.35) : light ? -0.05 : 0.14), 0.7);
-    const s = 1 + Math.floor(rng() * 3);
-    g.fillRect(Math.floor(rng() * 64), Math.floor(rng() * 64), s, s);
+/* ------------------------------------------------------------------ */
+/* Animated GIF playback                                               */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Canvas drawImage() only ever shows the first frame of an animated GIF, so
+ * the logo GIF is decoded here (LZW) and played frame by frame instead.
+ */
+function lzwDecode(minCode, data, count) {
+  const out = new Uint8Array(count);
+  const clear = 1 << minCode;
+  const eoi = clear + 1;
+  const prefix = new Int16Array(4096);
+  const suffix = new Uint8Array(4096);
+  const stack = new Uint8Array(4097);
+  for (let i = 0; i < clear; i++) suffix[i] = i;
+  let size = minCode + 1;
+  let mask = (1 << size) - 1;
+  let next = eoi + 1;
+  let old = -1;
+  let first = 0;
+  let bits = 0;
+  let acc = 0;
+  let dp = 0;
+  let op = 0;
+  while (op < count) {
+    while (bits < size) {
+      if (dp >= data.length) return out;
+      acc |= data[dp++] << bits;
+      bits += 8;
+    }
+    let code = acc & mask;
+    acc >>>= size;
+    bits -= size;
+    if (code === clear) {
+      size = minCode + 1;
+      mask = (1 << size) - 1;
+      next = eoi + 1;
+      old = -1;
+      continue;
+    }
+    if (code === eoi) break;
+    if (old === -1) {
+      out[op++] = suffix[code];
+      old = code;
+      first = code;
+      continue;
+    }
+    const incoming = code;
+    let sp = 0;
+    if (code >= next) {
+      stack[sp++] = first;
+      code = old;
+    }
+    while (code > eoi) {
+      stack[sp++] = suffix[code];
+      code = prefix[code];
+    }
+    first = suffix[code];
+    stack[sp++] = first;
+    while (sp && op < count) out[op++] = stack[--sp];
+    if (next < 4096) {
+      prefix[next] = old;
+      suffix[next] = first;
+      next++;
+      if (next > mask && size < 12) {
+        size++;
+        mask = (1 << size) - 1;
+      }
+    }
+    old = incoming;
   }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
-  return tex;
+  return out;
+}
+
+function decodeGif(buffer) {
+  const b = new Uint8Array(buffer);
+  if (b[0] !== 0x47 || b[1] !== 0x49 || b[2] !== 0x46) throw new Error('not a gif');
+  let p = 6;
+  const u16 = () => {
+    const v = b[p] | (b[p + 1] << 8);
+    p += 2;
+    return v;
+  };
+  const W = u16();
+  const H = u16();
+  const flags = b[p++];
+  p += 2;
+  const table = (n) => {
+    const t = b.subarray(p, p + 3 * n);
+    p += 3 * n;
+    return t;
+  };
+  const global = flags & 0x80 ? table(1 << ((flags & 7) + 1)) : null;
+  const blocks = () => {
+    const parts = [];
+    let total = 0;
+    let len;
+    while ((len = b[p++])) {
+      parts.push(b.subarray(p, p + len));
+      total += len;
+      p += len;
+    }
+    const out = new Uint8Array(total);
+    let o = 0;
+    for (const part of parts) {
+      out.set(part, o);
+      o += part.length;
+    }
+    return out;
+  };
+  const frames = [];
+  let control = { delay: 100, disposal: 0, transparent: -1 };
+  while (p < b.length) {
+    const block = b[p++];
+    if (block === 0x3b) break;
+    if (block === 0x21) {
+      const label = b[p++];
+      if (label === 0xf9) {
+        p++;
+        const packed = b[p++];
+        const delay = u16();
+        const index = b[p++];
+        p++;
+        control = { delay: Math.max(20, (delay || 10) * 10), disposal: (packed >> 2) & 7, transparent: packed & 1 ? index : -1 };
+      } else {
+        blocks();
+      }
+      continue;
+    }
+    if (block !== 0x2c) break;
+    const x = u16();
+    const y = u16();
+    const w = u16();
+    const h = u16();
+    const f = b[p++];
+    const local = f & 0x80 ? table(1 << ((f & 7) + 1)) : null;
+    const minCode = b[p++];
+    let pixels = lzwDecode(minCode, blocks(), w * h);
+    if (f & 0x40) {
+      const rows = new Uint8Array(w * h);
+      let src = 0;
+      for (const [start, step] of [[0, 8], [4, 8], [2, 4], [1, 2]]) {
+        for (let row = start; row < h; row += step) {
+          rows.set(pixels.subarray(src, src + w), row * w);
+          src += w;
+        }
+      }
+      pixels = rows;
+    }
+    frames.push(Object.assign({ x, y, w, h, colors: local || global, pixels }, control));
+    control = { delay: 100, disposal: 0, transparent: -1 };
+  }
+  return { W, H, frames };
+}
+
+/* Plays decoded GIF frames onto a canvas, honouring each frame's delay and disposal. */
+class GifPlayer {
+  constructor(gif) {
+    this.gif = gif;
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = gif.W;
+    this.canvas.height = gif.H;
+    this.g = this.canvas.getContext('2d', { willReadFrequently: true });
+    this.index = -1;
+    this.wait = 0;
+    this.step();
+  }
+
+  step() {
+    const { frames } = this.gif;
+    const g = this.g;
+    const prev = frames[this.index];
+    if (prev) {
+      if (prev.disposal === 2) g.clearRect(prev.x, prev.y, prev.w, prev.h);
+      if (prev.disposal === 3 && this.saved) g.putImageData(this.saved, 0, 0);
+    }
+    this.index = (this.index + 1) % frames.length;
+    if (this.index === 0) g.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    const f = frames[this.index];
+    if (f.disposal === 3) this.saved = g.getImageData(0, 0, this.canvas.width, this.canvas.height);
+    if (f.w && f.h) {
+      const img = g.getImageData(f.x, f.y, f.w, f.h);
+      const d = img.data;
+      for (let i = 0; i < f.pixels.length; i++) {
+        const c = f.pixels[i];
+        if (c === f.transparent || !f.colors) continue;
+        d[i * 4] = f.colors[c * 3];
+        d[i * 4 + 1] = f.colors[c * 3 + 1];
+        d[i * 4 + 2] = f.colors[c * 3 + 2];
+        d[i * 4 + 3] = 255;
+      }
+      g.putImageData(img, f.x, f.y);
+    }
+    this.wait = f.delay / 1000;
+  }
+
+  /* Advances by dt seconds; returns true when the picture changed. */
+  advance(dt) {
+    if (this.gif.frames.length < 2) return false;
+    this.wait -= dt;
+    let changed = false;
+    while (this.wait <= 0) {
+      this.step();
+      changed = true;
+    }
+    return changed;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -299,7 +484,8 @@ class GardenSplash extends HTMLElement {
     if (!this.canvas || !this.overlay) return;
 
     try {
-      this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, powerPreference: 'high-performance' });
+      this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, alpha: true, powerPreference: 'high-performance' });
+      this.renderer.setClearColor(0x000000, 0);
     } catch (e) {
       // No WebGL: show the logo and controls over the plain background.
       this.classList.add('is-ready', 'is-bloomed', 'is-static');
@@ -314,8 +500,6 @@ class GardenSplash extends HTMLElement {
     this.resetButton = this.querySelector('[data-garden-replant]');
     this.bloomReadout = this.querySelector('[data-garden-bloom]');
     this.coordReadout = this.querySelector('[data-garden-coords]');
-    this.filmCanvas = this.querySelector('[data-garden-film]');
-    this.grainLayer = this.querySelector('[data-garden-grain]');
 
     this.readConfig();
     this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -397,7 +581,7 @@ class GardenSplash extends HTMLElement {
   setupScene() {
     const scene = new THREE.Scene();
     this.scene = scene;
-    scene.background = toColor(this.soil);
+    // No background or ground: only the flowers are drawn, over whatever is behind the section.
     this.fogColor = this.isLight ? toColor(WHITE) : toColor(mix(this.soil, POWDER, 0.18));
 
     // One harsh key light from the top left, a flat ambient fill, and the center's own glow.
@@ -430,10 +614,10 @@ class GardenSplash extends HTMLElement {
       petal: plastic({ side: THREE.DoubleSide, shininess: 90 }),
       gloss: plastic({ shininess: 140, flatShading: false }),
       foliage: plastic({ shininess: 30, specular: 0x777777, side: THREE.DoubleSide }),
-      floor: snap(new THREE.MeshPhongMaterial({ map: groundTexture(this.soil, this.isLight), shininess: 40, specular: 0x8899cc })),
       lid: plastic({ shininess: 50, side: THREE.DoubleSide, flatShading: false }),
     };
     this.makeMaterial = plastic;
+    this.snapMaterial = snap;
 
     this.geometries = {
       round: PETALS.round(),
@@ -449,11 +633,104 @@ class GardenSplash extends HTMLElement {
       socket: new THREE.TorusGeometry(1.1, 0.2, 6, 18),
     };
 
-    this.floor = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.materials.floor);
-    scene.add(this.floor);
+    this.setupLogo();
     this.eyeTextures = new Map();
     this.dummy = new THREE.Object3D();
     this.tmp = new THREE.Vector3();
+  }
+
+  /*
+   * The logo is painted into a texture on the center flower's disc, so the
+   * petals literally close over it and unfold to reveal it. The page's own
+   * logo image is reloaded with CORS so WebGL may use it; animated GIFs keep
+   * playing because the texture is repainted a few times a second.
+   */
+  setupLogo() {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    this.logoCanvas = c;
+    this.logoTexture = new THREE.CanvasTexture(c);
+    this.logoTexture.colorSpace = THREE.SRGBColorSpace;
+    // Unlit, so the logo keeps its true colors under the harsh key light.
+    this.logoMaterial = this.snapMaterial(new THREE.MeshBasicMaterial({ map: this.logoTexture }));
+    this.paintLogo();
+
+    const source = this.logo && this.logo.querySelector('img');
+    const src = source && (source.currentSrc || source.src);
+    if (!src) return;
+    const url = new URL(src, window.location.href);
+    const useImage = () => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        this.logoImage = img;
+        if (this.paintLogo()) this.classList.add('has-3d-logo');
+      };
+      img.src = url.href;
+    };
+    if (!/\.gif$/i.test(url.pathname)) {
+      useImage();
+      return;
+    }
+    // Animated logos: a smaller rendition is plenty for a texture this size.
+    if (url.searchParams.has('width')) url.searchParams.set('width', '360');
+    fetch(url.href, { mode: 'cors' })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status);
+        return res.arrayBuffer();
+      })
+      .then((buf) => {
+        this.logoGif = new GifPlayer(decodeGif(buf));
+        this.logoImage = this.logoGif.canvas;
+        if (this.paintLogo()) this.classList.add('has-3d-logo');
+      })
+      .catch(useImage);
+  }
+
+  paintLogo() {
+    const g = this.logoCanvas.getContext('2d');
+    const S = this.logoCanvas.width;
+    g.clearRect(0, 0, S, S);
+    g.fillStyle = rgba(POWDER);
+    g.beginPath();
+    g.arc(S / 2, S / 2, S / 2, 0, TAU);
+    g.fill();
+    const img = this.logoImage;
+    const iw = img && (img.naturalWidth || img.width);
+    const ih = img && (img.naturalHeight || img.height);
+    if (img && iw) {
+      const box = S * 0.9;
+      const k = Math.min(box / iw, box / ih);
+      const w = iw * k;
+      const h = ih * k;
+      try {
+        g.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
+        // Reading a pixel back throws if the image is unusable (no CORS); check once.
+        if (this.logoChecked !== img) {
+          g.getImageData(0, 0, 1, 1);
+          this.logoChecked = img;
+        }
+      } catch (e) {
+        // The image could not be used (no CORS): keep the page's own logo instead.
+        this.logoImage = null;
+        g.fillStyle = rgba(POWDER);
+        g.fillRect(0, 0, S, S);
+        this.logoTexture.needsUpdate = true;
+        return false;
+      }
+    } else if (!img) {
+      const text = this.querySelector('.garden-splash__logo-text');
+      if (text) {
+        g.fillStyle = rgba(OCEAN);
+        g.font = `600 ${S * 0.16}px ui-monospace, Menlo, monospace`;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(text.textContent.trim().toLowerCase(), S / 2, S / 2, S * 0.85);
+      }
+    }
+    this.logoTexture.needsUpdate = true;
+    return true;
   }
 
   eyeMaterial(iris) {
@@ -602,62 +879,13 @@ class GardenSplash extends HTMLElement {
     this.camera.updateProjectionMatrix();
     this.scene.fog = new THREE.Fog(this.fogColor, dist + 30, dist + 320);
 
-    const span = (dist - FLOOR_Z) / dist;
-    this.floor.position.set(W / 2, H / 2, FLOOR_Z);
-    this.floor.scale.set(W * span * 1.2, H * span * 1.2, 1);
-    const tiles = (W * span * 1.2) / 64;
-    this.materials.floor.map.repeat.set(tiles, (H * span * 1.2) / 64);
-
     this.overlay.width = Math.round(W * this.dpr);
     this.overlay.height = Math.round(H * this.dpr);
-    this.paintFilm();
 
     // A small height change (mobile browser chrome) keeps the same field, re-placed.
     if (relayout) this.generate();
     else this.buildMeshes();
     this.project();
-  }
-
-  /* Film finish over the render: soft flash from above, vignette, scanlines, grain. */
-  paintFilm() {
-    const { w: W, h: H, dpr } = this;
-    const light = this.isLight;
-    if (this.filmCanvas) {
-      this.filmCanvas.width = Math.round(W * dpr);
-      this.filmCanvas.height = Math.round(H * dpr);
-      const g = this.filmCanvas.getContext('2d');
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const flash = g.createRadialGradient(W * 0.5, H * 0.08, 0, W * 0.5, H * 0.08, Math.max(W, H) * 0.7);
-      flash.addColorStop(0, rgba(POWDER, light ? 0 : 0.1));
-      flash.addColorStop(1, rgba(POWDER, 0));
-      g.fillStyle = flash;
-      g.fillRect(0, 0, W, H);
-      const dark = light ? OCEAN : tone(this.soil, -0.8);
-      const vig = g.createRadialGradient(W / 2, H * 0.48, Math.min(W, H) * 0.25, W / 2, H * 0.48, Math.hypot(W, H) * 0.62);
-      vig.addColorStop(0, rgba(dark, 0));
-      vig.addColorStop(1, rgba(dark, light ? 0.3 : 0.75));
-      g.fillStyle = vig;
-      g.fillRect(0, 0, W, H);
-      g.fillStyle = 'rgba(0,0,0,0.07)';
-      for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
-    }
-    if (this.grainLayer && !this.grainLayer.style.backgroundImage) {
-      const size = 160;
-      const tile = document.createElement('canvas');
-      tile.width = size;
-      tile.height = size;
-      const tg = tile.getContext('2d');
-      const img = tg.createImageData(size, size);
-      for (let i = 0; i < img.data.length; i += 4) {
-        const v = Math.random() * 255;
-        img.data[i] = v;
-        img.data[i + 1] = v;
-        img.data[i + 2] = v;
-        img.data[i + 3] = 22;
-      }
-      tg.putImageData(img, 0, 0);
-      this.grainLayer.style.backgroundImage = `url(${tile.toDataURL()})`;
-    }
   }
 
   generate() {
@@ -788,13 +1016,19 @@ class GardenSplash extends HTMLElement {
       f.species = 'hero';
       f.color = this.heroColor;
       f.color2 = this.heroAccent;
-      sepals(8, r * 0.7);
-      ring(26, 'ray', f.color, r * 1.02, r * 1.0, 1.45, 0.06, 0, 0, 0);
-      ring(24, 'ray', tone(f.color, 0.12), r * 0.86, r * 0.9, 1.45, 0.16, 0.12, 2, Math.PI / 24);
-      ring(20, 'ray', this.heroAccent, r * 0.68, r * 0.7, 1.45, 0.3, 0.25, 4, 0);
-      // The flat center the logo sits on, ringed with stamens.
+      // The petals grow from the rim of the logo disc and start curled shut
+      // over it; the outer rings open first and the inner ring uncovers the logo.
       const dr = r * this.logoScale * 1.04;
-      center('ball', this.heroAccent, dr, dr, r * 0.08, r * 0.12);
+      f.disc = dr;
+      sepals(8, r * 0.7);
+      ring(26, 'ray', f.color, r * 1.02 - dr * 0.4, r * 1.0, 2.35, 0.06, 0, 0, 0);
+      ring(24, 'ray', tone(f.color, 0.12), r * 0.86 - dr * 0.4, r * 0.9, 2.45, 0.16, 0.12, 2, Math.PI / 24);
+      ring(20, 'ray', this.heroAccent, Math.max(dr * 2.2, r * 0.68 - dr * 0.4), r * 0.7, 2.55, 0.3, 0.3, 4, 0);
+      parts.forEach((part) => {
+        if (part.grow !== 'petal') return;
+        part.off = dr * 0.92;
+        part.offA = part.a;
+      });
       for (let i = 0; i < 30; i++) {
         center('ball', tone(this.heroColor, 0.3), r * 0.035, r * 0.035, r * 0.035, r * 0.16, { off: dr * 1.02, offA: (i / 30) * TAU });
       }
@@ -979,6 +1213,10 @@ class GardenSplash extends HTMLElement {
     Object.values(this.meshes).forEach((m) => (m.instanceColor.needsUpdate = true));
 
     const hero = this.center;
+    this.heroDisc = new THREE.Mesh(new THREE.CircleGeometry(1, 40), this.logoMaterial);
+    this.heroDisc.position.set(hero.x, this.h - hero.y, hero.z + 3);
+    this.heroDisc.scale.setScalar(1e-4);
+    group.add(this.heroDisc);
     this.heroLight.position.set(hero.x, this.h - hero.y, hero.z + 160);
     this.heroLight.distance = hero.r * 9;
 
@@ -1097,7 +1335,11 @@ class GardenSplash extends HTMLElement {
       );
     });
 
-    if (f.isHero) this.heroLight.intensity = 2 * openP;
+    if (f.isHero) {
+      // The logo disc is there from the bud on, hidden under the closed petals.
+      this.heroDisc.scale.setScalar(Math.max(zero, f.disc * smooth(range(budP, 0, 0.6))));
+      this.heroLight.intensity = 2 * openP;
+    }
   }
 
   replant() {
@@ -1223,6 +1465,7 @@ class GardenSplash extends HTMLElement {
     }
 
     this.updateEyes(dt);
+    if (this.logoGif && this.center && this.center.p > STAGE.bud[0] && this.logoGif.advance(dt)) this.paintLogo();
     for (const pg of this.pings) pg.t += dt;
     this.pings = this.pings.filter((pg) => pg.t < 0.25);
   }
