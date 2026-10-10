@@ -12,14 +12,29 @@
     "garden_splash_duet": {
       "type": "garden-splash",
       "settings": {
+        "logo": "shopify://shop_images/duet-monogram-3d-spin-slow.gif",
+        "logo_size": 30,
         "menu": "main-menu",
-        "center_color": "#F04E62",
-        "center_accent_color": "#A62749"
+        "logo_link": "",
+        "center_color": "#f04e62",
+        "center_accent_color": "#a62749",
+        "color_1": "#a62749",
+        "color_2": "#66a4c8",
+        "color_3": "#191f6b",
+        "color_4": "#b9e5fb",
+        "color_5": "#f04e62",
+        "color_6": "#b9e5fb",
+        "foliage_color": "#66a4c8",
+        "soil_color": "#FFFFFF",
+        "bloom_duration": 4,
+        "density": "lush",
+        "hud_label": "Richmond VA  37.5407N  77.4360W",
+        "hint_text": "Press + drag to grow  /  Tap to make them blink",
+        "show_replant": true
       }
     },
     "splash_streams_jYPmmR": {
       "type": "splash-streams",
-      "disabled": true,
       "blocks": {
         "stream_TmMwAG": {
           "type": "stream",
@@ -59,6 +74,7 @@
         "stream_cqRFbW",
         "email_signup_8b3nXh"
       ],
+      "disabled": true,
       "name": "Splash streams",
       "settings": {
         "menu": "main-menu",
