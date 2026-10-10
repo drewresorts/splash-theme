@@ -1,20 +1,19 @@
 /**
  * Garden splash
  *
- * A garden seen from straight above, rendered in real 3D the way cheap
+ * A flower bed seen from straight above, rendered in real 3D the way cheap
  * late-90s CGI looked: a low-resolution render scaled up without smoothing,
  * one harsh light, plastic specular highlights, flat-shaded low-poly
  * geometry, distance fog and vertices that snap to a coarse grid.
  *
- * Each specimen is a Duet asterisk on a stem. It grows seed → sprout →
- * leaves → bud → bloom until the heads overlap and fill the screen. Many
- * specimens open an eyeball that turns in its socket to follow the
- * pointer. The center specimen opens last and the logo (a DOM element)
- * appears on it.
+ * Flowers grow scattered across the screen (seed → sprout → leaves → bud →
+ * bloom). Once every one has bloomed they glide into place and pack together
+ * into the shape of the logo. Some flowers open an eyeball that turns in its
+ * socket to follow the pointer. Visitors can switch the color scheme.
  *
  * Interaction is utilitarian: crosshair and coordinate readout, hover or
- * tap to inspect, press and drag to speed up growth, tap to resequence a
- * specimen (nearby eyes blink).
+ * tap to inspect, press and drag to speed up growth, tap to recolor a
+ * flower (nearby eyes blink).
  */
 import * as THREE from './three.module.min.js';
 
@@ -84,7 +83,6 @@ const LATIN = {
   poppy: 'PAPAVER',
   lily: 'LILIUM',
   cluster: 'HYDRANGEA',
-  hero: 'GERBERA D✱',
 };
 /* Species whose open center can hold an eye instead. */
 const EYED = new Set(['daisy', 'poppy', 'rose']);
@@ -105,12 +103,17 @@ const STAGE = {
 };
 
 /* Heights above the z = 0 plane, where screen and world units match. */
-const FLOOR_Z = -140; // where seeds land and stems start; no ground is drawn
+const FLOOR_Z = -45; // where seeds land and stems start; no ground is drawn
 const FOV = 50;
 const BLINK = 0.2;
+const ARRANGE = 2.4; // seconds for the bed to glide into the logo
+
+/* Flower spacing as a fraction of the logo's letter-stroke width. */
+const LOGO_SPACING = { airy: 0.5, lush: 0.36, overgrown: 0.27 };
 
 /* The render is under-resolved on purpose, then scaled up with nearest-neighbour. */
-const renderScale = (w) => (w < 750 ? 0.6 : 0.5);
+// Narrow screens get more pixels, or the small flowers that spell the logo turn to mush.
+const renderScale = (w) => (w < 750 ? 0.85 : 0.5);
 
 /* Bridson's Poisson-disc sampling: evenly spread, never on a grid. */
 function poissonDisc(x0, y0, x1, y1, minDist, rng, seedPoint) {
@@ -264,216 +267,6 @@ function eyeTexture(iris) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Animated GIF playback                                               */
-/* ------------------------------------------------------------------ */
-
-/*
- * Canvas drawImage() only ever shows the first frame of an animated GIF, so
- * the logo GIF is decoded here (LZW) and played frame by frame instead.
- */
-function lzwDecode(minCode, data, count) {
-  const out = new Uint8Array(count);
-  const clear = 1 << minCode;
-  const eoi = clear + 1;
-  const prefix = new Int16Array(4096);
-  const suffix = new Uint8Array(4096);
-  const stack = new Uint8Array(4097);
-  for (let i = 0; i < clear; i++) suffix[i] = i;
-  let size = minCode + 1;
-  let mask = (1 << size) - 1;
-  let next = eoi + 1;
-  let old = -1;
-  let first = 0;
-  let bits = 0;
-  let acc = 0;
-  let dp = 0;
-  let op = 0;
-  while (op < count) {
-    while (bits < size) {
-      if (dp >= data.length) return out;
-      acc |= data[dp++] << bits;
-      bits += 8;
-    }
-    let code = acc & mask;
-    acc >>>= size;
-    bits -= size;
-    if (code === clear) {
-      size = minCode + 1;
-      mask = (1 << size) - 1;
-      next = eoi + 1;
-      old = -1;
-      continue;
-    }
-    if (code === eoi) break;
-    if (old === -1) {
-      out[op++] = suffix[code];
-      old = code;
-      first = code;
-      continue;
-    }
-    const incoming = code;
-    let sp = 0;
-    if (code >= next) {
-      stack[sp++] = first;
-      code = old;
-    }
-    while (code > eoi) {
-      stack[sp++] = suffix[code];
-      code = prefix[code];
-    }
-    first = suffix[code];
-    stack[sp++] = first;
-    while (sp && op < count) out[op++] = stack[--sp];
-    if (next < 4096) {
-      prefix[next] = old;
-      suffix[next] = first;
-      next++;
-      if (next > mask && size < 12) {
-        size++;
-        mask = (1 << size) - 1;
-      }
-    }
-    old = incoming;
-  }
-  return out;
-}
-
-function decodeGif(buffer) {
-  const b = new Uint8Array(buffer);
-  if (b[0] !== 0x47 || b[1] !== 0x49 || b[2] !== 0x46) throw new Error('not a gif');
-  let p = 6;
-  const u16 = () => {
-    const v = b[p] | (b[p + 1] << 8);
-    p += 2;
-    return v;
-  };
-  const W = u16();
-  const H = u16();
-  const flags = b[p++];
-  p += 2;
-  const table = (n) => {
-    const t = b.subarray(p, p + 3 * n);
-    p += 3 * n;
-    return t;
-  };
-  const global = flags & 0x80 ? table(1 << ((flags & 7) + 1)) : null;
-  const blocks = () => {
-    const parts = [];
-    let total = 0;
-    let len;
-    while ((len = b[p++])) {
-      parts.push(b.subarray(p, p + len));
-      total += len;
-      p += len;
-    }
-    const out = new Uint8Array(total);
-    let o = 0;
-    for (const part of parts) {
-      out.set(part, o);
-      o += part.length;
-    }
-    return out;
-  };
-  const frames = [];
-  let control = { delay: 100, disposal: 0, transparent: -1 };
-  while (p < b.length) {
-    const block = b[p++];
-    if (block === 0x3b) break;
-    if (block === 0x21) {
-      const label = b[p++];
-      if (label === 0xf9) {
-        p++;
-        const packed = b[p++];
-        const delay = u16();
-        const index = b[p++];
-        p++;
-        control = { delay: Math.max(20, (delay || 10) * 10), disposal: (packed >> 2) & 7, transparent: packed & 1 ? index : -1 };
-      } else {
-        blocks();
-      }
-      continue;
-    }
-    if (block !== 0x2c) break;
-    const x = u16();
-    const y = u16();
-    const w = u16();
-    const h = u16();
-    const f = b[p++];
-    const local = f & 0x80 ? table(1 << ((f & 7) + 1)) : null;
-    const minCode = b[p++];
-    let pixels = lzwDecode(minCode, blocks(), w * h);
-    if (f & 0x40) {
-      const rows = new Uint8Array(w * h);
-      let src = 0;
-      for (const [start, step] of [[0, 8], [4, 8], [2, 4], [1, 2]]) {
-        for (let row = start; row < h; row += step) {
-          rows.set(pixels.subarray(src, src + w), row * w);
-          src += w;
-        }
-      }
-      pixels = rows;
-    }
-    frames.push(Object.assign({ x, y, w, h, colors: local || global, pixels }, control));
-    control = { delay: 100, disposal: 0, transparent: -1 };
-  }
-  return { W, H, frames };
-}
-
-/* Plays decoded GIF frames onto a canvas, honouring each frame's delay and disposal. */
-class GifPlayer {
-  constructor(gif) {
-    this.gif = gif;
-    this.canvas = document.createElement('canvas');
-    this.canvas.width = gif.W;
-    this.canvas.height = gif.H;
-    this.g = this.canvas.getContext('2d', { willReadFrequently: true });
-    this.index = -1;
-    this.wait = 0;
-    this.step();
-  }
-
-  step() {
-    const { frames } = this.gif;
-    const g = this.g;
-    const prev = frames[this.index];
-    if (prev) {
-      if (prev.disposal === 2) g.clearRect(prev.x, prev.y, prev.w, prev.h);
-      if (prev.disposal === 3 && this.saved) g.putImageData(this.saved, 0, 0);
-    }
-    this.index = (this.index + 1) % frames.length;
-    if (this.index === 0) g.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    const f = frames[this.index];
-    if (f.disposal === 3) this.saved = g.getImageData(0, 0, this.canvas.width, this.canvas.height);
-    if (f.w && f.h) {
-      const img = g.getImageData(f.x, f.y, f.w, f.h);
-      const d = img.data;
-      for (let i = 0; i < f.pixels.length; i++) {
-        const c = f.pixels[i];
-        if (c === f.transparent || !f.colors) continue;
-        d[i * 4] = f.colors[c * 3];
-        d[i * 4 + 1] = f.colors[c * 3 + 1];
-        d[i * 4 + 2] = f.colors[c * 3 + 2];
-        d[i * 4 + 3] = 255;
-      }
-      g.putImageData(img, f.x, f.y);
-    }
-    this.wait = f.delay / 1000;
-  }
-
-  /* Advances by dt seconds; returns true when the picture changed. */
-  advance(dt) {
-    if (this.gif.frames.length < 2) return false;
-    this.wait -= dt;
-    let changed = false;
-    while (this.wait <= 0) {
-      this.step();
-      changed = true;
-    }
-    return changed;
-  }
-}
-
-/* ------------------------------------------------------------------ */
 /* The element                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -500,6 +293,7 @@ class GardenSplash extends HTMLElement {
     this.resetButton = this.querySelector('[data-garden-replant]');
     this.bloomReadout = this.querySelector('[data-garden-bloom]');
     this.coordReadout = this.querySelector('[data-garden-coords]');
+    this.schemeButtons = Array.from(this.querySelectorAll('[data-garden-scheme]'));
 
     this.readConfig();
     this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -520,7 +314,14 @@ class GardenSplash extends HTMLElement {
 
     this.setupScene();
     this.bindEvents();
+    this.applyScheme(this.storedScheme());
     this.resize(true);
+    // Layout waits for the logo's silhouette, which the flowers will form.
+    this.loadMask().then(() => {
+      this.maskReady = true;
+      this.resize(true);
+      this.start();
+    });
 
     // Hide the server-rendered logo without animating it away.
     if (this.logo) this.logo.style.transition = 'none';
@@ -555,6 +356,7 @@ class GardenSplash extends HTMLElement {
 
   readConfig() {
     const d = this.dataset;
+    this.densityName = DENSITY[d.density] ? d.density : 'lush';
     this.heroColor = parseColor(d.centerColor) || [240, 78, 98];
     this.heroAccent = parseColor(d.centerAccent) || [166, 39, 73];
     this.foliage = parseColor(d.foliageColor) || [102, 164, 200];
@@ -569,11 +371,11 @@ class GardenSplash extends HTMLElement {
     const ground = colorKey(this.soil);
     palette = palette.filter((c) => colorKey(c) !== ground);
     this.palette = palette.length ? palette : [[166, 39, 73], [102, 164, 200], [185, 229, 251], [240, 78, 98]];
+    this.house = { palette: this.palette, foliage: this.foliage, center: this.heroColor, accent: this.heroAccent };
     this.isLight = luminance(this.soil) > 0.6;
     this.ink = this.isLight ? OCEAN : POWDER;
     this.duration = clamp(parseFloat(d.duration) || 12, 2, 60);
     this.density = DENSITY[d.density] || DENSITY.lush;
-    this.logoScale = clamp(parseFloat(d.logoScale) || 0.55, 0.2, 1);
   }
 
   /* ---------------- scene ---------------- */
@@ -584,13 +386,11 @@ class GardenSplash extends HTMLElement {
     // No background or ground: only the flowers are drawn, over whatever is behind the section.
     this.fogColor = this.isLight ? toColor(WHITE) : toColor(mix(this.soil, POWDER, 0.18));
 
-    // One harsh key light from the top left, a flat ambient fill, and the center's own glow.
+    // One harsh key light from the top left and a flat ambient fill.
     const key = new THREE.DirectionalLight(0xffffff, 2.6);
     key.position.set(-0.7, 0.9, 1.2);
     scene.add(key);
     scene.add(new THREE.AmbientLight(toColor(mix(POWDER, this.soil, 0.4)), 0.9));
-    this.heroLight = new THREE.PointLight(toColor(this.heroColor), 0, 0, 0);
-    scene.add(this.heroLight);
 
     this.camera = new THREE.PerspectiveCamera(FOV, 1, 10, 5000);
 
@@ -633,107 +433,143 @@ class GardenSplash extends HTMLElement {
       socket: new THREE.TorusGeometry(1.1, 0.2, 6, 18),
     };
 
-    this.setupLogo();
     this.eyeTextures = new Map();
     this.dummy = new THREE.Object3D();
     this.tmp = new THREE.Vector3();
   }
 
-  /*
-   * The logo is painted into a texture on the center flower's disc, so the
-   * petals literally close over it and unfold to reveal it. The page's own
-   * logo image is reloaded with CORS so WebGL may use it; animated GIFs keep
-   * playing because the texture is repainted a few times a second.
-   */
-  setupLogo() {
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 512;
-    this.logoCanvas = c;
-    this.logoTexture = new THREE.CanvasTexture(c);
-    this.logoTexture.colorSpace = THREE.SRGBColorSpace;
-    // Unlit, so the logo keeps its true colors under the harsh key light.
-    this.logoMaterial = this.snapMaterial(new THREE.MeshBasicMaterial({ map: this.logoTexture }));
-    this.paintLogo();
+  /* ---------------- color schemes ---------------- */
 
-    // The flower's own logo setting (or the bundled wordmark), else the page logo.
-    const source = this.logo && this.logo.querySelector('img');
-    const src = this.dataset.flowerLogo || (source && (source.currentSrc || source.src));
-    if (!src) return;
-    const url = new URL(src, window.location.href);
-    const useImage = () => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        this.logoImage = img;
-        if (this.paintLogo()) this.classList.add('has-3d-logo');
+  /* Scheme 0 is the store's own colors; the others come from the swatch buttons. */
+  schemeAt(i) {
+    const b = this.schemeButtons[i];
+    if (!b || i === 0) return this.house;
+    try {
+      return {
+        palette: JSON.parse(b.dataset.palette).map(parseColor).filter(Boolean),
+        foliage: parseColor(b.dataset.foliage) || this.house.foliage,
+        center: parseColor(b.dataset.center) || this.house.center,
+        accent: parseColor(b.dataset.accent) || this.house.accent,
       };
-      img.src = url.href;
-    };
-    if (!/\.gif$/i.test(url.pathname)) {
-      useImage();
-      return;
+    } catch (e) {
+      return this.house;
     }
-    // Animated logos: a smaller rendition is plenty for a texture this size.
-    if (url.searchParams.has('width')) url.searchParams.set('width', '360');
-    fetch(url.href, { mode: 'cors' })
-      .then((res) => {
-        if (!res.ok) throw new Error(res.status);
-        return res.arrayBuffer();
-      })
-      .then((buf) => {
-        this.logoGif = new GifPlayer(decodeGif(buf));
-        this.logoImage = this.logoGif.canvas;
-        if (this.paintLogo()) this.classList.add('has-3d-logo');
-      })
-      .catch(useImage);
   }
 
-  paintLogo() {
-    const g = this.logoCanvas.getContext('2d');
-    const S = this.logoCanvas.width;
-    g.clearRect(0, 0, S, S);
-    // The disc is the center color, like the brand's circle-bound logo.
-    g.fillStyle = rgba(this.heroColor);
-    g.beginPath();
-    g.arc(S / 2, S / 2, S / 2, 0, TAU);
-    g.fill();
-    const img = this.logoImage;
-    const iw = img && (img.naturalWidth || img.width);
-    const ih = img && (img.naturalHeight || img.height);
-    if (img && iw) {
-      // A wide wordmark's corners still land inside the circle at 94% of its width.
-      const box = S * 0.94;
-      const k = Math.min(box / iw, box / ih);
-      const w = iw * k;
-      const h = ih * k;
-      try {
-        g.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
-        // Reading a pixel back throws if the image is unusable (no CORS); check once.
-        if (this.logoChecked !== img) {
-          g.getImageData(0, 0, 1, 1);
-          this.logoChecked = img;
-        }
-      } catch (e) {
-        // The image could not be used (no CORS): keep the page's own logo instead.
-        this.logoImage = null;
-        g.fillStyle = rgba(this.heroColor);
-        g.fillRect(0, 0, S, S);
-        this.logoTexture.needsUpdate = true;
-        return false;
-      }
-    } else if (!img) {
-      const text = this.querySelector('.garden-splash__logo-text');
-      if (text) {
-        g.fillStyle = rgba(OCEAN);
-        g.font = `600 ${S * 0.16}px ui-monospace, Menlo, monospace`;
-        g.textAlign = 'center';
-        g.textBaseline = 'middle';
-        g.fillText(text.textContent.trim().toLowerCase(), S / 2, S / 2, S * 0.85);
-      }
+  storedScheme() {
+    try {
+      const i = parseInt(window.localStorage.getItem('garden-splash-scheme'), 10);
+      return i >= 0 && i < this.schemeButtons.length ? i : 0;
+    } catch (e) {
+      return 0;
     }
-    this.logoTexture.needsUpdate = true;
-    return true;
+  }
+
+  applyScheme(i) {
+    const sc = this.schemeAt(i);
+    this.scheme = i;
+    this.palette = sc.palette.length ? sc.palette : this.house.palette;
+    this.foliage = sc.foliage;
+    this.heroColor = sc.center;
+    this.heroAccent = sc.accent;
+    this.schemeButtons.forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
+  }
+
+  /* A visitor picked a scheme: recolor every flower in place and remember it. */
+  pickScheme(i) {
+    this.applyScheme(i);
+    try {
+      window.localStorage.setItem('garden-splash-scheme', String(i));
+    } catch (e) {
+      /* private mode: the choice just isn't remembered */
+    }
+    if (!this.flowers.length) return;
+    for (const f of this.flowers) this.sequence(f);
+    this.buildMeshes();
+  }
+
+  /* ---------------- logo silhouette ---------------- */
+
+  /* Reads the logo's alpha channel; the bloomed flowers arrange themselves into it. */
+  loadMask() {
+    const src = this.dataset.flowerLogo;
+    if (!src) return Promise.resolve();
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const timer = window.setTimeout(resolve, 4000);
+      img.onerror = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      img.onload = () => {
+        clearTimeout(timer);
+        try {
+          const w = 400;
+          const h = Math.max(1, Math.round((w * img.naturalHeight) / img.naturalWidth));
+          const c = document.createElement('canvas');
+          c.width = w;
+          c.height = h;
+          const g = c.getContext('2d', { willReadFrequently: true });
+          g.drawImage(img, 0, 0, w, h);
+          const data = g.getImageData(0, 0, w, h).data;
+          const alpha = new Uint8Array(w * h);
+          let x0 = w;
+          let y0 = h;
+          let x1 = 0;
+          let y1 = 0;
+          for (let i = 0; i < w * h; i++) {
+            alpha[i] = data[i * 4 + 3];
+            if (alpha[i] > 127) {
+              const x = i % w;
+              const y = (i / w) | 0;
+              if (x < x0) x0 = x;
+              if (x > x1) x1 = x;
+              if (y < y0) y0 = y;
+              if (y > y1) y1 = y;
+            }
+          }
+          if (x1 > x0 && y1 > y0) this.mask = { w, h, alpha, x0, y0, x1: x1 + 1, y1: y1 + 1 };
+        } catch (e) {
+          // The image can't be read (no CORS): the flowers stay where they grew.
+        }
+        resolve();
+      };
+      img.src = src;
+    });
+  }
+
+  /*
+   * Fits the logo to the screen and fills it with evenly spaced spots, one
+   * per flower. Spacing follows the letter-stroke width, scaled by density.
+   */
+  layoutLogo(rng) {
+    const m = this.mask;
+    const { w: W, h: H } = this;
+    const bw = m.x1 - m.x0;
+    const bh = m.y1 - m.y0;
+    const k = Math.min((W * 0.88) / bw, (H * 0.62) / bh);
+    const lw = bw * k;
+    const lh = bh * k;
+    const ox = (W - lw) / 2;
+    const oy = (H - lh) / 2;
+    const inside = (x, y) => {
+      const mx = Math.floor(m.x0 + (x - ox) / k);
+      const my = Math.floor(m.y0 + (y - oy) / k);
+      return mx >= 0 && my >= 0 && mx < m.w && my < m.h && m.alpha[my * m.w + mx] > 110;
+    };
+    // A wide wordmark ends in the asterisk: flowers there take the asterisk color.
+    const starFrom = bw / bh > 2 ? 0.74 : 2;
+    let spacing = Math.max(7, lh * 0.16 * LOGO_SPACING[this.densityName]);
+    let spots = [];
+    for (let attempt = 0; attempt < 6; attempt++) {
+      spots = poissonDisc(ox, oy, ox + lw, oy + lh, spacing, rng, [ox + lw / 2, oy + lh / 2]).filter(([x, y]) => inside(x, y));
+      if (spots.length <= 900) break;
+      spacing *= 1.15;
+    }
+    this.base = spacing;
+    this.logoBox = { x: ox, y: oy, w: lw, h: lh };
+    return spots.map(([x, y]) => ({ x, y, r: spacing * lerp(0.9, 1.06, rng()), star: (x - ox) / lw > starFrom }));
   }
 
   eyeMaterial(iris) {
@@ -812,6 +648,7 @@ class GardenSplash extends HTMLElement {
     document.addEventListener('keydown', onKey);
     this.navToggles.forEach((el) => el.addEventListener('click', onToggle));
     if (this.resetButton) this.resetButton.addEventListener('click', onReset);
+    this.schemeButtons.forEach((b, i) => b.addEventListener('click', () => this.pickScheme(i)));
     this.motionQuery.addEventListener('change', onMotion);
 
     this.unbind = () => {
@@ -885,8 +722,9 @@ class GardenSplash extends HTMLElement {
     this.overlay.width = Math.round(W * this.dpr);
     this.overlay.height = Math.round(H * this.dpr);
 
+    if (!this.maskReady) return;
     // A small height change (mobile browser chrome) keeps the same field, re-placed.
-    if (relayout) this.generate();
+    if (relayout || !this.flowers.length) this.generate();
     else this.buildMeshes();
     this.project();
   }
@@ -894,68 +732,65 @@ class GardenSplash extends HTMLElement {
   generate() {
     const { w: W, h: H } = this;
     const rng = mulberry32(this.seed);
-    const dens = this.density;
-    const base = clamp(Math.sqrt(W * H) * 0.075 * dens.size, 30, 96);
-    this.base = base;
-
-    const cx = W / 2;
-    const cy = H / 2;
-    const heroR = clamp(Math.min(W, H) * 0.21, base * 1.8, base * 2.7);
-    this.heroR = heroR;
-
-    // The field extends past the edges because the lower layers shrink with distance.
-    const margin = base * 1.6;
-    const pts = poissonDisc(-margin, -margin, W + margin, H + margin, base * dens.spacing, rng, [cx + base * 3, cy]);
-    const maxDist = Math.hypot(W / 2 + margin, H / 2 + margin);
     const D = this.duration;
-    const flowers = [];
-    let id = 1;
+    const targets = this.mask ? this.layoutLogo(rng) : null;
+    if (!targets) this.base = clamp(Math.sqrt(W * H) * 0.075 * this.density.size, 30, 96);
+    const base = this.base;
 
-    for (const [x, y] of pts) {
-      const dist = Math.hypot(x - cx, y - cy);
-      if (dist < heroR * 1.05) continue;
-      // Some specimens sit deeper in the bed, down in the fog.
-      const far = rng() < 0.38;
-      const r = base * lerp(0.88, 1.16, rng()) * (far ? 0.9 : 1);
-      const dn = clamp(dist / maxDist, 0, 1);
+    // Where the flowers first grow: scattered over the whole screen.
+    const count = targets ? targets.length : 0;
+    const spread = targets ? Math.sqrt((W * H * 0.62) / Math.max(1, count)) : base * this.density.spacing;
+    let starts = poissonDisc(0, 0, W, H, spread, rng, [W / 2, H / 2]);
+    for (let i = starts.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [starts[i], starts[j]] = [starts[j], starts[i]];
+    }
+    if (targets) {
+      while (starts.length < count) starts.push([rng() * W, rng() * H]);
+      starts = starts.slice(0, count);
+      // Paired left to right, so the bed glides into the logo without much crossing.
+      starts.sort((a, b) => a[0] - b[0]);
+      targets.sort((a, b) => a.x - b.x);
+    }
+
+    const maxDist = Math.hypot(W / 2, H / 2);
+    this.flowers = starts.map(([x, y], i) => {
+      const target = targets && targets[i];
+      const r = target ? target.r : base * lerp(0.88, 1.16, rng());
+      const dn = clamp(Math.hypot(x - W / 2, y - H / 2) / maxDist, 0, 1);
       const startAt = D * (0.02 + 0.5 * (0.45 * (1 - dn) + 0.55 * rng()));
-      const z = far ? lerp(-105, -70, rng()) : lerp(-25, 30, rng());
-      flowers.push(this.makeFlower(x, y, z, r, rng, { id: id++, far, startAt, dur: D * lerp(0.36, 0.5, rng()) }));
-    }
+      const f = this.makeFlower(x, y, lerp(-25, 30, rng()), r, rng, { id: i + 1, startAt, dur: D * lerp(0.36, 0.5, rng()), star: target && target.star });
+      f.home = [x, y];
+      f.dest = target ? [target.x, target.y] : [x, y];
+      f.moveDelay = target ? (target.x / W) * 0.7 + rng() * 0.25 : 0;
+      f.lift = 0;
+      return f;
+    });
 
-    for (let tries = 0; tries < 3000; tries++) {
-      const x = -margin * 0.5 + rng() * (W + margin);
-      const y = -margin * 0.5 + rng() * (H + margin);
-      const rf = base * lerp(0.36, 0.52, rng());
-      if (Math.hypot(x - cx, y - cy) < heroR * 1.2) continue;
-      let ok = true;
-      for (let i = 0; i < flowers.length; i++) {
-        const f = flowers[i];
-        const lim = f.r * (f.small ? 1.1 : 0.62) + rf * 0.45;
-        if ((f.x - x) ** 2 + (f.y - y) ** 2 < lim * lim) {
-          ok = false;
-          break;
-        }
-      }
-      if (!ok) continue;
-      flowers.push(this.makeFlower(x, y, lerp(-50, -30, rng()), rf, rng, { id: id++, small: true, startAt: D * lerp(0.4, 0.75, rng()), dur: D * lerp(0.25, 0.35, rng()) }));
-    }
-
-    this.center = this.makeFlower(cx, cy, 60, heroR, rng, { id: 0, hero: true, startAt: D * 0.24, dur: D * 0.68 });
-    flowers.push(this.center);
-
-    this.flowers = flowers;
+    this.hasTargets = !!targets;
+    this.arrangeAt = -1;
+    this.arranged = false;
     this.bloomed = false;
     this.inspected = null;
     this.classList.remove('is-bloomed');
     const t = this.elapsed;
-    flowers.forEach((f) => (f.p = clamp((t - f.startAt) / f.dur, 0, 1)));
+    this.flowers.forEach((f) => (f.p = clamp((t - f.startAt) / f.dur, 0, 1)));
+    if (this.reduced) this.settle();
     this.assignEyes(rng);
     this.buildMeshes();
+  }
 
-    // The logo sits on the center's disc; size it to the disc as projected.
-    const scale = this.camDist / (this.camDist - (this.center.z + this.center.r * 0.2));
-    this.style.setProperty('--garden-logo-size', `${Math.round(heroR * 2 * this.logoScale * scale)}px`);
+  /* Puts every flower straight into its place in the logo (reduced motion). */
+  settle() {
+    for (const f of this.flowers) {
+      f.p = 1;
+      [f.x, f.y] = f.dest;
+      f.lift = 0;
+      f.shown = -1;
+    }
+    this.arranged = true;
+    this.bloomed = true;
+    this.classList.add('is-bloomed');
   }
 
   makeFlower(x, y, z, r, rng, opts) {
@@ -965,9 +800,7 @@ class GardenSplash extends HTMLElement {
       y,
       z,
       r,
-      far: !!opts.far,
-      small: !!opts.small,
-      isHero: !!opts.hero,
+      star: !!opts.star,
       startAt: opts.startAt,
       dur: Math.max(0.5, opts.dur),
       p: 0,
@@ -975,9 +808,19 @@ class GardenSplash extends HTMLElement {
       boost: 1,
       rot: rng() * TAU,
       seedAngle: rng() * TAU,
-      rng: mulberry32((rng() * 2 ** 31) | 0),
+      partSeed: (rng() * 2 ** 31) | 0,
+      colorIndex: Math.floor(rng() * 1000),
+      species: 'rose',
     };
-    const leafCount = f.isHero ? 6 : f.small ? 2 : 2 + Math.floor(rng() * 3);
+    let v = rng();
+    for (const [name, weight] of SPECIES) {
+      if ((v -= weight) <= 0) {
+        f.species = name;
+        break;
+      }
+    }
+    if (r < 12) f.species = 'daisy';
+    const leafCount = 2 + Math.floor(rng() * 3);
     f.leaves = [];
     for (let i = 0; i < leafCount; i++) {
       f.leaves.push({
@@ -987,7 +830,7 @@ class GardenSplash extends HTMLElement {
         delay: (i / Math.max(1, leafCount)) * 0.35,
       });
     }
-    this.sequence(f, rng);
+    this.sequence(f);
     return f;
   }
 
@@ -997,7 +840,9 @@ class GardenSplash extends HTMLElement {
    * that goes from closed (petal standing up, a bud) to open as it blooms.
    *   kind: geometry; sx/sy/sz: full size; grow: which stage drives it.
    */
-  sequence(f, rng) {
+  sequence(f) {
+    // The same seed every time, so a recolor keeps the exact same petals.
+    const rng = mulberry32(f.partSeed);
     const r = f.r;
     const parts = [];
     const petal = (kind, color, a, len, w, closed, open, delay, z) =>
@@ -1015,45 +860,14 @@ class GardenSplash extends HTMLElement {
       }
     };
 
-    if (f.isHero) {
-      f.species = 'hero';
+    if (f.star) {
       f.color = this.heroColor;
       f.color2 = this.heroAccent;
-      // The petals grow from the rim of the logo disc and start curled shut
-      // over it; the outer rings open first and the inner ring uncovers the logo.
-      const dr = r * this.logoScale * 1.04;
-      f.disc = dr;
-      sepals(8, r * 0.7);
-      ring(26, 'ray', f.color, r * 1.02 - dr * 0.4, r * 1.0, 2.35, 0.06, 0, 0, 0);
-      ring(24, 'ray', tone(f.color, 0.12), r * 0.86 - dr * 0.4, r * 0.9, 2.45, 0.16, 0.12, 2, Math.PI / 24);
-      ring(20, 'ray', this.heroAccent, Math.max(dr * 2.2, r * 0.68 - dr * 0.4), r * 0.7, 2.55, 0.3, 0.3, 4, 0);
-      parts.forEach((part) => {
-        if (part.grow !== 'petal') return;
-        part.off = dr * 0.92;
-        part.offA = part.a;
-      });
-      for (let i = 0; i < 30; i++) {
-        center('ball', tone(this.heroColor, 0.3), r * 0.035, r * 0.035, r * 0.035, r * 0.16, { off: dr * 1.02, offA: (i / 30) * TAU });
-      }
-      f.parts = parts;
-      return;
+    } else {
+      const n = this.palette.length;
+      f.color = this.palette[f.colorIndex % n];
+      f.color2 = n > 1 ? this.palette[(f.colorIndex + 1 + (f.colorIndex >> 3) % (n - 1)) % n] : this.ink;
     }
-
-    // A specimen with an eye keeps its species when it is rebuilt.
-    if (!(f.eye && f.species)) {
-      let v = rng();
-      f.species = 'rose';
-      for (const [name, weight] of SPECIES) {
-        if ((v -= weight) <= 0) {
-          f.species = name;
-          break;
-        }
-      }
-    }
-    if (f.small) f.species = 'cluster';
-    f.color = pick(rng, this.palette);
-    const alt = this.palette.filter((p) => colorKey(p) !== colorKey(f.color));
-    f.color2 = alt.length ? pick(rng, alt) : this.ink;
     const c = f.color;
 
     switch (f.species) {
@@ -1127,15 +941,16 @@ class GardenSplash extends HTMLElement {
 
   /* Some specimens open an eye in place of their center, where nothing covers it. */
   assignEyes(rng) {
-    const near = this.flowers.filter((f) => !f.far && !f.isHero);
+    const all = this.flowers;
     const irises = [this.foliage, this.heroAccent, this.heroColor].concat(this.palette).filter((c) => colorKey(c) !== colorKey(this.soil));
-    for (const f of near) {
+    for (const f of all) {
       f.eye = null;
-      if (f.small || !EYED.has(f.species) || rng() > 0.55) continue;
-      let hidden = Math.hypot(f.x - this.center.x, f.y - this.center.y) < this.heroR * 1.35;
-      for (const o of near) {
+      if (!EYED.has(f.species) || f.r < 12 || rng() > 0.4) continue;
+      // Judged where the flower ends up, in the logo.
+      let hidden = false;
+      for (const o of all) {
         if (hidden) break;
-        if (o !== f && o.z > f.z && (o.x - f.x) ** 2 + (o.y - f.y) ** 2 < (o.r * 0.9) ** 2) hidden = true;
+        if (o !== f && o.z > f.z && (o.dest[0] - f.dest[0]) ** 2 + (o.dest[1] - f.dest[1]) ** 2 < (o.r * 0.85) ** 2) hidden = true;
       }
       if (hidden) continue;
       f.eye = {
@@ -1147,7 +962,7 @@ class GardenSplash extends HTMLElement {
         delay: rng() * 0.05,
       };
       // Rebuilt without its usual center, so the eye sits where it was.
-      this.sequence(f, f.rng);
+      this.sequence(f);
     }
   }
 
@@ -1215,14 +1030,6 @@ class GardenSplash extends HTMLElement {
     }
     Object.values(this.meshes).forEach((m) => (m.instanceColor.needsUpdate = true));
 
-    const hero = this.center;
-    this.heroDisc = new THREE.Mesh(new THREE.CircleGeometry(1, 40), this.logoMaterial);
-    this.heroDisc.position.set(hero.x, this.h - hero.y, hero.z + 3);
-    this.heroDisc.scale.setScalar(1e-4);
-    group.add(this.heroDisc);
-    this.heroLight.position.set(hero.x, this.h - hero.y, hero.z + 160);
-    this.heroLight.distance = hero.r * 9;
-
     // Eyes: an eyeball that turns in its socket, and lids that close over it.
     for (const f of this.flowers) {
       if (!f.eye) continue;
@@ -1269,6 +1076,7 @@ class GardenSplash extends HTMLElement {
     const d = this.dummy;
     const X = f.x;
     const Y = this.h - f.y;
+    const Z = f.z + f.lift;
     const r = f.r;
     const zero = 1e-4;
     d.rotation.order = 'ZYX';
@@ -1293,13 +1101,13 @@ class GardenSplash extends HTMLElement {
     put(S.seed, X, Y, seedZ, 0, 0, seedS, seedS, seedS);
 
     // The stem rises from the soil to where the head will be.
-    const stemH = (f.z - FLOOR_Z) * smooth(Math.max(sprout * 0.25, leaves));
+    const stemH = (Z - FLOOR_Z) * smooth(Math.max(sprout * 0.25, leaves));
     const stemR = sprout > 0 ? Math.max(1.5, r * 0.05) : 0;
     put(S.stem, X, Y, FLOOR_Z, 0, 0, stemR, stemR, Math.max(zero, stemH));
 
     f.leaves.forEach((leaf, i) => {
       const lp = smooth(range(leaves, leaf.delay, leaf.delay + 0.65));
-      const lz = FLOOR_Z + (f.z - 14 - FLOOR_Z) * lp;
+      const lz = FLOOR_Z + (Z - 14 - FLOOR_Z) * lp;
       put(S.leaves[i], X, Y, lz, leaf.a, lerp(1.2, 0.1, lp), leaf.len * lp, leaf.w * 2 * lp, leaf.w * 2 * lp);
     });
 
@@ -1329,7 +1137,7 @@ class GardenSplash extends HTMLElement {
         S.parts[i],
         X + Math.cos(oa) * off,
         Y + Math.sin(oa) * off,
-        f.z + (part.z || 0),
+        Z + (part.z || 0),
         f.rot + part.a,
         pitch,
         part.sx * s,
@@ -1338,11 +1146,6 @@ class GardenSplash extends HTMLElement {
       );
     });
 
-    if (f.isHero) {
-      // The logo disc only appears once the bud is fully formed, under the still-closed petals.
-      this.heroDisc.scale.setScalar(Math.max(zero, f.disc * smooth(range(openP, 0, 0.18))));
-      this.heroLight.intensity = 2 * openP;
-    }
   }
 
   replant() {
@@ -1362,7 +1165,6 @@ class GardenSplash extends HTMLElement {
     let best = null;
     let bd = reach * reach;
     for (const f of this.flowers) {
-      if (f.isHero && this.bloomed) continue;
       const d2 = (x - f.sx) ** 2 + (y - f.sy) ** 2;
       if (d2 < bd) {
         bd = d2;
@@ -1382,10 +1184,13 @@ class GardenSplash extends HTMLElement {
     if (f.p < 1) {
       f.startAt = Math.min(f.startAt, this.elapsed);
       f.boost = Math.max(f.boost, 10);
-    } else if (!f.isHero) {
-      // Resequence: new notation and color, rebuilt from the bud.
+    } else {
+      // Recolor: the next color in the scheme, re-bloomed from the bud.
       const was = colorKey(f.color);
-      for (let i = 0; i < 6 && colorKey(f.color) === was; i++) this.sequence(f, f.rng);
+      for (let i = 0; i < 6 && colorKey(f.color) === was; i++) {
+        f.colorIndex++;
+        this.sequence(f);
+      }
       f.p = STAGE.bud[0];
       f.boost = 4;
       this.rebuild = true;
@@ -1401,7 +1206,7 @@ class GardenSplash extends HTMLElement {
   /* ---------------- loop ---------------- */
 
   start() {
-    if (this.running || !this.isConnected || !this.renderer) return;
+    if (this.running || !this.isConnected || !this.renderer || !this.maskReady) return;
     this.running = true;
     this.last = performance.now();
     const loop = (now) => {
@@ -1432,6 +1237,29 @@ class GardenSplash extends HTMLElement {
       this.buildMeshes();
     }
 
+    // Once the whole bed has bloomed, it glides into the shape of the logo.
+    if (this.hasTargets && !this.arranged) {
+      if (this.arrangeAt < 0 && this.flowers.length && this.flowers.every((f) => f.p >= 1)) this.arrangeAt = t;
+      if (this.arrangeAt >= 0) {
+        let done = true;
+        for (const f of this.flowers) {
+          const k = range(t - this.arrangeAt - f.moveDelay, 0, ARRANGE);
+          if (k < 1) done = false;
+          const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+          f.x = lerp(f.home[0], f.dest[0], e);
+          f.y = lerp(f.home[1], f.dest[1], e);
+          f.lift = Math.sin(Math.PI * k) * 70;
+          f.shown = -1;
+        }
+        this.project();
+        if (done) {
+          this.arranged = true;
+          this.bloomed = true;
+          this.classList.add('is-bloomed');
+        }
+      }
+    }
+
     for (const f of this.flowers) {
       // Press and drag to accelerate growth under the pointer.
       if (ptr.down && f.p < 1 && Math.hypot(f.sx - ptr.x, f.sy - ptr.y) < reach) {
@@ -1449,7 +1277,7 @@ class GardenSplash extends HTMLElement {
       total += f.p;
     }
 
-    if (!this.bloomed && this.center && this.center.p >= 0.96) {
+    if (!this.bloomed && !this.hasTargets && this.flowers.length && this.flowers.every((f) => f.p >= 1)) {
       this.bloomed = true;
       this.classList.add('is-bloomed');
     }
@@ -1468,7 +1296,6 @@ class GardenSplash extends HTMLElement {
     }
 
     this.updateEyes(dt);
-    if (this.logoGif && this.center && this.center.p > STAGE.bud[0] && this.logoGif.advance(dt)) this.paintLogo();
     for (const pg of this.pings) pg.t += dt;
     this.pings = this.pings.filter((pg) => pg.t < 0.25);
   }
@@ -1484,7 +1311,7 @@ class GardenSplash extends HTMLElement {
       const k = (120 - this.camera.position.z) / dir.z;
       return out.copy(this.camera.position).addScaledVector(dir, k);
     }
-    if (!nav && this.bloomed && this.elapsed % 17 > 12) return out.set(this.center.x, this.h - this.center.y, this.center.z + 60);
+    if (!nav && this.arranged && this.elapsed % 17 > 12) return out.set(this.w / 2, this.h / 2, 80);
     return null;
   }
 
@@ -1498,6 +1325,7 @@ class GardenSplash extends HTMLElement {
       const open = smooth(range(f.p, 0.9 + e.delay, 1));
       e.group.visible = f.p > 0.86;
       if (!e.group.visible) continue;
+      e.group.position.set(f.x, this.h - f.y, f.z + f.lift + f.r * 0.14 + e.R * 0.4);
       if (t > e.nextBlink) {
         e.blinkAt = t;
         e.nextBlink = t + (Math.random() < 0.15 ? 0.4 : 2.5 + Math.random() * 9);
@@ -1580,7 +1408,7 @@ class GardenSplash extends HTMLElement {
         hex(f.color),
         `Z${String(Math.round(f.z)).padStart(4, ' ')}`,
         `${String(Math.round(f.p * 100)).padStart(3, '0')}%`,
-        f.eye ? (this.pointer.active ? 'WATCHING' : 'AWAKE') : f.isHero ? 'PRIMARY' : 'BLIND',
+        f.eye ? (this.pointer.active ? 'WATCHING' : 'AWAKE') : f.star ? 'GLYPH' : 'BLIND',
       ].join('  ');
       g.font = '500 10px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
       const tw = g.measureText(label).width;

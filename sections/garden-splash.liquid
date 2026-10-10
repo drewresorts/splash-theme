@@ -92,8 +92,39 @@
     <p class="garden-splash__hud garden-splash__hud--tl">{{ section.settings.hud_label | escape }}</p>
   {%- endif -%}
 
-  {%- if has_menu -%}
-    <div class="garden-splash__hud garden-splash__hud--tr" data-garden-ui>
+  {%- comment -%}
+    Visitor color schemes: the store's own colors first, then brand duochromes.
+    Each swatch carries the colors the flowers switch to.
+  {%- endcomment -%}
+  {%- capture schemes -%}
+    House|{{ palette_json | strip }}|{{ section.settings.foliage_color }}|{{ section.settings.center_color }}|{{ section.settings.center_accent_color }}
+    Fuchsia|["#F04E62","#A62749","#B9E5FB"]|#66A4C8|#191F6B|#66A4C8
+    Ocean|["#191F6B","#66A4C8","#B9E5FB"]|#A62749|#F04E62|#A62749
+    Wine|["#A62749","#191F6B","#F04E62"]|#B9E5FB|#66A4C8|#B9E5FB
+    Powder|["#B9E5FB","#66A4C8","#F04E62"]|#191F6B|#A62749|#191F6B
+  {%- endcapture -%}
+  <div class="garden-splash__hud garden-splash__hud--tr" data-garden-ui>
+    <div class="garden-splash__schemes" role="group" aria-label="Color scheme">
+      {%- assign scheme_lines = schemes | strip | newline_to_br | split: '<br />' -%}
+      {%- for line in scheme_lines -%}
+        {%- assign parts = line | strip | split: '|' -%}
+        {%- assign swatch = parts[1] | remove: '[' | remove: ']' | remove: '"' | split: ',' -%}
+        <button
+          type="button"
+          class="garden-splash__swatch"
+          data-garden-scheme
+          data-palette="{{ parts[1] | escape }}"
+          data-foliage="{{ parts[2] }}"
+          data-center="{{ parts[3] }}"
+          data-accent="{{ parts[4] }}"
+          aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}"
+          aria-label="{{ parts[0] }} colors"
+          title="{{ parts[0] }}"
+          style="--s1: {{ swatch[0] }}; --s2: {{ swatch[1] | default: swatch[0] }}; --s3: {{ parts[3] }};"
+        ></button>
+      {%- endfor -%}
+    </div>
+    {%- if has_menu -%}
       <button
         type="button"
         class="garden-splash__btn"
@@ -106,8 +137,8 @@
       >
         Menu
       </button>
-    </div>
-  {%- endif -%}
+    {%- endif -%}
+  </div>
 
   <div class="garden-splash__hud garden-splash__hud--bl" data-garden-ui>
     <span class="garden-splash__readout" aria-hidden="true">Bloom <span data-garden-bloom>000%</span></span>
@@ -247,10 +278,12 @@
   }
 
   /* Slight color fringing, like a lens or an old print. */
-  /* Once the logo is painted onto the 3D flower, this copy stays as an invisible button. */
-  .garden-splash.has-3d-logo .garden-splash__logo-img,
-  .garden-splash.has-3d-logo .garden-splash__logo-text {
-    opacity: 0;
+  /* The flowers spell the logo, so this copy is kept for screen readers and keyboards only. */
+  .garden-splash.is-ready:not(.is-static) .garden-splash__center {
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 
   .garden-splash__logo-img {
@@ -335,6 +368,34 @@
   .garden-splash.has-interacted .garden-splash__hint,
   .garden-splash.is-nav-open .garden-splash__hint {
     display: none;
+  }
+
+  .garden-splash__schemes {
+    display: flex;
+    gap: 6px;
+    margin-right: 6px;
+  }
+
+  .garden-splash__swatch {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid currentColor;
+    border-radius: 0;
+    background: linear-gradient(90deg, var(--s1) 0 34%, var(--s2) 34% 67%, var(--s3) 67%);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .garden-splash__swatch[aria-pressed='true'] {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  .garden-splash__swatch:focus-visible {
+    outline: 2px dashed currentColor;
+    outline-offset: 2px;
   }
 
   .garden-splash__btn {
@@ -448,7 +509,8 @@
   }
 
   @media (max-width: 749px) {
-    .garden-splash__hud--br {
+    .garden-splash__hud--br,
+    .garden-splash__hud--tl {
       display: none;
     }
 
@@ -493,14 +555,14 @@
     {
       "type": "image_picker",
       "id": "flower_logo",
-      "label": "Flower logo",
-      "info": "Painted onto the center flower's disc and revealed as it opens. Leave blank to use the white Duet wordmark. Use a light logo; the disc is the center flower color."
+      "label": "Logo shape",
+      "info": "Once every flower has bloomed, they arrange themselves into this logo's silhouette. Use a logo with a transparent background. Leave blank to use the Duet wordmark."
     },
     {
       "type": "range",
       "id": "logo_size",
       "label": "Logo size",
-      "info": "Relative to the center flower.",
+      "info": "Only used when the 3D garden can't run and the flat logo is shown instead.",
       "min": 30,
       "max": 90,
       "step": 5,
@@ -527,13 +589,13 @@
     {
       "type": "color",
       "id": "center_color",
-      "label": "Center flower",
+      "label": "Asterisk flowers",
       "default": "#F04E62"
     },
     {
       "type": "color",
       "id": "center_accent_color",
-      "label": "Center flower back layer",
+      "label": "Asterisk accent",
       "default": "#A62749"
     },
     {
