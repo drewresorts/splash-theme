@@ -656,8 +656,9 @@ class GardenSplash extends HTMLElement {
     this.logoMaterial = this.snapMaterial(new THREE.MeshBasicMaterial({ map: this.logoTexture }));
     this.paintLogo();
 
+    // The flower's own logo setting (or the bundled wordmark), else the page logo.
     const source = this.logo && this.logo.querySelector('img');
-    const src = source && (source.currentSrc || source.src);
+    const src = this.dataset.flowerLogo || (source && (source.currentSrc || source.src));
     if (!src) return;
     const url = new URL(src, window.location.href);
     const useImage = () => {
@@ -692,7 +693,8 @@ class GardenSplash extends HTMLElement {
     const g = this.logoCanvas.getContext('2d');
     const S = this.logoCanvas.width;
     g.clearRect(0, 0, S, S);
-    g.fillStyle = rgba(POWDER);
+    // The disc is the center color, like the brand's circle-bound logo.
+    g.fillStyle = rgba(this.heroColor);
     g.beginPath();
     g.arc(S / 2, S / 2, S / 2, 0, TAU);
     g.fill();
@@ -700,7 +702,8 @@ class GardenSplash extends HTMLElement {
     const iw = img && (img.naturalWidth || img.width);
     const ih = img && (img.naturalHeight || img.height);
     if (img && iw) {
-      const box = S * 0.9;
+      // A wide wordmark's corners still land inside the circle at 94% of its width.
+      const box = S * 0.94;
       const k = Math.min(box / iw, box / ih);
       const w = iw * k;
       const h = ih * k;
@@ -714,7 +717,7 @@ class GardenSplash extends HTMLElement {
       } catch (e) {
         // The image could not be used (no CORS): keep the page's own logo instead.
         this.logoImage = null;
-        g.fillStyle = rgba(POWDER);
+        g.fillStyle = rgba(this.heroColor);
         g.fillRect(0, 0, S, S);
         this.logoTexture.needsUpdate = true;
         return false;
@@ -1336,8 +1339,8 @@ class GardenSplash extends HTMLElement {
     });
 
     if (f.isHero) {
-      // The logo disc is there from the bud on, hidden under the closed petals.
-      this.heroDisc.scale.setScalar(Math.max(zero, f.disc * smooth(range(budP, 0, 0.6))));
+      // The logo disc only appears once the bud is fully formed, under the still-closed petals.
+      this.heroDisc.scale.setScalar(Math.max(zero, f.disc * smooth(range(openP, 0, 0.18))));
       this.heroLight.intensity = 2 * openP;
     }
   }

@@ -13,7 +13,7 @@
       "type": "garden-splash",
       "settings": {
         "logo": "shopify://shop_images/duet-monogram-3d-spin-slow.gif",
-        "logo_size": 30,
+        "logo_size": 55,
         "menu": "main-menu",
         "logo_link": "",
         "center_color": "#f04e62",

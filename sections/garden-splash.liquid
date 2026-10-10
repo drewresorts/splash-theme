@@ -4,6 +4,12 @@
   assign logo_size = section.settings.logo_size | default: 55
   assign logo_ratio = logo_size | times: 0.01
 
+  if section.settings.flower_logo != blank
+    assign flower_logo_url = section.settings.flower_logo | image_url: width: 900
+  else
+    assign flower_logo_url = 'duet-wordmark-white.png' | asset_url
+  endif
+
   assign has_menu = false
   if garden_menu != blank and garden_menu.links.size > 0
     assign has_menu = true
@@ -33,6 +39,7 @@
   data-duration="{{ section.settings.bloom_duration }}"
   data-density="{{ section.settings.density }}"
   data-logo-scale="{{ logo_ratio }}"
+  data-flower-logo="{{ flower_logo_url }}"
   style="--gs-ground: {{ section.settings.soil_color }}; --gs-ink: {{ hud_ink }}; --gs-hero: {{ section.settings.center_color }};"
 >
   <canvas class="garden-splash__canvas" data-garden-canvas aria-hidden="true"></canvas>
@@ -482,6 +489,12 @@
       "id": "logo",
       "label": "Center logo",
       "info": "Leave blank to use Theme settings → Splash streams page → Center logo."
+    },
+    {
+      "type": "image_picker",
+      "id": "flower_logo",
+      "label": "Flower logo",
+      "info": "Painted onto the center flower's disc and revealed as it opens. Leave blank to use the white Duet wordmark. Use a light logo; the disc is the center flower color."
     },
     {
       "type": "range",
