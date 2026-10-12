@@ -1,0 +1,474 @@
+{%- comment -%}
+  The shop as one simple page: a transparent header with the logo on the
+  left and the menu button on the right, and every product in the
+  collection as just its image, floating over the garden background. No
+  filters, sorting or paging: the catalog is small enough to see at once.
+{%- endcomment -%}
+{%- liquid
+  assign shop_menu = section.settings.menu
+  assign menu_style = section.settings.menu_style | default: 'outline'
+  assign menu_label = section.settings.menu_label | default: 'Menu'
+  assign menu_close_label = section.settings.menu_close_label | default: 'Close'
+  assign logo_link = section.settings.logo_link | default: routes.root_url
+-%}
+
+<div
+  class="garden-shop"
+  id="GardenShop-{{ section.id }}"
+  style="--gs-cols: {{ section.settings.columns_desktop }}; --gs-cols-mobile: {{ section.settings.columns_mobile }}; --gs-logo-width: {{ section.settings.logo_width }}px; --gs-menu-image-width: {{ section.settings.menu_image_width }}px; --gs-ink: {{ section.settings.ink_color }}; --gs-page: {{ section.settings.page_color }};"
+>
+  <header class="garden-shop__header">
+    <a href="{{ logo_link }}" class="garden-shop__logo">
+      {%- if section.settings.logo != blank -%}
+        {%- assign logo_alt = section.settings.logo.alt | default: shop.name -%}
+        {{
+          section.settings.logo
+          | image_url: width: 600
+          | image_tag: widths: '200, 300, 400, 600', sizes: '(min-width: 750px) 240px, 40vw', loading: 'eager', alt: logo_alt
+        }}
+      {%- else -%}
+        <span class="garden-shop__logo-text">{{ shop.name | escape }}</span>
+      {%- endif -%}
+    </a>
+
+    {%- if shop_menu != blank -%}
+      <button
+        type="button"
+        class="garden-shop__menu garden-shop__menu--{{ menu_style }}"
+        data-shop-menu
+        data-open-label="{{ menu_label | escape }}"
+        data-close-label="{{ menu_close_label | escape }}"
+        aria-expanded="false"
+        aria-controls="GardenShopNav-{{ section.id }}"
+        {% if menu_style == 'image' and section.settings.menu_image != blank %}
+          aria-label="{{ menu_label | escape }}"
+        {% endif %}
+      >
+        {%- if menu_style == 'image' and section.settings.menu_image != blank -%}
+          {{
+            section.settings.menu_image
+            | image_url: width: 400
+            | image_tag: loading: 'eager', alt: '', class: 'garden-shop__menu-img'
+          }}
+        {%- else -%}
+          <span data-shop-menu-label>{{ menu_label | escape }}</span>
+        {%- endif -%}
+      </button>
+    {%- endif -%}
+  </header>
+
+  {%- if shop_menu != blank -%}
+    <nav class="garden-shop__nav" id="GardenShopNav-{{ section.id }}" aria-label="{{ shop_menu.title | escape }}">
+      <ul class="garden-shop__nav-list" role="list">
+        {%- for link in shop_menu.links -%}
+          <li><a href="{{ link.url }}" class="garden-shop__nav-link">{{ link.title | escape }}</a></li>
+        {%- endfor -%}
+        {%- if section.settings.show_cart_link -%}
+          <li>
+            <a href="{{ routes.cart_url }}" class="garden-shop__nav-link">
+              {{- 'templates.cart.cart' | t }}
+              {%- if cart.item_count > 0 %} ({{ cart.item_count }}){% endif -%}
+            </a>
+          </li>
+        {%- endif -%}
+      </ul>
+    </nav>
+  {%- endif -%}
+
+  <h1 class="visually-hidden">{{ collection.title | escape }}</h1>
+
+  {%- paginate collection.products by 50 -%}
+    <ul class="garden-shop__grid" role="list">
+      {%- for product in collection.products -%}
+        <li class="garden-shop__item">
+          {% render 'card-floating', card_product: product, index: forloop.index, lazy_load: true %}
+        </li>
+      {%- endfor -%}
+    </ul>
+  {%- endpaginate -%}
+</div>
+
+{%- if shop_menu != blank -%}
+  <script>
+    (function () {
+      var root = document.getElementById('GardenShop-{{ section.id }}');
+      if (!root) return;
+      var button = root.querySelector('[data-shop-menu]');
+      var label = root.querySelector('[data-shop-menu-label]');
+      var nav = root.querySelector('.garden-shop__nav');
+      if (!button || !nav) return;
+      function toggle(force) {
+        var open = typeof force === 'boolean' ? force : !root.classList.contains('is-nav-open');
+        root.classList.toggle('is-nav-open', open);
+        button.setAttribute('aria-expanded', String(open));
+        if (label) label.textContent = button.getAttribute(open ? 'data-close-label' : 'data-open-label');
+        if (open) {
+          var first = nav.querySelector('a');
+          if (first) first.focus({ preventScroll: true });
+        } else if (nav.contains(document.activeElement)) {
+          button.focus({ preventScroll: true });
+        }
+      }
+      button.addEventListener('click', function () {
+        toggle();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && root.classList.contains('is-nav-open')) toggle(false);
+      });
+    })();
+  </script>
+{%- endif -%}
+
+{{ 'component-garden-float.css' | asset_url | stylesheet_tag }}
+
+{% stylesheet %}
+  .garden-shop {
+    --gs-gap: 4rem;
+    min-height: 100vh;
+    color: var(--gs-ink, #191f6b);
+  }
+
+  /* ---------- Header: transparent, logo left, menu right ---------- */
+
+  .garden-shop__header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.6rem;
+    padding: max(1.6rem, env(safe-area-inset-top)) max(1.6rem, env(safe-area-inset-right)) 1.6rem
+      max(1.6rem, env(safe-area-inset-left));
+    pointer-events: none;
+  }
+
+  .garden-shop__logo,
+  .garden-shop__menu {
+    pointer-events: auto;
+  }
+
+  .garden-shop__logo {
+    display: block;
+    width: var(--gs-logo-width, 160px);
+    max-width: 55vw;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .garden-shop__logo img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .garden-shop__logo-text {
+    font-size: 2rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .garden-shop__menu {
+    margin: 0;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    font-size: 1.1rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  /* A soft halo of the page color keeps text legible over the flowers. */
+  .garden-shop__menu--outline,
+  .garden-shop__menu--text,
+  .garden-shop__logo-text {
+    text-shadow: 0 0 4px var(--gs-page, #fff), 0 0 10px var(--gs-page, #fff);
+  }
+
+  .garden-shop__menu--outline {
+    border-color: currentColor;
+    box-shadow: 0 0 6px color-mix(in srgb, var(--gs-page, #fff) 70%, transparent),
+      inset 0 0 6px color-mix(in srgb, var(--gs-page, #fff) 70%, transparent);
+  }
+
+  .garden-shop__menu--filled {
+    border-color: currentColor;
+    background: var(--gs-page, #fff);
+  }
+
+  .garden-shop__menu--text {
+    padding: 0.8rem 0;
+  }
+
+  .garden-shop__menu--image {
+    padding: 0;
+  }
+
+  .garden-shop__menu-img {
+    display: block;
+    width: var(--gs-menu-image-width, 64px);
+    height: auto;
+  }
+
+  .garden-shop__menu--image:hover {
+    opacity: 0.7;
+  }
+
+  .garden-shop__menu--outline:hover,
+  .garden-shop__menu--filled:hover {
+    background: var(--gs-ink, #191f6b);
+    color: var(--gs-page, #fff);
+  }
+
+  .garden-shop__menu--text:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .garden-shop__menu:focus-visible,
+  .garden-shop__logo:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  /* ---------- Menu overlay ---------- */
+
+  .garden-shop__nav {
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    padding: 9.6rem max(1.6rem, 8vw);
+    background: color-mix(in srgb, var(--gs-page, #fff) 90%, transparent);
+    overflow-y: auto;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.12s linear, visibility 0s linear 0.12s;
+  }
+
+  .garden-shop.is-nav-open .garden-shop__nav {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.12s linear;
+  }
+
+  .garden-shop__nav-list {
+    display: grid;
+    gap: 0.4rem;
+    width: 100%;
+    max-width: 72rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .garden-shop__nav-list li {
+    border-top: 1px solid currentColor;
+  }
+
+  .garden-shop__nav-list li:last-child {
+    border-bottom: 1px solid currentColor;
+  }
+
+  .garden-shop__nav-link {
+    display: block;
+    padding: 1.4rem 0;
+    color: inherit;
+    font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    font-size: clamp(2rem, 3.2vw, 3.2rem);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+
+  .garden-shop__nav-link:hover,
+  .garden-shop__nav-link:focus-visible {
+    opacity: 0.6;
+    outline: none;
+  }
+
+  /* ---------- Products: only the images, centered ---------- */
+
+  .garden-shop__grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--gs-gap);
+    max-width: 140rem;
+    margin: 0 auto;
+    padding: 14rem max(1.6rem, 5vw) 8rem;
+    list-style: none;
+  }
+
+  .garden-shop__item {
+    width: calc((100% - var(--gs-gap) * (var(--gs-cols-mobile) - 1)) / var(--gs-cols-mobile));
+    min-width: 0;
+  }
+
+  @media screen and (min-width: 750px) {
+    .garden-shop {
+      --gs-gap: 6rem;
+    }
+
+    .garden-shop__item {
+      width: calc((100% - var(--gs-gap) * (var(--gs-cols) - 1)) / var(--gs-cols));
+    }
+  }
+
+  @media screen and (max-width: 749px) {
+    .garden-shop {
+      --gs-gap: 2.4rem;
+    }
+
+    .garden-shop__grid {
+      padding-top: 10rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .garden-shop__nav {
+      transition: none;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Garden shop",
+  "tag": "section",
+  "class": "section section--garden-shop",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "The whole shop on one page: a transparent header with your logo and menu button, and every product in the collection (up to 50) as just its image. Pair with the Garden background section, and use product photos on transparent backgrounds."
+    },
+    {
+      "type": "header",
+      "content": "Header"
+    },
+    {
+      "type": "image_picker",
+      "id": "logo",
+      "label": "Logo"
+    },
+    {
+      "type": "range",
+      "id": "logo_width",
+      "label": "Logo width",
+      "min": 60,
+      "max": 400,
+      "step": 10,
+      "unit": "px",
+      "default": 160
+    },
+    {
+      "type": "url",
+      "id": "logo_link",
+      "label": "Logo link",
+      "info": "Defaults to the home page."
+    },
+    {
+      "type": "link_list",
+      "id": "menu",
+      "label": "Menu",
+      "default": "main-menu"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_cart_link",
+      "label": "Add a Cart link to the menu",
+      "default": true,
+      "info": "This page has no cart icon, so shoppers reach their cart from the menu."
+    },
+    {
+      "type": "select",
+      "id": "menu_style",
+      "label": "Menu button style",
+      "default": "outline",
+      "options": [
+        { "value": "outline", "label": "Outline, no fill" },
+        { "value": "filled", "label": "Filled" },
+        { "value": "text", "label": "Text only" },
+        { "value": "image", "label": "Custom image" }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "menu_label",
+      "label": "Menu button text",
+      "default": "Menu"
+    },
+    {
+      "type": "text",
+      "id": "menu_close_label",
+      "label": "Close button text",
+      "default": "Close",
+      "info": "Not used with a custom image."
+    },
+    {
+      "type": "image_picker",
+      "id": "menu_image",
+      "label": "Menu button image",
+      "info": "Used with the Custom image style."
+    },
+    {
+      "type": "range",
+      "id": "menu_image_width",
+      "label": "Menu button image width",
+      "min": 24,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "color",
+      "id": "ink_color",
+      "label": "Text and outlines",
+      "default": "#191F6B"
+    },
+    {
+      "type": "color",
+      "id": "page_color",
+      "label": "Menu background",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "header",
+      "content": "Products"
+    },
+    {
+      "type": "range",
+      "id": "columns_desktop",
+      "label": "Products per row on desktop",
+      "min": 2,
+      "max": 5,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "select",
+      "id": "columns_mobile",
+      "label": "Products per row on mobile",
+      "default": "2",
+      "options": [
+        { "value": "1", "label": "1" },
+        { "value": "2", "label": "2" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Garden shop"
+    }
+  ]
+}
+{% endschema %}

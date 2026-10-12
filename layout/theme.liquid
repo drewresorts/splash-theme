@@ -321,6 +321,13 @@
       elsif template.name == 'page' and template.suffix == 'garden-splash'
         assign hide_store_chrome = true
       endif
+
+      # The garden shop page (the default collection template) brings its own
+      # minimal header, so the store header and footer are left out there too.
+      assign hide_header_footer = hide_store_chrome
+      if template.name == 'collection' and template.suffix == blank
+        assign hide_header_footer = true
+      endif
     -%}
 
     {%- if hide_store_chrome -%}
@@ -391,7 +398,7 @@
         }
       </script>
     {%- endif -%}
-    {%- unless hide_store_chrome -%}
+    {%- unless hide_header_footer -%}
       <a class="skip-to-content-link button visually-hidden" href="#MainContent">
         {{ 'accessibility.skip_to_text' | t }}
       </a>
@@ -407,7 +414,7 @@
       {{ content_for_layout }}
     </main>
 
-    {%- unless hide_store_chrome -%}
+    {%- unless hide_header_footer -%}
       {% sections 'footer-group' %}
     {%- endunless -%}
 

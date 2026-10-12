@@ -1,9 +1,18 @@
 {%- comment -%}
   The garden splash's flower bed, fully bloomed and waving slowly behind
-  the page. It is fixed to the screen, so content scrolls over it. The 3D
+  the page. It is laid out exactly like the splash's bed (same logo shape
+  and density give the same number and size of flowers), but never forms
+  the logo. It is fixed to the screen, so content scrolls over it. The 3D
   code loads only after everything else on the page has, so products
   always come first.
 {%- endcomment -%}
+{%- liquid
+  # Blank uses the Duet wordmark built into garden-splash.js.
+  assign flower_logo_url = ''
+  if section.settings.flower_logo != blank
+    assign flower_logo_url = section.settings.flower_logo | image_url: width: 900
+  endif
+-%}
 {%- capture palette_json -%}
   ["{{ section.settings.color_1 }}","{{ section.settings.color_2 }}","{{ section.settings.color_3 }}","{{ section.settings.color_4 }}","{{ section.settings.color_5 }}"]
 {%- endcapture -%}
@@ -20,6 +29,7 @@
   data-density="{{ section.settings.density }}"
   data-wave-speed="{{ section.settings.wave_speed | divided_by: 10.0 }}"
   data-grow-in="{{ section.settings.grow_in }}"
+  {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
   style="--gbg-veil: {{ section.settings.veil | divided_by: 100.0 }}; --gbg-page: {{ section.settings.page_color }};"
   aria-hidden="true"
 >
@@ -98,10 +108,26 @@
       "label": "Density",
       "default": "lush",
       "options": [
-        { "value": "airy", "label": "Airy — larger flowers" },
-        { "value": "lush", "label": "Lush" },
-        { "value": "overgrown", "label": "Overgrown — smaller, more flowers" }
-      ]
+        {
+          "value": "airy",
+          "label": "Airy — larger flowers"
+        },
+        {
+          "value": "lush",
+          "label": "Lush"
+        },
+        {
+          "value": "overgrown",
+          "label": "Overgrown — smaller, more flowers"
+        }
+      ],
+      "info": "Match the garden splash for the same flower size."
+    },
+    {
+      "type": "image_picker",
+      "id": "flower_logo",
+      "label": "Logo shape",
+      "info": "The bed is sized as if the flowers were about to form this logo, as on the splash. Use the same image and density as the garden splash for identical flowers. Leave blank for the Duet wordmark."
     },
     {
       "type": "range",

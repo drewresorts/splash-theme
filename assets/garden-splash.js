@@ -645,10 +645,6 @@ class GardenSplash extends HTMLElement {
    */
   loadMask() {
     const src = this.dataset.flowerLogo;
-    if (this.background) {
-      this.dataset.gardenMask = 'none';
-      return Promise.resolve();
-    }
     if (!src) {
       this.setMask(WORDMARK.w, WORDMARK.h, wordmarkAlpha());
       this.dataset.gardenMask = 'builtin';
@@ -883,7 +879,7 @@ class GardenSplash extends HTMLElement {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     // The 3D render is drawn small and scaled up by CSS with nearest-neighbour.
-    this.rs = this.background ? 0.5 : renderScale(W);
+    this.rs = renderScale(W);
     this.renderer.setPixelRatio(this.rs);
     this.renderer.setSize(W, H, false);
     this.snap.value.set(W * this.rs * 0.25, H * this.rs * 0.25);
@@ -956,7 +952,7 @@ class GardenSplash extends HTMLElement {
     this.classList.remove('is-bloomed');
     const t = this.elapsed;
     this.flowers.forEach((f) => (f.p = clamp((t - f.startAt) / f.dur, 0, 1)));
-    if (this.reduced) this.settle();
+    if (this.reduced && !this.background) this.settle();
     this.assignEyes(rng);
     this.buildMeshes();
   }
@@ -1433,7 +1429,9 @@ class GardenSplash extends HTMLElement {
     }
 
     // Once the whole bed has bloomed, it glides into the shape of the logo.
-    if (this.hasTargets && !this.arranged) {
+    // A background bed is laid out the same way, so its flowers match the
+    // splash's in size and number, but it stays scattered and waves instead.
+    if (this.hasTargets && !this.arranged && !this.background) {
       if (this.arrangeAt < 0 && this.flowers.length && this.flowers.every((f) => f.p >= 1)) this.arrangeAt = t;
       if (this.arrangeAt >= 0) {
         let done = true;
@@ -1493,7 +1491,8 @@ class GardenSplash extends HTMLElement {
   }
 
   /*
-   * Background mode: the bloomed bed rolls in a slow wave that travels
+   * Background mode: the fully populated bed, exactly as on the splash just
+   * before it forms the logo, rolls in a slow wave that travels
    * across the screen, each flower rising toward the viewer and swaying,
    * like the glide on the splash page but without end.
    */
