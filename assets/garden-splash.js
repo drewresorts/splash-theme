@@ -266,6 +266,26 @@ function eyeTexture(iris) {
   return tex;
 }
 
+/*
+ * The Duet wordmark's silhouette, 400 x 143: run lengths in base 36,
+ * alternating empty and filled, row by row. Built in so the default logo
+ * needs no download before the flowers can form it.
+ */
+const WORDMARK = { w: 400, h: 143, runs: '27.1.am.j.a6.y.a6.y.a6.y.a6.x.a7.x.ad.r.af.p.ag.o.ah.n.ah.n.ah.n.ai.m.ai.m.ai.m.51.8.59.m.50.9.59.m.4z.a.59.m.4z.a.59.m.4z.a.59.m.4z.a.59.m.4z.a.59.m.4z.a.59.m.4y.b.59.m.4y.b.59.m.4y.b.59.m.4y.b.59.m.4y.b.59.m.4x.c.59.m.4x.c.22.1.36.m.4x.c.1z.5.35.m.4w.d.1w.8.35.m.4w.d.1t.b.35.m.4w.d.1q.f.34.m.4v.e.1n.i.34.m.4v.e.1k.l.34.m.4u.f.1j.m.34.m.4t.g.1k.m.33.m.4s.h.1k.m.33.m.3c.d.12.i.1l.l.33.m.2a.1.w.n.w.j.1l.l.2e.a.f.m.k.8.14.f.s.u.s.k.1l.m.28.j.b.m.8.k.s.r.q.y.o.m.1m.l.12.2.11.p.8.1e.m.x.n.i.4.h.j.p.1m.l.11.3.z.t.6.1e.m.x.l.g.b.g.d.1h.z.l.z.5.w.x.4.1e.m.x.k.f.f.g.6.1m.z.l.y.7.u.z.3.1e.m.x.i.g.h.g.5.1m.z.l.w.a.r.i.9.b.2.1e.m.x.h.g.j.h.3.1m.10.k.v.c.p.h.d.a.1.1e.s.r.g.g.l.h.2.1m.10.l.t.d.o.h.f.w.2.q.u.p.f.g.n.24.11.k.s.f.l.i.h.v.3.p.v.o.d.h.o.1s.1d.k.r.h.j.i.j.u.4.o.w.n.c.i.p.i.a.n.1q.k.p.j.i.h.l.t.4.o.w.n.c.h.q.i.a.n.1q.k.o.l.g.h.n.s.5.n.w.n.b.i.r.i.9.n.1q.k.m.n.f.i.n.s.5.n.x.m.a.i.s.j.8.n.1r.j.l.p.d.i.p.r.5.m.y.m.9.j.t.j.7.n.1r.k.j.r.c.i.q.q.5.m.y.m.8.j.u.j.7.n.1s.j.i.t.a.i.r.q.5.m.y.m.8.j.u.k.6.n.1s.j.h.v.8.j.r.q.5.m.y.m.7.j.v.k.6.n.1s.j.g.w.8.j.s.p.5.m.y.m.6.k.w.k.5.n.1t.j.d.w.9.j.t.p.5.m.y.m.6.k.w.k.5.n.1t.j.c.v.b.j.u.o.5.m.y.m.5.l.w.l.4.n.1u.i.b.v.b.k.u.o.5.m.y.m.5.k.x.l.4.n.1u.j.9.u.d.k.u.o.5.m.y.m.4.l.y.k.4.n.1v.i.8.u.d.k.v.o.5.m.y.m.4.l.y.l.3.n.1v.i.7.u.e.k.w.n.5.m.y.m.3.l.z.l.3.n.1v.i.5.u.g.k.w.n.5.m.y.m.3.l.z.l.3.n.1w.i.3.t.h.l.w.n.5.m.y.m.3.l.z.m.2.n.1w.i.2.t.i.k.x.n.5.m.y.m.2.m.z.m.2.n.1x.h.1.t.j.k.x.n.5.m.y.m.2.m.10.l.2.n.1x.19.k.l.y.m.5.m.y.m.2.m.10.l.2.n.1x.18.l.l.y.m.5.m.y.m.1.m.11.l.2.n.t.2.13.15.n.l.y.m.5.m.y.m.1.m.11.m.1.n.s.m.k.14.n.m.y.m.5.m.y.m.1.m.11.m.1.n.s.12.4.12.p.m.y.m.5.m.y.19.11.m.1.n.s.27.q.m.y.m.5.m.y.19.11.m.1.n.s.25.s.l.z.m.5.m.y.19.11.m.1.n.s.24.t.l.10.l.5.m.y.19.11.m.1.n.s.22.u.m.10.l.5.m.y.19.11.m.1.n.s.21.v.m.10.l.5.m.y.19.11.m.1.n.s.1z.x.m.10.l.5.m.y.19.11.1a.s.1y.y.m.10.l.5.m.y.3k.s.1w.10.m.10.l.5.m.y.3k.s.1x.z.m.10.l.5.m.y.3k.s.1y.y.m.10.l.5.m.y.3k.s.20.w.m.10.l.5.m.y.3k.s.21.v.m.10.l.5.m.y.1j.1e.n.s.23.s.n.10.l.5.m.y.18.1p.n.s.24.r.n.10.l.5.m.y.18.1p.n.s.26.p.n.10.l.5.m.y.18.1p.n.s.27.o.n.10.l.5.m.y.18.1p.n.s.w.b.12.m.n.10.l.6.l.y.18.1p.n.s.h.p.14.l.n.10.l.6.l.y.18.1p.n.1y.16.j.n.10.l.6.l.y.19.1o.n.1x.18.i.n.10.l.6.l.y.19.1o.n.1x.1a.g.n.10.l.6.l.y.19.1o.n.1x.h.1.t.f.n.10.l.6.l.y.19.1o.n.1w.i.3.t.d.n.10.l.6.l.y.19.1o.n.1w.i.4.t.c.n.10.l.6.l.y.19.1o.n.1v.i.6.u.a.n.10.l.6.l.y.19.1o.n.1v.i.7.u.a.m.10.l.6.l.y.19.1o.n.1u.j.8.v.8.m.10.l.6.l.y.19.1o.n.1u.j.9.v.7.m.10.l.6.l.y.19.1o.n.1u.i.c.v.5.m.10.l.6.l.y.1a.1n.n.1t.j.d.v.4.n.z.l.6.l.y.1a.1n.n.1t.j.e.w.2.n.z.l.6.l.y.1a.1n.n.1s.j.g.w.1.n.y.n.5.l.y.1a.1n.n.1s.j.h.v.1.n.y.n.5.l.x.1b.1o.m.1s.j.i.t.3.m.y.n.5.l.x.n.1.o.1n.m.1r.k.j.r.4.m.y.n.5.l.x.n.1.o.1n.m.1r.j.m.o.5.m.y.n.5.l.x.n.2.n.1n.m.1q.k.n.m.6.m.y.n.5.l.w.o.2.n.1m.n.1q.k.o.k.7.m.y.n.5.l.w.o.2.o.1l.n.1q.j.q.j.7.n.w.o.5.m.v.o.3.n.1h.2.2.n.1p.k.r.h.9.m.w.o.5.m.v.o.3.n.1g.s.1p.k.s.f.a.m.w.o.5.m.u.p.3.o.1f.s.1o.l.u.c.b.m.w.o.5.m.u.p.4.n.1e.t.1o.k.w.a.d.l.w.o.5.m.t.q.4.o.1c.u.1n.l.x.9.d.m.u.p.5.m.t.q.5.n.1c.u.1n.l.y.7.e.m.u.p.5.m.t.q.5.o.1a.7.1.n.1n.l.z.5.g.l.u.p.5.m.s.r.6.n.19.7.2.n.1m.l.11.3.h.l.t.q.6.m.q.s.7.n.18.7.2.o.1l.l.1m.l.s.q.6.m.q.5.2.m.6.n.17.7.4.n.1k.m.1m.l.s.q.6.m.p.6.2.m.7.n.15.8.4.n.1k.l.1o.k.r.r.6.n.n.6.3.m.8.n.13.8.5.n.1j.m.1o.l.q.r.6.n.n.6.3.m.8.o.11.8.6.n.1j.m.1p.k.p.s.7.n.l.6.4.m.9.o.z.8.7.n.1j.m.1p.l.o.s.7.o.i.8.4.m.a.o.x.8.8.o.1i.l.1r.k.n.t.7.o.h.8.5.m.b.o.u.a.8.o.1j.k.1s.j.m.9.1.k.8.p.e.8.6.n.b.o.s.a.a.o.1l.h.1s.k.l.9.1.l.7.q.a.a.7.n.c.o.p.a.c.o.m.3.10.d.1t.k.j.9.2.l.8.t.3.d.7.o.c.p.l.b.d.p.j.5.12.a.1v.k.h.9.3.m.7.18.8.p.c.q.h.c.f.p.g.8.15.6.1w.k.f.9.4.n.7.16.9.r.c.s.9.f.g.r.c.a.18.3.1x.k.c.a.5.q.5.14.a.u.a.1e.i.t.6.c.3a.l.8.b.7.t.2.11.c.u.c.1a.l.19.3d.11.8.t.3.z.d.u.e.16.n.17.3g.z.9.t.5.w.e.u.g.12.q.15.3j.v.b.t.6.t.g.s.k.y.u.11.3n.r.d.l.h.n.k.b.13.s.y.y.3r.n.f.7.x.j.24.k.14.t.3y.g.1s.6.42.n.al.e.3e' };
+
+function wordmarkAlpha() {
+  const alpha = new Uint8Array(WORDMARK.w * WORDMARK.h);
+  let i = 0;
+  let on = false;
+  for (const run of WORDMARK.runs.split('.')) {
+    const n = parseInt(run, 36);
+    if (on) alpha.fill(255, i, i + n);
+    i += n;
+    on = !on;
+  }
+  return alpha;
+}
+
 /* ------------------------------------------------------------------ */
 /* The element                                                         */
 /* ------------------------------------------------------------------ */
@@ -530,20 +550,58 @@ class GardenSplash extends HTMLElement {
 
   /* ---------------- logo silhouette ---------------- */
 
-  /* Reads the logo's alpha channel; the bloomed flowers arrange themselves into it. */
+  /* Bounds of the opaque part of an alpha mask, or null if it is empty. */
+  setMask(w, h, alpha) {
+    let x0 = w;
+    let y0 = h;
+    let x1 = 0;
+    let y1 = 0;
+    for (let i = 0; i < w * h; i++) {
+      if (alpha[i] <= 127) continue;
+      const x = i % w;
+      const y = (i / w) | 0;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    this.mask = x1 > x0 && y1 > y0 ? { w, h, alpha, x0, y0, x1: x1 + 1, y1: y1 + 1 } : null;
+    return !!this.mask;
+  }
+
+  /*
+   * The silhouette the bloomed flowers arrange into: the built-in wordmark,
+   * or the alpha channel of a logo chosen in the theme editor.
+   * data-garden-mask records which, for debugging on a live store.
+   */
   loadMask() {
     const src = this.dataset.flowerLogo;
-    if (!src) return Promise.resolve();
+    if (!src) {
+      this.setMask(WORDMARK.w, WORDMARK.h, wordmarkAlpha());
+      this.dataset.gardenMask = 'builtin';
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      const timer = window.setTimeout(resolve, 4000);
-      img.onerror = () => {
-        clearTimeout(timer);
+      // A slow logo doesn't hold the garden back: it starts growing, and the
+      // logo is laid out when it arrives (see onLateMask).
+      let late = false;
+      const timer = window.setTimeout(() => {
+        late = true;
+        this.dataset.gardenMask = 'waiting';
         resolve();
-      };
-      img.onload = () => {
+      }, 4000);
+      const done = (ok) => {
         clearTimeout(timer);
+        this.dataset.gardenMask = ok ? 'loaded' : 'failed';
+        if (!ok) console.warn('garden-splash: could not read the logo shape from', src);
+        if (late) {
+          if (ok) this.onLateMask();
+        } else resolve();
+      };
+      img.onerror = () => done(false);
+      img.onload = () => {
         try {
           const w = 400;
           const h = Math.max(1, Math.round((w * img.naturalHeight) / img.naturalWidth));
@@ -554,29 +612,21 @@ class GardenSplash extends HTMLElement {
           g.drawImage(img, 0, 0, w, h);
           const data = g.getImageData(0, 0, w, h).data;
           const alpha = new Uint8Array(w * h);
-          let x0 = w;
-          let y0 = h;
-          let x1 = 0;
-          let y1 = 0;
-          for (let i = 0; i < w * h; i++) {
-            alpha[i] = data[i * 4 + 3];
-            if (alpha[i] > 127) {
-              const x = i % w;
-              const y = (i / w) | 0;
-              if (x < x0) x0 = x;
-              if (x > x1) x1 = x;
-              if (y < y0) y0 = y;
-              if (y > y1) y1 = y;
-            }
-          }
-          if (x1 > x0 && y1 > y0) this.mask = { w, h, alpha, x0, y0, x1: x1 + 1, y1: y1 + 1 };
+          for (let i = 0; i < w * h; i++) alpha[i] = data[i * 4 + 3];
+          done(this.setMask(w, h, alpha));
         } catch (e) {
-          // The image can't be read (no CORS): the flowers stay where they grew.
+          // The image can't be read (no CORS).
+          done(false);
         }
-        resolve();
       };
       img.src = src;
     });
+  }
+
+  /* The logo arrived after the garden started: replant it to form the logo. */
+  onLateMask() {
+    if (this.failed || this.arranged || !this.maskReady) return;
+    this.resize(true);
   }
 
   /*
