@@ -31,61 +31,9 @@
         "hint_text": "Press + drag to grow  /  Tap to make them blink",
         "show_replant": true
       }
-    },
-    "splash_streams_jYPmmR": {
-      "type": "splash-streams",
-      "blocks": {
-        "stream_TmMwAG": {
-          "type": "stream",
-          "settings": {
-            "youtube_url": "https://www.youtube.com/watch?v=_eArnSLGhSo"
-          }
-        },
-        "stream_jqHxD6": {
-          "type": "stream",
-          "settings": {
-            "youtube_url": "https://www.youtube.com/watch?v=2ywP2Zzs6Qs"
-          }
-        },
-        "stream_cqRFbW": {
-          "type": "stream",
-          "settings": {
-            "youtube_url": "https://www.youtube.com/watch?v=erBoOFKTH4E"
-          }
-        },
-        "email_signup_8b3nXh": {
-          "type": "email_signup",
-          "disabled": true,
-          "settings": {
-            "position": "bottom",
-            "heading": "",
-            "text": "",
-            "placeholder": "Email",
-            "button_label": "Subscribe",
-            "success_message": "Thanks — you're on the list.",
-            "lowercase_text": true
-          }
-        }
-      },
-      "block_order": [
-        "stream_TmMwAG",
-        "stream_jqHxD6",
-        "stream_cqRFbW",
-        "email_signup_8b3nXh"
-      ],
-      "disabled": true,
-      "name": "Splash streams",
-      "settings": {
-        "menu": "main-menu",
-        "menu_logo": "shopify://shop_images/duet_web_menu_star.png",
-        "logo_width": 450,
-        "overlay_color": "#ff0000",
-        "overlay_opacity": 70
-      }
     }
   },
   "order": [
-    "garden_splash_duet",
-    "splash_streams_jYPmmR"
+    "garden_splash_duet"
   ]
 }
