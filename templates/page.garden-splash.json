@@ -29,7 +29,7 @@
         "bloom_duration": 10,
         "density": "airy",
         "hint_text": "touch the garden",
-        "show_replant": true
+        "show_replant": false
       }
     }
   },
