@@ -1,0 +1,138 @@
+/*
+ * Garden kit: the splash page's 3D flowers, pre-rendered from the same
+ * engine into one sprite sheet (assets/garden-sprites.png). Each row is a
+ * specimen, each of its 8 columns a growth stage from seed to bloom, so
+ * the rest of the store gets the motif without loading any 3D code.
+ */
+
+.garden-flower {
+  --gf-size: 64px;
+  --gf-row: 0;
+  display: inline-block;
+  flex: none;
+  width: var(--gf-size);
+  height: var(--gf-size);
+  background: url('garden-sprites.png') no-repeat;
+  background-size: calc(var(--gf-size) * 8) calc(var(--gf-size) * 8);
+  /* Full bloom unless it is waiting to grow. */
+  background-position: calc(var(--gf-size) * -7) calc(var(--gf-size) * var(--gf-row) * -1);
+  image-rendering: pixelated;
+  filter: hue-rotate(var(--garden-hue, 0deg));
+  pointer-events: none;
+}
+
+/* Waits on its seed until it is scrolled into view (garden-kit.js adds is-grown). */
+.garden-flower--grow {
+  background-position-x: 0;
+}
+
+.garden-flower--grow.is-grown {
+  animation: garden-grow var(--gf-duration, 1.4s) steps(7, jump-end) var(--gf-delay, 0s) forwards;
+}
+
+@keyframes garden-grow {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: calc(var(--gf-size) * -7);
+  }
+}
+
+/* Small uppercase monospace labels, as on the splash page. */
+.garden-label {
+  margin: 0;
+  font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  font-size: 1.1rem;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ---------- Flower bed: a band of flowers across the page ---------- */
+
+.garden-bed {
+  position: relative;
+  height: var(--gb-height, 72px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.garden-bed .garden-flower {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* ---------- Product cards: a flower grows in the corner on hover ---------- */
+
+.garden-card-bloom {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  z-index: 2;
+  --gf-size: 56px;
+  opacity: 0;
+}
+
+@media (hover: hover) {
+  .card-wrapper:hover .garden-card-bloom,
+  .card-wrapper:focus-within .garden-card-bloom {
+    opacity: 1;
+    animation: garden-grow 0.8s steps(7, jump-end) forwards;
+  }
+}
+
+/* ---------- Added to cart: a flower blooms on the cart icon ---------- */
+
+.garden-cart-bloom {
+  position: fixed;
+  z-index: 1000;
+  --gf-size: 72px;
+  background-position-x: 0;
+  animation: garden-grow 0.9s steps(7, jump-end) forwards, garden-fade 0.5s linear 1.6s forwards;
+}
+
+@keyframes garden-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+/* ---------- Empty cart: a seedling ---------- */
+
+.garden-empty {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.6rem;
+}
+
+.garden-empty .garden-flower {
+  --gf-size: 96px;
+  background-position-x: calc(var(--gf-size) * -2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .garden-flower--grow,
+  .garden-flower--grow.is-grown {
+    animation: none;
+    background-position-x: calc(var(--gf-size) * -7);
+  }
+
+  .garden-card-bloom {
+    transition: none;
+  }
+
+  @media (hover: hover) {
+    .card-wrapper:hover .garden-card-bloom,
+    .card-wrapper:focus-within .garden-card-bloom {
+      animation: none;
+      background-position-x: calc(var(--gf-size) * -7);
+    }
+  }
+
+  .garden-cart-bloom {
+    animation: garden-fade 0.5s linear 1.2s forwards;
+    background-position-x: calc(var(--gf-size) * -7);
+  }
+}

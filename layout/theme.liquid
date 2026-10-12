@@ -39,6 +39,20 @@
     <script src="{{ 'details-modal.js' | asset_url }}" defer="defer"></script>
     <script src="{{ 'search-form.js' | asset_url }}" defer="defer"></script>
 
+    {%- if settings.garden_motif -%}
+      <script src="{{ 'garden-kit.js' | asset_url }}" defer="defer"></script>
+      {%- if settings.garden_follow_scheme -%}
+        <script>
+          // The flower colors a visitor picked on the garden splash carry through the store.
+          // The hues match the swatches in sections/garden-splash.liquid.
+          try {
+            var gardenHue = [0, 60, 180, 240, 300][parseInt(localStorage.getItem('garden-splash-scheme'), 10)];
+            if (gardenHue) document.documentElement.style.setProperty('--garden-hue', gardenHue + 'deg');
+          } catch (e) {}
+        </script>
+      {%- endif -%}
+    {%- endif -%}
+
     {%- if settings.animations_reveal_on_scroll -%}
       <script src="{{ 'animations.js' | asset_url }}" defer="defer"></script>
     {%- endif -%}
@@ -260,6 +274,9 @@
     {% endstyle %}
 
     {{ 'base.css' | asset_url | stylesheet_tag }}
+    {%- if settings.garden_motif -%}
+      {{ 'garden-kit.css' | asset_url | stylesheet_tag }}
+    {%- endif -%}
     <link rel="stylesheet" href="{{ 'component-cart-items.css' | asset_url }}" media="print" onload="this.media='all'">
 
     {%- if settings.cart_type == 'drawer' -%}
@@ -356,7 +373,7 @@
     </script>
   </head>
 
-  <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
+  <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.garden_motif and settings.garden_cart_bloom %} garden-cart-motif{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
     {%- if hide_store_chrome -%}
       <script>
         if (window.navigation && typeof window.navigation.addEventListener === 'function') {

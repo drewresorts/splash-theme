@@ -1481,5 +1481,45 @@
         "info": "t:settings_schema.splash_streams.logo.info"
       }
     ]
+  },
+  {
+    "name": "Garden motif",
+    "settings": [
+      {
+        "type": "paragraph",
+        "content": "Carries the garden splash's 3D flowers through the store. They are pre-rendered into one small image (about 20KB), so no 3D code loads outside the splash page."
+      },
+      {
+        "type": "checkbox",
+        "id": "garden_motif",
+        "label": "Enable garden motif",
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "garden_card_bloom",
+        "label": "Flower grows on product cards on hover",
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "garden_cart_bloom",
+        "label": "Flower blooms on the cart icon when something is added",
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "garden_empty_cart",
+        "label": "Seedling on the empty cart",
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "garden_follow_scheme",
+        "label": "Use the flower colors picked on the splash page",
+        "default": true,
+        "info": "When visitors pick a color on the garden splash, the flowers across the store take that color too."
+      }
+    ]
   }
 ]
