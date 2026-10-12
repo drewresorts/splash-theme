@@ -12,7 +12,7 @@
     "garden_splash_duet": {
       "type": "garden-splash",
       "settings": {
-        "logo": "shopify://shop_images/duet-monogram-3d-spin-slow.gif",
+        "logo": "shopify://shop_images/duet_web_menu_star.png",
         "menu": "main-menu",
         "logo_link": "",
         "center_color": "#f04e62",
