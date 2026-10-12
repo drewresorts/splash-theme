@@ -13,8 +13,17 @@
       "type": "garden-splash",
       "settings": {
         "logo": "shopify://shop_images/duet_web_menu_star.png",
+        "logo_position": "none",
+        "flower_logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png",
+        "logo_width": 120,
         "menu": "main-menu",
         "logo_link": "",
+        "menu_style": "image",
+        "menu_label": "Menu",
+        "menu_close_label": "Close",
+        "menu_image": "shopify://shop_images/duet_web_menu_star.png",
+        "menu_image_width": 100,
+        "show_schemes": false,
         "center_color": "#f04e62",
         "center_accent_color": "#a62749",
         "color_1": "#a62749",
@@ -27,7 +36,7 @@
         "soil_color": "#ffffff",
         "bloom_duration": 4,
         "density": "overgrown",
-        "hint_text": "Press + drag to grow  /  Tap to make them blink"
+        "hint_text": ""
       }
     }
   },
