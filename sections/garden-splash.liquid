@@ -116,33 +116,22 @@
 
   {%- if section.settings.show_schemes -%}
     {%- comment -%}
-      Visitor color schemes: the store's own colors first, then brand duochromes.
-      Each swatch carries the colors the flowers switch to.
+      Visitor color schemes: the store's own colors first, then the same
+      palette turned around the color wheel (data-hue, in degrees). The
+      script works out each scheme's colors and paints the swatches.
     {%- endcomment -%}
-    {%- capture schemes -%}
-      House|{{ palette_json | strip }}|{{ section.settings.foliage_color }}|{{ section.settings.center_color }}|{{ section.settings.center_accent_color }}
-      Fuchsia|["#F04E62","#A62749","#B9E5FB"]|#66A4C8|#191F6B|#66A4C8
-      Ocean|["#191F6B","#66A4C8","#B9E5FB"]|#A62749|#F04E62|#A62749
-      Wine|["#A62749","#191F6B","#F04E62"]|#B9E5FB|#66A4C8|#B9E5FB
-      Powder|["#B9E5FB","#66A4C8","#F04E62"]|#191F6B|#A62749|#191F6B
-    {%- endcapture -%}
     <div class="garden-splash__schemes" role="group" aria-label="Flower colors" data-garden-ui>
-      {%- assign scheme_lines = schemes | strip | newline_to_br | split: '<br />' -%}
-      {%- for line in scheme_lines -%}
-        {%- assign parts = line | strip | split: '|' -%}
-        {%- assign swatch = parts[1] | remove: '[' | remove: ']' | remove: '"' | split: ',' -%}
+      {%- assign scheme_names = 'House,Gold,Teal,Cobalt,Violet' | split: ',' -%}
+      {%- assign scheme_hues = '0,60,180,240,300' | split: ',' -%}
+      {%- for name in scheme_names -%}
         <button
           type="button"
           class="garden-splash__swatch"
           data-garden-scheme
-          data-palette="{{ parts[1] | escape }}"
-          data-foliage="{{ parts[2] }}"
-          data-center="{{ parts[3] }}"
-          data-accent="{{ parts[4] }}"
+          data-hue="{{ scheme_hues[forloop.index0] }}"
           aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}"
-          aria-label="{{ parts[0] }} colors"
-          title="{{ parts[0] }}"
-          style="--s1: {{ swatch[0] }}; --s2: {{ swatch[1] | default: swatch[0] }}; --s3: {{ parts[3] }};"
+          aria-label="{{ name }} colors"
+          title="{{ name }}"
         ></button>
       {%- endfor -%}
     </div>
@@ -379,6 +368,7 @@
     transform: translateX(-50%);
   }
 
+  .garden-splash:not(.is-ready) .garden-splash__schemes,
   .garden-splash.is-nav-open .garden-splash__schemes {
     visibility: hidden;
   }
@@ -692,7 +682,7 @@
       "id": "show_schemes",
       "label": "Let visitors change the flower colors",
       "default": true,
-      "info": "Shows a row of color dots at the bottom of the screen. The first dot is the colors below."
+      "info": "Shows a row of color dots at the bottom of the screen: the colors below, then the same palette shifted to gold, teal, cobalt and violet hues."
     },
     {
       "type": "color",

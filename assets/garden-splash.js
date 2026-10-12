@@ -64,6 +64,57 @@ const tone = (c, amt) => (amt >= 0 ? mix(c, WHITE, amt) : mix(c, BLACK, -amt));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a === undefined ? 1 : a})`;
 const colorKey = (c) => `${c[0] | 0},${c[1] | 0},${c[2] | 0}`;
 const hex = (c) => '#' + c.map((v) => (v | 0).toString(16).padStart(2, '0')).join('').toUpperCase();
+
+/*
+ * OKLCH, a perceptual color space: turning a color's hue here keeps how
+ * light and how saturated it looks, so a rotated palette keeps the
+ * original's relationships. Colors are [r, g, b] in 0-255.
+ */
+const toLinear = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const fromLinear = (v) => 255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+
+function toOklch(c) {
+  const [r, g, b] = c.map(toLinear);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+  return [L, Math.hypot(A, B), Math.atan2(B, A)];
+}
+
+function oklchToLinear(L, C, h) {
+  const A = C * Math.cos(h);
+  const B = C * Math.sin(h);
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+}
+
+/* Turns a color's hue by deg, giving up chroma only where the new hue can't hold it on screen. */
+function rotateHue(c, deg) {
+  const [L, C, h0] = toOklch(c);
+  const h = h0 + (deg * Math.PI) / 180;
+  const fits = (rgb) => rgb.every((v) => v >= -1e-4 && v <= 1 + 1e-4);
+  let rgb = oklchToLinear(L, C, h);
+  if (!fits(rgb)) {
+    let lo = 0;
+    let hi = C;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(oklchToLinear(L, mid, h))) lo = mid;
+      else hi = mid;
+    }
+    rgb = oklchToLinear(L, lo, h);
+  }
+  return rgb.map((v) => Math.round(clamp(fromLinear(clamp(v, 0, 1)), 0, 255)));
+}
 const luminance = (c) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
 const toColor = (c) => new THREE.Color(`rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`);
 
@@ -343,6 +394,7 @@ class GardenSplash extends HTMLElement {
 
     this.setupScene();
     this.bindEvents();
+    this.paintSwatches();
     this.applyScheme(this.storedScheme());
     this.resize(true);
     // Layout waits for the logo's silhouette, which the flowers will form.
@@ -496,20 +548,28 @@ class GardenSplash extends HTMLElement {
 
   /* ---------------- color schemes ---------------- */
 
-  /* Scheme 0 is the store's own colors; the others come from the swatch buttons. */
+  /*
+   * Scheme 0 is the store's own colors. Each other swatch names a hue turn
+   * (data-hue, in degrees): the whole house palette is turned around the
+   * color wheel together, so its light, dark and muted colors stay as they were.
+   */
   schemeAt(i) {
     const b = this.schemeButtons[i];
-    if (!b || i === 0) return this.house;
-    try {
-      return {
-        palette: JSON.parse(b.dataset.palette).map(parseColor).filter(Boolean),
-        foliage: parseColor(b.dataset.foliage) || this.house.foliage,
-        center: parseColor(b.dataset.center) || this.house.center,
-        accent: parseColor(b.dataset.accent) || this.house.accent,
-      };
-    } catch (e) {
-      return this.house;
-    }
+    const deg = b ? parseFloat(b.dataset.hue) || 0 : 0;
+    if (!deg) return this.house;
+    const turn = (c) => rotateHue(c, deg);
+    const h = this.house;
+    return { palette: h.palette.map(turn), foliage: turn(h.foliage), center: turn(h.center), accent: turn(h.accent) };
+  }
+
+  /* Each swatch shows its scheme's main colors. */
+  paintSwatches() {
+    this.schemeButtons.forEach((b, i) => {
+      const sc = this.schemeAt(i);
+      b.style.setProperty('--s1', hex(sc.center));
+      b.style.setProperty('--s2', hex(sc.palette[1 % sc.palette.length]));
+      b.style.setProperty('--s3', hex(sc.palette[2 % sc.palette.length]));
+    });
   }
 
   storedScheme() {
