@@ -323,9 +323,6 @@ class GardenSplash extends HTMLElement {
 
     this.logo = this.querySelector('[data-garden-logo]');
     this.nav = this.querySelector('[data-garden-nav]');
-    this.resetButton = this.querySelector('[data-garden-replant]');
-    this.bloomReadout = this.querySelector('[data-garden-bloom]');
-    this.coordReadout = this.querySelector('[data-garden-coords]');
     this.schemeButtons = Array.from(this.querySelectorAll('[data-garden-scheme]'));
 
     this.readConfig();
@@ -343,7 +340,6 @@ class GardenSplash extends HTMLElement {
     this.running = false;
     this.visible = true;
     this.bloomed = false;
-    this.lastReadout = -1;
 
     this.setupScene();
     this.bindEvents();
@@ -737,7 +733,6 @@ class GardenSplash extends HTMLElement {
       const [x, y] = local(e);
       Object.assign(this.pointer, { x, y, active: true, down: true, id: e.pointerId, sx: x, sy: y, st: e.timeStamp, type: e.pointerType });
       this.markInteracted();
-      this.updateCoords();
       try {
         this.setPointerCapture(e.pointerId);
       } catch (err) {
@@ -757,7 +752,6 @@ class GardenSplash extends HTMLElement {
       p.y = y;
       p.active = true;
       p.type = e.pointerType;
-      this.updateCoords();
     };
     const onUp = (e) => {
       const p = this.pointer;
@@ -773,7 +767,6 @@ class GardenSplash extends HTMLElement {
         this.pointer.down = false;
       }
     };
-    const onReset = () => this.replant();
     const onMotion = () => {
       this.reduced = this.motionQuery.matches;
     };
@@ -783,7 +776,6 @@ class GardenSplash extends HTMLElement {
     this.addEventListener('pointerup', onUp);
     this.addEventListener('pointercancel', onLeave);
     this.addEventListener('pointerleave', onLeave);
-    if (this.resetButton) this.resetButton.addEventListener('click', onReset);
     this.schemeButtons.forEach((b, i) => b.addEventListener('click', () => this.pickScheme(i)));
     if (this.motionQuery.addEventListener) this.motionQuery.addEventListener('change', onMotion);
 
@@ -794,14 +786,6 @@ class GardenSplash extends HTMLElement {
 
   markInteracted() {
     if (!this.classList.contains('has-interacted')) this.classList.add('has-interacted');
-  }
-
-  updateCoords() {
-    if (!this.coordReadout) return;
-    const p = this.pointer;
-    const x = String(Math.round(p.x - this.w / 2)).padStart(5, ' ');
-    const y = String(Math.round(this.h / 2 - p.y)).padStart(5, ' ');
-    this.coordReadout.textContent = `X${x}  Y${y}`;
   }
 
   /* ---------------- layout ---------------- */
@@ -1273,17 +1257,6 @@ class GardenSplash extends HTMLElement {
 
   }
 
-  replant() {
-    if (this.classList.contains('is-nav-open') && this.toggleNav) this.toggleNav(false);
-    this.markInteracted();
-    this.seed = (Math.random() * 2 ** 31) | 0;
-    this.elapsed = this.reduced ? this.duration * 1.2 : 0;
-    this.pings.length = 0;
-    this.generate();
-    this.project();
-    this.start();
-  }
-
   /* ---------------- interaction ---------------- */
 
   /* How much larger than their final size the flowers are drawn right now. */
@@ -1371,7 +1344,6 @@ class GardenSplash extends HTMLElement {
     const t = this.elapsed;
     const ptr = this.pointer;
     const reach = this.base * 2.4 * this.scaleNow();
-    let total = 0;
 
     if (this.rebuild) {
       this.rebuild = false;
@@ -1416,19 +1388,11 @@ class GardenSplash extends HTMLElement {
         f.shown = f.p;
         this.shape(f);
       }
-      total += f.p;
     }
 
     if (!this.bloomed && !this.hasTargets && this.flowers.length && this.flowers.every((f) => f.p >= 1)) {
       this.bloomed = true;
       this.classList.add('is-bloomed');
-    }
-
-    const tick = Math.floor(t * 8);
-    if (this.bloomReadout && tick !== this.lastReadout) {
-      this.lastReadout = tick;
-      const pct = this.flowers.length ? Math.round((total / this.flowers.length) * 100) : 0;
-      this.bloomReadout.textContent = String(pct).padStart(3, '0') + '%';
     }
 
     if (ptr.active && ptr.type === 'mouse' && !ptr.down) {
