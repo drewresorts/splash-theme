@@ -9,13 +9,29 @@
  */
 {
   "sections": {
+    "garden-background": {
+      "type": "garden-background",
+      "settings": {
+        "density": "lush",
+        "wave_speed": 10,
+        "grow_in": false,
+        "veil": 0,
+        "page_color": "#FFFFFF",
+        "color_1": "#A62749",
+        "color_2": "#66A4C8",
+        "color_3": "#191F6B",
+        "color_4": "#B9E5FB",
+        "color_5": "#F04E62",
+        "foliage_color": "#66A4C8"
+      }
+    },
     "garden-header": {
       "type": "garden-collection-header",
       "settings": {
         "trail_label": "Shop",
         "show_description": true,
         "collection_links": "main-menu",
-        "show_bed": true,
+        "show_bed": false,
         "flower_count": 22,
         "bed_height": 72,
         "color_scheme": "scheme-1"
@@ -42,16 +58,18 @@
         "show_secondary_image": false,
         "show_vendor": false,
         "show_rating": false,
-        "quick_add": "standard",
+        "quick_add": "none",
         "enable_filtering": true,
         "filter_type": "horizontal",
         "enable_sorting": true,
         "padding_top": 12,
-        "padding_bottom": 36
+        "padding_bottom": 36,
+        "product_display": "floating"
       }
     }
   },
   "order": [
+    "garden-background",
     "garden-header",
     "banner",
     "product-grid"

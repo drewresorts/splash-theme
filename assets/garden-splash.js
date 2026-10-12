@@ -381,7 +381,8 @@ class GardenSplash extends HTMLElement {
     this.reduced = this.motionQuery.matches;
 
     this.seed = (Math.random() * 2 ** 31) | 0;
-    this.elapsed = this.reduced ? this.duration * 1.2 : 0;
+    // A background bed starts fully grown unless it is set to grow in.
+    this.elapsed = this.reduced || (this.background && this.dataset.growIn !== 'true') ? this.duration * 1.2 : 0;
     this.flowers = [];
     this.eyes = [];
     this.pings = [];
@@ -394,6 +395,14 @@ class GardenSplash extends HTMLElement {
 
     this.setupScene();
     this.bindEvents();
+    if (this.background) {
+      // The bed sits behind the page, so the eyes follow the pointer across it.
+      this.onWindowPointer = (e) => {
+        if (e.pointerType !== 'mouse') return;
+        Object.assign(this.pointer, { x: e.clientX, y: e.clientY, active: true, type: 'mouse' });
+      };
+      window.addEventListener('pointermove', this.onWindowPointer, { passive: true });
+    }
     this.paintSwatches();
     this.applyScheme(this.storedScheme());
     this.resize(true);
@@ -456,6 +465,7 @@ class GardenSplash extends HTMLElement {
     if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.intersectionObserver) this.intersectionObserver.disconnect();
     if (this.unbind) this.unbind();
+    if (this.onWindowPointer) window.removeEventListener('pointermove', this.onWindowPointer);
     if (this.renderer) {
       this.clearMeshes();
       this.renderer.dispose();
@@ -464,6 +474,9 @@ class GardenSplash extends HTMLElement {
 
   readConfig() {
     const d = this.dataset;
+    // Background mode: a bloomed bed that keeps waving behind a page's content.
+    this.background = d.mode === 'background';
+    this.waveSpeed = clamp(parseFloat(d.waveSpeed) || 1, 0.2, 3);
     this.densityName = DENSITY[d.density] ? d.density : 'lush';
     this.heroColor = parseColor(d.centerColor) || [240, 78, 98];
     this.heroAccent = parseColor(d.centerAccent) || [166, 39, 73];
@@ -632,6 +645,10 @@ class GardenSplash extends HTMLElement {
    */
   loadMask() {
     const src = this.dataset.flowerLogo;
+    if (this.background) {
+      this.dataset.gardenMask = 'none';
+      return Promise.resolve();
+    }
     if (!src) {
       this.setMask(WORDMARK.w, WORDMARK.h, wordmarkAlpha());
       this.dataset.gardenMask = 'builtin';
@@ -866,7 +883,7 @@ class GardenSplash extends HTMLElement {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     // The 3D render is drawn small and scaled up by CSS with nearest-neighbour.
-    this.rs = renderScale(W);
+    this.rs = this.background ? 0.5 : renderScale(W);
     this.renderer.setPixelRatio(this.rs);
     this.renderer.setSize(W, H, false);
     this.snap.value.set(W * this.rs * 0.25, H * this.rs * 0.25);
@@ -1383,12 +1400,17 @@ class GardenSplash extends HTMLElement {
         this.running = false;
         return;
       }
+      // Behind a page the bed only needs about 30 frames a second.
+      if (this.background && now - this.last < 30) {
+        this.raf = requestAnimationFrame(loop);
+        return;
+      }
       const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
       this.last = now;
       try {
         this.update(dt);
         this.renderer.render(this.scene, this.camera);
-        this.drawOverlay();
+        if (!this.background) this.drawOverlay();
       } catch (e) {
         this.fail(e);
         return;
@@ -1434,6 +1456,8 @@ class GardenSplash extends HTMLElement {
       }
     }
 
+    if (this.background && !this.reduced) this.wave(t);
+
     for (const f of this.flowers) {
       // Press and drag to accelerate growth under the pointer.
       if (ptr.down && f.p < 1 && Math.hypot(f.sx - ptr.x, f.sy - ptr.y) < reach) {
@@ -1455,7 +1479,9 @@ class GardenSplash extends HTMLElement {
       this.classList.add('is-bloomed');
     }
 
-    if (ptr.active && ptr.type === 'mouse' && !ptr.down) {
+    if (this.background) {
+      this.inspected = null;
+    } else if (ptr.active && ptr.type === 'mouse' && !ptr.down) {
       this.inspected = this.nearest(ptr.x, ptr.y, this.base * 1.1 * this.scaleNow());
     } else if (this.inspected && t > this.inspectUntil) {
       this.inspected = null;
@@ -1464,6 +1490,25 @@ class GardenSplash extends HTMLElement {
     this.updateEyes(dt);
     for (const pg of this.pings) pg.t += dt;
     this.pings = this.pings.filter((pg) => pg.t < 0.25);
+  }
+
+  /*
+   * Background mode: the bloomed bed rolls in a slow wave that travels
+   * across the screen, each flower rising toward the viewer and swaying,
+   * like the glide on the splash page but without end.
+   */
+  wave(t) {
+    const k = t * this.waveSpeed;
+    for (const f of this.flowers) {
+      if (f.rot0 === undefined) f.rot0 = f.rot;
+      const phase = k * 1.1 - f.home[0] * 0.006 - f.home[1] * 0.0025;
+      const s = Math.sin(phase);
+      f.lift = (0.5 + 0.5 * s) * 46;
+      f.x = f.home[0] + Math.cos(phase * 0.8) * 6;
+      f.y = f.home[1] + Math.sin(phase * 0.6) * 4;
+      f.rot = f.rot0 + s * 0.14;
+      f.shown = -1;
+    }
   }
 
   /* Where the eyes look: the pointer, otherwise mostly straight up at the viewer. */
