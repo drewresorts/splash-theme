@@ -275,21 +275,34 @@ class GardenSplash extends HTMLElement {
     this.canvas = this.querySelector('[data-garden-canvas]');
     this.overlay = this.querySelector('[data-garden-overlay]');
     if (!this.canvas || !this.overlay) return;
-
     try {
-      this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, alpha: true, powerPreference: 'high-performance' });
-      this.renderer.setClearColor(0x000000, 0);
+      this.init();
     } catch (e) {
-      // No WebGL: show the logo and controls over the plain background.
-      this.classList.add('is-ready', 'is-bloomed', 'is-static');
-      return;
+      this.fail(e);
     }
+  }
+
+  /*
+   * Anything going wrong with the 3D garden leaves the plain logo and the
+   * menu (wired up by the section's own script) over the page background.
+   */
+  fail(e) {
+    if (this.failed) return;
+    this.failed = true;
+    this.running = false;
+    cancelAnimationFrame(this.raf);
+    this.classList.remove('is-nav-open');
+    this.classList.add('is-ready', 'is-bloomed', 'is-static');
+    if (e) console.error('garden-splash:', e);
+  }
+
+  init() {
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, alpha: true, powerPreference: 'high-performance' });
+    this.renderer.setClearColor(0x000000, 0);
     this.octx = this.overlay.getContext('2d');
 
     this.logo = this.querySelector('[data-garden-logo]');
     this.nav = this.querySelector('[data-garden-nav]');
-    this.navToggles = Array.from(this.querySelectorAll('[data-garden-nav-toggle]'));
-    this.menuButton = this.querySelector('[data-garden-menu]');
     this.resetButton = this.querySelector('[data-garden-replant]');
     this.bloomReadout = this.querySelector('[data-garden-bloom]');
     this.coordReadout = this.querySelector('[data-garden-coords]');
@@ -318,27 +331,54 @@ class GardenSplash extends HTMLElement {
     this.resize(true);
     // Layout waits for the logo's silhouette, which the flowers will form.
     this.loadMask().then(() => {
-      this.maskReady = true;
-      this.resize(true);
-      this.start();
+      if (this.failed) return;
+      try {
+        this.maskReady = true;
+        this.resize(true);
+        this.start();
+      } catch (e) {
+        this.fail(e);
+      }
     });
 
-    // Hide the server-rendered logo without animating it away.
+    // A phone can drop the GL context under memory pressure; wait briefly for it to come back.
+    this.canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this.running = false;
+      cancelAnimationFrame(this.raf);
+      this.lostTimer = window.setTimeout(() => this.fail(new Error('WebGL context lost')), 3000);
+    });
+    this.canvas.addEventListener('webglcontextrestored', () => {
+      clearTimeout(this.lostTimer);
+      if (!this.failed) this.start();
+    });
+
+    if (window.ResizeObserver) {
+      this.resizeObserver = new ResizeObserver(() => this.scheduleResize());
+      this.resizeObserver.observe(this);
+    } else {
+      window.addEventListener('resize', () => this.scheduleResize());
+    }
+    if (window.IntersectionObserver) {
+      this.intersectionObserver = new IntersectionObserver((entries) => {
+        this.visible = entries[entries.length - 1].isIntersecting;
+        if (this.visible) this.start();
+      });
+      this.intersectionObserver.observe(this);
+    }
+    this.start();
+  }
+
+  /* The server-rendered logo stays up until the first 3D frame is on screen. */
+  reveal() {
+    if (this.revealed) return;
+    this.revealed = true;
     if (this.logo) this.logo.style.transition = 'none';
     this.classList.add('is-ready');
     if (this.logo) {
       void this.logo.offsetWidth;
       this.logo.style.transition = '';
     }
-
-    this.resizeObserver = new ResizeObserver(() => this.scheduleResize());
-    this.resizeObserver.observe(this);
-    this.intersectionObserver = new IntersectionObserver((entries) => {
-      this.visible = entries[entries.length - 1].isIntersecting;
-      if (this.visible) this.start();
-    });
-    this.intersectionObserver.observe(this);
-    this.start();
   }
 
   disconnectedCallback() {
@@ -546,30 +586,82 @@ class GardenSplash extends HTMLElement {
   layoutLogo(rng) {
     const m = this.mask;
     const { w: W, h: H } = this;
-    const bw = m.x1 - m.x0;
-    const bh = m.y1 - m.y0;
-    const k = Math.min((W * 0.88) / bw, (H * 0.62) / bh);
-    const lw = bw * k;
-    const lh = bh * k;
-    const ox = (W - lw) / 2;
-    const oy = (H - lh) / 2;
-    const inside = (x, y) => {
-      const mx = Math.floor(m.x0 + (x - ox) / k);
-      const my = Math.floor(m.y0 + (y - oy) / k);
-      return mx >= 0 && my >= 0 && mx < m.w && my < m.h && m.alpha[my * m.w + mx] > 110;
+    // Tight bounds of the logo between two source columns.
+    const bounds = (cx0, cx1) => {
+      let x0 = m.w;
+      let y0 = m.h;
+      let x1 = 0;
+      let y1 = 0;
+      for (let y = m.y0; y < m.y1; y++) {
+        for (let x = cx0; x < cx1; x++) {
+          if (m.alpha[y * m.w + x] <= 110) continue;
+          if (x < x0) x0 = x;
+          if (x >= x1) x1 = x + 1;
+          if (y < y0) y0 = y;
+          if (y >= y1) y1 = y + 1;
+        }
+      }
+      return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
     };
     // A wide wordmark ends in the asterisk: flowers there take the asterisk color.
-    const starFrom = bw / bh > 2 ? 0.74 : 2;
-    let spacing = Math.max(7, lh * 0.16 * LOGO_SPACING[this.densityName]);
+    const wide = (m.x1 - m.x0) / (m.y1 - m.y0) > 2;
+    const split = Math.round(m.x0 + (m.x1 - m.x0) * 0.74);
+    let pieces;
+    if (wide && W / H < 0.8) {
+      // On a tall screen the asterisk sits under the word, so the letters can be larger.
+      const word = bounds(m.x0, split);
+      const star = bounds(split, m.x1);
+      star.star = true;
+      const gap = word.h * 0.14;
+      const k = Math.min((W * 0.9) / Math.max(word.w, star.w), (H * 0.66) / (word.h + gap + star.h));
+      const top = (H - (word.h + gap + star.h) * k) / 2;
+      word.ox = (W - word.w * k) / 2;
+      word.oy = top;
+      star.ox = (W - star.w * k) / 2;
+      star.oy = top + (word.h + gap) * k;
+      pieces = [word, star];
+      pieces.k = k;
+    } else {
+      const all = bounds(m.x0, m.x1);
+      const k = Math.min((W * 0.88) / all.w, (H * 0.62) / all.h);
+      all.ox = (W - all.w * k) / 2;
+      all.oy = (H - all.h * k) / 2;
+      all.starFrom = wide ? split : m.w;
+      pieces = [all];
+      pieces.k = k;
+    }
+    const k = pieces.k;
+    pieces.forEach((pc) => {
+      pc.sw = pc.w * k;
+      pc.sh = pc.h * k;
+    });
+    // Which piece a screen point falls on, if any, and whether it is part of the asterisk.
+    const hit = (x, y) => {
+      for (const pc of pieces) {
+        if (x < pc.ox || y < pc.oy || x >= pc.ox + pc.sw || y >= pc.oy + pc.sh) continue;
+        const mx = Math.floor(pc.x0 + (x - pc.ox) / k);
+        const my = Math.floor(pc.y0 + (y - pc.oy) / k);
+        if (m.alpha[my * m.w + mx] > 110) return { star: !!pc.star || mx >= (pc.starFrom || m.w) };
+      }
+      return null;
+    };
+    const bx0 = Math.min(...pieces.map((pc) => pc.ox));
+    const by0 = Math.min(...pieces.map((pc) => pc.oy));
+    const bx1 = Math.max(...pieces.map((pc) => pc.ox + pc.sw));
+    const by1 = Math.max(...pieces.map((pc) => pc.oy + pc.sh));
+    // Spacing follows the height of the letters, scaled by density.
+    let spacing = Math.max(7, pieces[0].sh * 0.16 * LOGO_SPACING[this.densityName]);
     let spots = [];
     for (let attempt = 0; attempt < 6; attempt++) {
-      spots = poissonDisc(ox, oy, ox + lw, oy + lh, spacing, rng, [ox + lw / 2, oy + lh / 2]).filter(([x, y]) => inside(x, y));
+      spots = poissonDisc(bx0, by0, bx1, by1, spacing, rng, [(bx0 + bx1) / 2, (by0 + by1) / 2])
+        .map(([x, y]) => ({ x, y, h: hit(x, y) }))
+        .filter((sp) => sp.h);
       if (spots.length <= 900) break;
       spacing *= 1.15;
     }
     this.base = spacing;
-    this.logoBox = { x: ox, y: oy, w: lw, h: lh };
-    return spots.map(([x, y]) => ({ x, y, r: spacing * lerp(0.9, 1.06, rng()), star: (x - ox) / lw > starFrom }));
+    this.logoBox = { x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 };
+    return spots.map((sp) => ({ x: sp.x, y: sp.y, r: spacing * lerp(0.9, 1.06, rng()), star: sp.h.star }));
   }
 
   eyeMaterial(iris) {
@@ -631,10 +723,6 @@ class GardenSplash extends HTMLElement {
         this.pointer.down = false;
       }
     };
-    const onKey = (e) => {
-      if (e.key === 'Escape' && this.classList.contains('is-nav-open')) this.toggleNav(false);
-    };
-    const onToggle = () => this.toggleNav();
     const onReset = () => this.replant();
     const onMotion = () => {
       this.reduced = this.motionQuery.matches;
@@ -645,15 +733,12 @@ class GardenSplash extends HTMLElement {
     this.addEventListener('pointerup', onUp);
     this.addEventListener('pointercancel', onLeave);
     this.addEventListener('pointerleave', onLeave);
-    document.addEventListener('keydown', onKey);
-    this.navToggles.forEach((el) => el.addEventListener('click', onToggle));
     if (this.resetButton) this.resetButton.addEventListener('click', onReset);
     this.schemeButtons.forEach((b, i) => b.addEventListener('click', () => this.pickScheme(i)));
-    this.motionQuery.addEventListener('change', onMotion);
+    if (this.motionQuery.addEventListener) this.motionQuery.addEventListener('change', onMotion);
 
     this.unbind = () => {
-      document.removeEventListener('keydown', onKey);
-      this.motionQuery.removeEventListener('change', onMotion);
+      if (this.motionQuery.removeEventListener) this.motionQuery.removeEventListener('change', onMotion);
     };
   }
 
@@ -667,24 +752,6 @@ class GardenSplash extends HTMLElement {
     const x = String(Math.round(p.x - this.w / 2)).padStart(5, ' ');
     const y = String(Math.round(this.h / 2 - p.y)).padStart(5, ' ');
     this.coordReadout.textContent = `X${x}  Y${y}`;
-  }
-
-  toggleNav(force) {
-    if (!this.nav) return;
-    const open = typeof force === 'boolean' ? force : !this.classList.contains('is-nav-open');
-    this.classList.toggle('is-nav-open', open);
-    this.navToggles.forEach((el) => el.setAttribute('aria-expanded', String(open)));
-    if (this.menuButton) {
-      this.menuButton.textContent = open ? this.menuButton.dataset.closeLabel : this.menuButton.dataset.openLabel;
-    }
-    this.pointer.active = false;
-    this.pointer.down = false;
-    if (open) {
-      const first = this.nav.querySelector('a');
-      if (first) first.focus({ preventScroll: true });
-    } else if (this.contains(document.activeElement) && this.menuButton) {
-      this.menuButton.focus({ preventScroll: true });
-    }
   }
 
   /* ---------------- layout ---------------- */
@@ -759,7 +826,10 @@ class GardenSplash extends HTMLElement {
       const r = target ? target.r : base * lerp(0.88, 1.16, rng());
       const dn = clamp(Math.hypot(x - W / 2, y - H / 2) / maxDist, 0, 1);
       const startAt = D * (0.02 + 0.5 * (0.45 * (1 - dn) + 0.55 * rng()));
-      const f = this.makeFlower(x, y, lerp(-25, 30, rng()), r, rng, { id: i + 1, startAt, dur: D * lerp(0.36, 0.5, rng()), star: target && target.star });
+      // Small letters make small flowers: while scattered they grow to fill
+      // the screen, and shrink to fit as they glide into the logo.
+      const grow = target ? clamp((spread * 0.8) / r, 1, 4) : 1;
+      const f = this.makeFlower(x, y, lerp(-25, 30, rng()), r, rng, { id: i + 1, startAt, dur: D * lerp(0.36, 0.5, rng()), star: target && target.star, grow });
       f.home = [x, y];
       f.dest = target ? [target.x, target.y] : [x, y];
       f.moveDelay = target ? (target.x / W) * 0.7 + rng() * 0.25 : 0;
@@ -786,6 +856,7 @@ class GardenSplash extends HTMLElement {
       f.p = 1;
       [f.x, f.y] = f.dest;
       f.lift = 0;
+      f.g = 1;
       f.shown = -1;
     }
     this.arranged = true;
@@ -800,6 +871,8 @@ class GardenSplash extends HTMLElement {
       y,
       z,
       r,
+      g: opts.grow || 1,
+      grow: opts.grow || 1,
       star: !!opts.star,
       startAt: opts.startAt,
       dur: Math.max(0.5, opts.dur),
@@ -819,7 +892,7 @@ class GardenSplash extends HTMLElement {
         break;
       }
     }
-    if (r < 12) f.species = 'daisy';
+    if (r * f.grow < 12) f.species = 'daisy';
     const leafCount = 2 + Math.floor(rng() * 3);
     f.leaves = [];
     for (let i = 0; i < leafCount; i++) {
@@ -945,7 +1018,7 @@ class GardenSplash extends HTMLElement {
     const irises = [this.foliage, this.heroAccent, this.heroColor].concat(this.palette).filter((c) => colorKey(c) !== colorKey(this.soil));
     for (const f of all) {
       f.eye = null;
-      if (!EYED.has(f.species) || f.r < 12 || rng() > 0.4) continue;
+      if (!EYED.has(f.species) || f.r * f.grow < 12 || rng() > 0.4) continue;
       // Judged where the flower ends up, in the logo.
       let hidden = false;
       for (const o of all) {
@@ -1065,7 +1138,7 @@ class GardenSplash extends HTMLElement {
       v.set(f.x, this.h - f.y, f.z).project(this.camera);
       f.sx = (v.x * 0.5 + 0.5) * this.w;
       f.sy = (-v.y * 0.5 + 0.5) * this.h;
-      f.sr = f.r * (this.camDist / (this.camDist - f.z));
+      f.sr = f.r * f.g * (this.camDist / (this.camDist - f.z));
     }
   }
 
@@ -1078,12 +1151,14 @@ class GardenSplash extends HTMLElement {
     const Y = this.h - f.y;
     const Z = f.z + f.lift;
     const r = f.r;
+    const g = f.g;
     const zero = 1e-4;
     d.rotation.order = 'ZYX';
-    const put = (slot, x, y, z, yaw, pitch, sx, sy, sz) => {
-      d.position.set(x, y, z);
+    // Every part is placed at the flower's own size, then scaled about its center by g.
+    const put = (slot, x, y, z, yaw, pitch, sx, sy, sz, keepZ) => {
+      d.position.set(X + (x - X) * g, Y + (y - Y) * g, keepZ ? z : Z + (z - Z) * g);
       d.rotation.set(0, -pitch, yaw);
-      d.scale.set(sx || zero, sy || zero, sz || zero);
+      d.scale.set(sx * g || zero, sy * g || zero, keepZ ? sz || zero : sz * g || zero);
       d.updateMatrix();
       slot.mesh.setMatrixAt(slot.i, d.matrix);
       slot.mesh.instanceMatrix.needsUpdate = true;
@@ -1098,17 +1173,17 @@ class GardenSplash extends HTMLElement {
     // The seed drops from near the camera down onto the soil.
     const seedZ = lerp(this.camDist * 0.7, FLOOR_Z + 3, seedIn * seedIn);
     const seedS = seedIn > 0 && sprout < 1 ? 3.5 : 0;
-    put(S.seed, X, Y, seedZ, 0, 0, seedS, seedS, seedS);
+    put(S.seed, X, Y, seedZ, 0, 0, seedS / g, seedS / g, seedS, true);
 
     // The stem rises from the soil to where the head will be.
     const stemH = (Z - FLOOR_Z) * smooth(Math.max(sprout * 0.25, leaves));
     const stemR = sprout > 0 ? Math.max(1.5, r * 0.05) : 0;
-    put(S.stem, X, Y, FLOOR_Z, 0, 0, stemR, stemR, Math.max(zero, stemH));
+    put(S.stem, X, Y, FLOOR_Z, 0, 0, stemR, stemR, Math.max(zero, stemH), true);
 
     f.leaves.forEach((leaf, i) => {
       const lp = smooth(range(leaves, leaf.delay, leaf.delay + 0.65));
       const lz = FLOOR_Z + (Z - 14 - FLOOR_Z) * lp;
-      put(S.leaves[i], X, Y, lz, leaf.a, lerp(1.2, 0.1, lp), leaf.len * lp, leaf.w * 2 * lp, leaf.w * 2 * lp);
+      put(S.leaves[i], X, Y, lz, leaf.a, lerp(1.2, 0.1, lp), leaf.len * lp, leaf.w * 2 * lp, leaf.w * 2 * lp * g, true);
     });
 
     // Petals stand closed around each other as a bud, then fall open.
@@ -1149,7 +1224,7 @@ class GardenSplash extends HTMLElement {
   }
 
   replant() {
-    if (this.classList.contains('is-nav-open')) this.toggleNav(false);
+    if (this.classList.contains('is-nav-open') && this.toggleNav) this.toggleNav(false);
     this.markInteracted();
     this.seed = (Math.random() * 2 ** 31) | 0;
     this.elapsed = this.reduced ? this.duration * 1.2 : 0;
@@ -1160,6 +1235,15 @@ class GardenSplash extends HTMLElement {
   }
 
   /* ---------------- interaction ---------------- */
+
+  /* How much larger than their final size the flowers are drawn right now. */
+  scaleNow() {
+    const n = this.flowers.length;
+    if (!n) return 1;
+    let sum = 0;
+    for (const f of this.flowers) sum += f.g;
+    return sum / n;
+  }
 
   nearest(x, y, reach) {
     let best = null;
@@ -1176,7 +1260,8 @@ class GardenSplash extends HTMLElement {
 
   tap(x, y) {
     this.pings.push({ x, y, t: 0 });
-    const f = this.nearest(x, y, this.base * 1.1);
+    const k = this.scaleNow();
+    const f = this.nearest(x, y, this.base * 1.1 * k);
     if (!f) return;
     this.inspected = f;
     this.inspectUntil = this.elapsed + 2.5;
@@ -1199,14 +1284,14 @@ class GardenSplash extends HTMLElement {
     for (const o of this.flowers) {
       if (!o.eye) continue;
       const dd = Math.hypot(o.sx - x, o.sy - y);
-      if (dd < this.base * 6) o.eye.blinkAt = this.elapsed + dd / (this.base * 14);
+      if (dd < this.base * 6 * k) o.eye.blinkAt = this.elapsed + dd / (this.base * 14 * k);
     }
   }
 
   /* ---------------- loop ---------------- */
 
   start() {
-    if (this.running || !this.isConnected || !this.renderer || !this.maskReady) return;
+    if (this.running || this.failed || !this.isConnected || !this.renderer || !this.maskReady) return;
     this.running = true;
     this.last = performance.now();
     const loop = (now) => {
@@ -1217,9 +1302,15 @@ class GardenSplash extends HTMLElement {
       }
       const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
       this.last = now;
-      this.update(dt);
-      this.renderer.render(this.scene, this.camera);
-      this.drawOverlay();
+      try {
+        this.update(dt);
+        this.renderer.render(this.scene, this.camera);
+        this.drawOverlay();
+      } catch (e) {
+        this.fail(e);
+        return;
+      }
+      this.reveal();
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
@@ -1229,7 +1320,7 @@ class GardenSplash extends HTMLElement {
     this.elapsed += dt;
     const t = this.elapsed;
     const ptr = this.pointer;
-    const reach = this.base * 2.4;
+    const reach = this.base * 2.4 * this.scaleNow();
     let total = 0;
 
     if (this.rebuild) {
@@ -1249,6 +1340,7 @@ class GardenSplash extends HTMLElement {
           f.x = lerp(f.home[0], f.dest[0], e);
           f.y = lerp(f.home[1], f.dest[1], e);
           f.lift = Math.sin(Math.PI * k) * 70;
+          f.g = lerp(f.grow, 1, e);
           f.shown = -1;
         }
         this.project();
@@ -1290,7 +1382,7 @@ class GardenSplash extends HTMLElement {
     }
 
     if (ptr.active && ptr.type === 'mouse' && !ptr.down) {
-      this.inspected = this.nearest(ptr.x, ptr.y, this.base * 1.1);
+      this.inspected = this.nearest(ptr.x, ptr.y, this.base * 1.1 * this.scaleNow());
     } else if (this.inspected && t > this.inspectUntil) {
       this.inspected = null;
     }
@@ -1325,7 +1417,8 @@ class GardenSplash extends HTMLElement {
       const open = smooth(range(f.p, 0.9 + e.delay, 1));
       e.group.visible = f.p > 0.86;
       if (!e.group.visible) continue;
-      e.group.position.set(f.x, this.h - f.y, f.z + f.lift + f.r * 0.14 + e.R * 0.4);
+      e.group.position.set(f.x, this.h - f.y, f.z + f.lift + (f.r * 0.14 + e.R * 0.4) * f.g);
+      e.group.scale.setScalar(f.g);
       if (t > e.nextBlink) {
         e.blinkAt = t;
         e.nextBlink = t + (Math.random() < 0.15 ? 0.4 : 2.5 + Math.random() * 9);

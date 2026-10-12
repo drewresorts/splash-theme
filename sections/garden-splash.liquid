@@ -30,6 +30,7 @@
 <script type="module" src="{{ 'garden-splash.js' | asset_url }}"></script>
 
 <garden-splash
+  id="GardenSplash-{{ section.id }}"
   class="garden-splash"
   data-center-color="{{ section.settings.center_color }}"
   data-center-accent="{{ section.settings.center_accent_color }}"
@@ -185,6 +186,41 @@
   {%- endif -%}
 </garden-splash>
 
+{%- if has_menu -%}
+  <script>
+    // The menu works on its own, whether or not the 3D garden manages to start.
+    (function () {
+      var root = document.getElementById('GardenSplash-{{ section.id }}');
+      if (!root) return;
+      var nav = root.querySelector('[data-garden-nav]');
+      var menu = root.querySelector('[data-garden-menu]');
+      var toggles = root.querySelectorAll('[data-garden-nav-toggle]');
+      if (!nav) return;
+      function toggle(force) {
+        var open = typeof force === 'boolean' ? force : !root.classList.contains('is-nav-open');
+        root.classList.toggle('is-nav-open', open);
+        for (var i = 0; i < toggles.length; i++) toggles[i].setAttribute('aria-expanded', String(open));
+        if (menu) menu.textContent = open ? menu.getAttribute('data-close-label') : menu.getAttribute('data-open-label');
+        if (open) {
+          var first = nav.querySelector('a');
+          if (first) first.focus({ preventScroll: true });
+        } else if (menu && root.contains(document.activeElement)) {
+          menu.focus({ preventScroll: true });
+        }
+      }
+      root.toggleNav = toggle;
+      for (var i = 0; i < toggles.length; i++) {
+        toggles[i].addEventListener('click', function () {
+          toggle();
+        });
+      }
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && root.classList.contains('is-nav-open')) toggle(false);
+      });
+    })();
+  </script>
+{%- endif -%}
+
 {% stylesheet %}
   .garden-splash {
     --gs-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
@@ -284,6 +320,15 @@
     height: 1px;
     overflow: hidden;
     clip-path: inset(50%);
+  }
+
+  /* Without the 3D garden, only the logo and the menu remain. */
+  .garden-splash.is-static .garden-splash__schemes,
+  .garden-splash.is-static .garden-splash__hud--bl,
+  .garden-splash.is-static .garden-splash__hud--br,
+  .garden-splash.is-static .garden-splash__hint,
+  .garden-splash.is-static .garden-splash__overlay {
+    display: none;
   }
 
   .garden-splash__logo-img {
