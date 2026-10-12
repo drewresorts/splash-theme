@@ -12,7 +12,7 @@
     "garden_splash_duet": {
       "type": "garden-splash",
       "settings": {
-        "logo": "shopify://shop_images/duet-monogram-3d-spin-slow.gif",
+        "logo": "shopify://shop_images/duet_web_menu_star.png",
         "logo_size": 30,
         "menu": "main-menu",
         "logo_link": "",
@@ -28,6 +28,7 @@
         "soil_color": "#ffffff",
         "bloom_duration": 4,
         "density": "overgrown",
+        "hud_label": "Richmond VA  37.5407N  77.4360W",
         "hint_text": "Press + drag to grow  /  Tap to make them blink",
         "show_replant": true
       }
