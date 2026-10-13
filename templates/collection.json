@@ -13,41 +13,41 @@
       "type": "garden-background",
       "settings": {
         "density": "overgrown",
+        "flower_logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png",
         "wave_speed": 10,
         "grow_in": false,
-        "veil": 0,
+        "veil": 60,
         "page_color": "#ffffff",
         "color_1": "#a62749",
         "color_2": "#66a4c8",
         "color_3": "#191f6b",
         "color_4": "#b9e5fb",
         "color_5": "#f04e62",
-        "foliage_color": "#66a4c8",
-        "flower_logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png"
+        "foliage_color": "#66a4c8"
       }
     },
     "garden-shop": {
       "type": "garden-shop",
       "settings": {
-        "logo_width": 160,
+        "logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png",
+        "logo_width": 150,
         "logo_link": "",
         "menu": "main-menu",
         "show_cart_link": true,
-        "menu_style": "image",
+        "menu_style": "filled",
         "menu_label": "Menu",
         "menu_close_label": "Close",
+        "menu_image": "shopify://shop_images/duet_web_menu_star.png",
         "menu_image_width": 100,
-        "ink_color": "#191F6B",
-        "page_color": "#FFFFFF",
+        "ink_color": "#000000",
+        "page_color": "#ffffff",
         "columns_desktop": 3,
-        "columns_mobile": "2",
-        "logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png",
-        "menu_image": "shopify://shop_images/duet_web_menu_star.png"
+        "columns_mobile": "2"
       }
     }
   },
   "order": [
-    "garden-background",
-    "garden-shop"
+    "garden-shop",
+    "garden-background"
   ]
 }
