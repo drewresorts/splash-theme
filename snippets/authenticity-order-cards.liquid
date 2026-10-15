@@ -19,6 +19,8 @@
     case status
       when 'ready'
         assign status_label = 'Ready'
+      when 'transferring'
+        assign status_label = 'Moving to your wallet'
       when 'in_wallet'
         assign status_label = 'In your wallet'
       when 'revoked'
@@ -75,6 +77,8 @@
       </p>
       {%- if status == 'minting' -%}
         <p class="authenticity-card__note">We're minting your certificate now. We'll email you when it's ready.</p>
+      {%- elsif status == 'transferring' -%}
+        <p class="authenticity-card__note">It's on its way to your wallet and usually arrives within a minute.</p>
       {%- elsif status == 'ready' and cert.transfer_url != blank -%}
         <a class="authenticity-card__action" href="{{ cert.transfer_url }}">Transfer to my wallet</a>
       {%- elsif status == 'revoked' -%}

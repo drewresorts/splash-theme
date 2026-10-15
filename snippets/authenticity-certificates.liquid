@@ -9,7 +9,7 @@
   - Order metafield duet.authenticity (JSON list), written by the
     authenticity app once a token is minted. Each entry:
       line_item_id, unit, product_title, variant_title, serial, edition,
-      status (minting | ready | in_wallet | revoked), token_id, chain,
+      status (minting | ready | transferring | in_wallet | revoked), token_id, chain,
       contract, explorer_url, image, purchased_at, minted_at, holder,
       transfer_url
   A paid order's certified items with no entry yet show as "Being minted".

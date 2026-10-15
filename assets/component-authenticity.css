@@ -107,7 +107,8 @@
   background: currentColor;
 }
 
-.authenticity-card--minting .authenticity-card__dot {
+.authenticity-card--minting .authenticity-card__dot,
+.authenticity-card--transferring .authenticity-card__dot {
   animation: authenticity-pulse 1.4s ease-in-out infinite;
 }
 
@@ -159,7 +160,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .authenticity-card--minting .authenticity-card__dot {
+  .authenticity-card--minting .authenticity-card__dot,
+.authenticity-card--transferring .authenticity-card__dot {
     animation: none;
   }
 }
