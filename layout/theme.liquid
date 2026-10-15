@@ -274,6 +274,7 @@
     {% endstyle %}
 
     {{ 'base.css' | asset_url | stylesheet_tag }}
+    {% render 'duet-mono-font' %}
     {%- if settings.garden_motif -%}
       {{ 'garden-kit.css' | asset_url | stylesheet_tag }}
     {%- endif -%}
