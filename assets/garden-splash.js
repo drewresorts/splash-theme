@@ -13,7 +13,17 @@
  *
  * Interaction is utilitarian: crosshair and coordinate readout, hover or
  * tap to inspect, press and drag to speed up growth, tap to recolor a
- * flower (nearby eyes blink).
+ * flower (nearby eyes blink). Once arranged, the logo itself opens the menu.
+ *
+ * Modes (data-mode):
+ *   (none)      the splash: grows, forms the logo, then stays as the
+ *               page's living backdrop with a slow drift of camera and light.
+ *   world       the same arrangement, already formed, fixed behind every
+ *               other page of the store (snippets/garden-world.liquid).
+ *   background  the bloomed bed, scattered and waving (garden-background).
+ *
+ * The opening plays once per visit: the seed and "already entered" are kept
+ * in sessionStorage, so later pages show the same composition without replaying it.
  */
 import * as THREE from './three.module.min.js';
 
@@ -337,6 +347,35 @@ function wordmarkAlpha() {
   return alpha;
 }
 
+/*
+ * The visit's garden: one seed for every page, so the arrangement is the
+ * same everywhere, and whether the opening has already been seen.
+ */
+const VISIT_KEY = 'duet-garden-visit';
+
+function readVisit() {
+  try {
+    const v = JSON.parse(window.sessionStorage.getItem(VISIT_KEY));
+    return v && typeof v.seed === 'number' ? v : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeVisit(v) {
+  try {
+    window.sessionStorage.setItem(VISIT_KEY, JSON.stringify(v));
+  } catch (e) {
+    /* private mode: every page simply starts fresh */
+  }
+}
+
+/* A reload is a deliberate return to the start, so the opening plays again. */
+function isReload() {
+  const nav = window.performance && performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+  return !!nav && nav.type === 'reload';
+}
+
 /* ------------------------------------------------------------------ */
 /* The element                                                         */
 /* ------------------------------------------------------------------ */
@@ -346,6 +385,12 @@ class GardenSplash extends HTMLElement {
     this.canvas = this.querySelector('[data-garden-canvas]');
     this.overlay = this.querySelector('[data-garden-overlay]');
     if (!this.canvas || !this.overlay) return;
+    // One garden per page: the world behind it steps aside for a page's own.
+    if (this.dataset.mode === 'world' && document.querySelector('garden-splash:not([data-mode="world"])')) {
+      document.body.classList.remove('has-garden-world');
+      this.remove();
+      return;
+    }
     try {
       this.init();
     } catch (e) {
@@ -373,6 +418,7 @@ class GardenSplash extends HTMLElement {
     this.octx = this.overlay.getContext('2d');
 
     this.logo = this.querySelector('[data-garden-logo]');
+    this.logoTrigger = this.querySelector('[data-garden-logo-trigger]');
     this.nav = this.querySelector('[data-garden-nav]');
     this.schemeButtons = Array.from(this.querySelectorAll('[data-garden-scheme]'));
 
@@ -380,9 +426,18 @@ class GardenSplash extends HTMLElement {
     this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     this.reduced = this.motionQuery.matches;
 
-    this.seed = (Math.random() * 2 ** 31) | 0;
+    // Every page of a visit draws the same garden. The splash plays its
+    // opening on the first visit (and on a reload, or in the theme editor);
+    // after that it, like the world behind other pages, starts already formed.
+    const visit = readVisit();
+    this.seed = visit ? visit.seed : (Math.random() * 2 ** 31) | 0;
+    const editor = !!(window.Shopify && window.Shopify.designMode);
+    this.skipOpening = !this.backdrop && !!(visit && visit.entered) && !isReload() && !editor;
+    if (!visit) writeVisit({ seed: this.seed, entered: false });
+    this.formed = this.world || this.skipOpening;
+
     // A background bed starts fully grown unless it is set to grow in.
-    this.elapsed = this.reduced || (this.background && this.dataset.growIn !== 'true') ? this.duration * 1.2 : 0;
+    this.elapsed = this.reduced || this.formed || (this.background && this.dataset.growIn !== 'true') ? this.duration * 1.2 : 0;
     this.flowers = [];
     this.eyes = [];
     this.pings = [];
@@ -395,7 +450,7 @@ class GardenSplash extends HTMLElement {
 
     this.setupScene();
     this.bindEvents();
-    if (this.background) {
+    if (this.backdrop) {
       // The bed sits behind the page, so the eyes follow the pointer across it.
       this.onWindowPointer = (e) => {
         if (e.pointerType !== 'mouse') return;
@@ -443,7 +498,30 @@ class GardenSplash extends HTMLElement {
       });
       this.intersectionObserver.observe(this);
     }
+
+    // Nothing is drawn in a hidden tab, or while the Pollen Dream game has
+    // the screen: only one garden renders at a time.
+    this.onVisibility = () => {
+      if (document.hidden) this.stop();
+      else this.start();
+    };
+    this.onWorldPause = () => {
+      this.paused = true;
+      this.stop();
+    };
+    this.onWorldResume = () => {
+      this.paused = false;
+      this.start();
+    };
+    document.addEventListener('visibilitychange', this.onVisibility);
+    window.addEventListener('duet:world-pause', this.onWorldPause);
+    window.addEventListener('duet:world-resume', this.onWorldResume);
     this.start();
+  }
+
+  stop() {
+    this.running = false;
+    cancelAnimationFrame(this.raf);
   }
 
   /* The server-rendered logo stays up until the first 3D frame is on screen. */
@@ -466,6 +544,9 @@ class GardenSplash extends HTMLElement {
     if (this.intersectionObserver) this.intersectionObserver.disconnect();
     if (this.unbind) this.unbind();
     if (this.onWindowPointer) window.removeEventListener('pointermove', this.onWindowPointer);
+    if (this.onVisibility) document.removeEventListener('visibilitychange', this.onVisibility);
+    if (this.onWorldPause) window.removeEventListener('duet:world-pause', this.onWorldPause);
+    if (this.onWorldResume) window.removeEventListener('duet:world-resume', this.onWorldResume);
     if (this.renderer) {
       this.clearMeshes();
       this.renderer.dispose();
@@ -476,6 +557,10 @@ class GardenSplash extends HTMLElement {
     const d = this.dataset;
     // Background mode: a bloomed bed that keeps waving behind a page's content.
     this.background = d.mode === 'background';
+    // World mode: the formed logo arrangement, fixed behind another page.
+    this.world = d.mode === 'world';
+    // Either way it sits behind a page: no overlay, no inspecting, fewer frames.
+    this.backdrop = this.background || this.world;
     this.waveSpeed = clamp(parseFloat(d.waveSpeed) || 1, 0.2, 3);
     this.densityName = DENSITY[d.density] ? d.density : 'lush';
     this.heroColor = parseColor(d.centerColor) || [240, 78, 98];
@@ -511,6 +596,7 @@ class GardenSplash extends HTMLElement {
     const key = new THREE.DirectionalLight(0xffffff, 2.6);
     key.position.set(-0.7, 0.9, 1.2);
     scene.add(key);
+    this.keyLight = key;
     scene.add(new THREE.AmbientLight(toColor(mix(POWDER, this.soil, 0.4)), 0.9));
 
     this.camera = new THREE.PerspectiveCamera(FOV, 1, 10, 5000);
@@ -694,7 +780,8 @@ class GardenSplash extends HTMLElement {
 
   /* The logo arrived after the garden started: replant it to form the logo. */
   onLateMask() {
-    if (this.failed || this.arranged || !this.maskReady) return;
+    // A garden already formed without it (a later page of the visit) is replanted too.
+    if (this.failed || !this.maskReady || (this.arranged && this.hasTargets)) return;
     this.resize(true);
   }
 
@@ -896,11 +983,16 @@ class GardenSplash extends HTMLElement {
     this.overlay.width = Math.round(W * this.dpr);
     this.overlay.height = Math.round(H * this.dpr);
 
+    this.camBase = this.camera.position.clone();
+
     if (!this.maskReady) return;
     // A small height change (mobile browser chrome) keeps the same field, re-placed.
     if (relayout || !this.flowers.length) this.generate();
     else this.buildMeshes();
     this.project();
+    if (this.arranged) this.placeLogoTrigger();
+    // A still garden (reduced motion) is drawn again at the new size.
+    this.start();
   }
 
   generate() {
@@ -952,7 +1044,7 @@ class GardenSplash extends HTMLElement {
     this.classList.remove('is-bloomed');
     const t = this.elapsed;
     this.flowers.forEach((f) => (f.p = clamp((t - f.startAt) / f.dur, 0, 1)));
-    if (this.reduced && !this.background) this.settle();
+    if ((this.reduced || this.formed) && !this.background) this.settle();
     this.assignEyes(rng);
     this.buildMeshes();
   }
@@ -966,9 +1058,39 @@ class GardenSplash extends HTMLElement {
       f.g = 1;
       f.shown = -1;
     }
+    this.onArranged();
+  }
+
+  /*
+   * The logo is formed: the splash becomes the page's backdrop. It is
+   * remembered for the visit, so other pages and later visits to the
+   * splash start from here instead of replaying the opening.
+   */
+  onArranged() {
     this.arranged = true;
     this.bloomed = true;
+    // From now on a resize re-lays the logo straight into place.
+    this.formed = true;
+    this.calmFrom = this.elapsed;
     this.classList.add('is-bloomed');
+    this.placeLogoTrigger();
+    if (!this.backdrop) writeVisit({ seed: this.seed, entered: true });
+  }
+
+  /* The formed logo is a button that opens the menu: it covers the logo's box. */
+  placeLogoTrigger() {
+    const btn = this.logoTrigger;
+    if (!btn || !this.logoBox) return;
+    const b = this.logoBox;
+    const pad = Math.max(8, this.base || 0);
+    btn.style.setProperty('--gs-trigger-x', `${Math.round(b.x - pad)}px`);
+    btn.style.setProperty('--gs-trigger-y', `${Math.round(b.y - pad)}px`);
+    btn.style.setProperty('--gs-trigger-w', `${Math.round(b.w + pad * 2)}px`);
+    btn.style.setProperty('--gs-trigger-h', `${Math.round(b.h + pad * 2)}px`);
+    // The menu opens out of the logo.
+    this.style.setProperty('--gs-origin-x', `${Math.round(b.x + b.w / 2)}px`);
+    this.style.setProperty('--gs-origin-y', `${Math.round(b.y + b.h / 2)}px`);
+    btn.hidden = false;
   }
 
   makeFlower(x, y, z, r, rng, opts) {
@@ -1387,7 +1509,7 @@ class GardenSplash extends HTMLElement {
   /* ---------------- loop ---------------- */
 
   start() {
-    if (this.running || this.failed || !this.isConnected || !this.renderer || !this.maskReady) return;
+    if (this.running || this.failed || this.paused || document.hidden || !this.isConnected || !this.renderer || !this.maskReady) return;
     this.running = true;
     this.last = performance.now();
     const loop = (now) => {
@@ -1397,7 +1519,7 @@ class GardenSplash extends HTMLElement {
         return;
       }
       // Behind a page the bed only needs about 30 frames a second.
-      if (this.background && now - this.last < 30) {
+      if (this.backdrop && now - this.last < 30) {
         this.raf = requestAnimationFrame(loop);
         return;
       }
@@ -1406,12 +1528,17 @@ class GardenSplash extends HTMLElement {
       try {
         this.update(dt);
         this.renderer.render(this.scene, this.camera);
-        if (!this.background) this.drawOverlay();
+        if (!this.backdrop) this.drawOverlay();
       } catch (e) {
         this.fail(e);
         return;
       }
       this.reveal();
+      // With reduced motion the formed world behind a page is a still picture.
+      if (this.world && this.reduced) {
+        this.running = false;
+        return;
+      }
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
@@ -1446,15 +1573,12 @@ class GardenSplash extends HTMLElement {
           f.shown = -1;
         }
         this.project();
-        if (done) {
-          this.arranged = true;
-          this.bloomed = true;
-          this.classList.add('is-bloomed');
-        }
+        if (done) this.onArranged();
       }
     }
 
     if (this.background && !this.reduced) this.wave(t);
+    if (this.arranged && !this.background) this.drift(t, dt);
 
     for (const f of this.flowers) {
       // Press and drag to accelerate growth under the pointer.
@@ -1477,7 +1601,7 @@ class GardenSplash extends HTMLElement {
       this.classList.add('is-bloomed');
     }
 
-    if (this.background) {
+    if (this.backdrop) {
       this.inspected = null;
     } else if (ptr.active && ptr.type === 'mouse' && !ptr.down) {
       this.inspected = this.nearest(ptr.x, ptr.y, this.base * 1.1 * this.scaleNow());
@@ -1507,6 +1631,34 @@ class GardenSplash extends HTMLElement {
       f.y = f.home[1] + Math.sin(phase * 0.6) * 4;
       f.rot = f.rot0 + s * 0.14;
       f.shown = -1;
+    }
+  }
+
+  /*
+   * The formed logo as a living backdrop. The flowers stay exactly where
+   * they are; only the camera sways a little over the bed (the flowers
+   * stand at different heights, so they shift in depth against each other)
+   * and the light slowly circles. It eases in after the arrangement, so
+   * nothing jumps. While the menu is open the camera leans in toward the logo.
+   */
+  drift(t, dt) {
+    if (!this.camBase) return;
+    const motion = this.reduced ? 0 : smooth(range(t - (this.calmFrom || 0), 0, 3));
+    const nav = this.classList.contains('is-nav-open') && !this.reduced ? 1 : 0;
+    this.navLean = lerp(this.navLean || 0, nav, 1 - Math.exp(-dt * 5));
+    const k = t * 0.12;
+    const sway = this.camDist * 0.035 * motion;
+    const c = this.camera;
+    c.position.set(
+      this.camBase.x + Math.sin(k) * sway,
+      this.camBase.y + Math.sin(k * 0.77 + 1) * sway * 0.7,
+      this.camBase.z * (1 - 0.06 * this.navLean)
+    );
+    const look = this.logoBox ? [this.logoBox.x + this.logoBox.w / 2, this.h - (this.logoBox.y + this.logoBox.h / 2)] : [this.w / 2, this.h / 2];
+    c.lookAt(lerp(this.w / 2, look[0], this.navLean), lerp(this.h / 2, look[1], this.navLean), 0);
+    if (this.keyLight) {
+      const a = k * 0.6 * motion;
+      this.keyLight.position.set(-0.7 * Math.cos(a) - 0.5 * Math.sin(a), 0.9 * Math.cos(a * 0.8), 1.2);
     }
   }
 
@@ -1643,3 +1795,34 @@ class GardenSplash extends HTMLElement {
 }
 
 if (!customElements.get('garden-splash')) customElements.define('garden-splash', GardenSplash);
+
+/*
+ * The garden's own building blocks, for the Pollen Dream game: the same
+ * scene setup, plastic materials, petal geometry, eyes and growth code,
+ * without the element around them. The bed it returns has the element's
+ * methods for flowers (makeFlower, sequence, assignEyes, buildMeshes,
+ * shape, updateEyes, clearMeshes); config supplies the colors and sizes
+ * readConfig would normally read from data attributes.
+ */
+export function createBed(config) {
+  const bed = Object.create(GardenSplash.prototype);
+  const palette = (config.palette || []).map(parseColor).filter(Boolean);
+  Object.assign(bed, {
+    palette: palette.length ? palette : [[166, 39, 73], [102, 164, 200], [185, 229, 251], [240, 78, 98]],
+    foliage: parseColor(config.foliage) || [102, 164, 200],
+    heroColor: parseColor(config.center) || [240, 78, 98],
+    heroAccent: parseColor(config.accent) || [166, 39, 73],
+    soil: parseColor(config.soil) || OCEAN,
+    flowers: [],
+    elapsed: 0,
+    reduced: !!config.reduced,
+    h: 0,
+    camDist: config.camDist || 1000,
+  });
+  bed.isLight = luminance(bed.soil) > 0.6;
+  bed.ink = bed.isLight ? OCEAN : POWDER;
+  bed.setupScene();
+  return bed;
+}
+
+export { THREE, STAGE, FLOOR_Z, mulberry32, poissonDisc, parseColor, mix, tone, toColor, rgba, clamp, lerp, range, smooth };

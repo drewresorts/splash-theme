@@ -328,7 +328,18 @@
       if template.name == 'collection' and template.suffix == blank
         assign hide_header_footer = true
       endif
+
+      # The flower world behind every other page. The splash pages and the
+      # garden shop page draw their own garden.
+      assign show_garden_world = false
+      if settings.garden_world and hide_header_footer == false and template.name != 'password' and template.name != 'gift_card'
+        assign show_garden_world = true
+      endif
     -%}
+
+    {%- if show_garden_world -%}
+      {{ 'component-garden-world.css' | asset_url | stylesheet_tag }}
+    {%- endif -%}
 
     {%- if hide_store_chrome -%}
       <script>
@@ -380,7 +391,7 @@
     </script>
   </head>
 
-  <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.garden_motif and settings.garden_cart_bloom %} garden-cart-motif{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
+  <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.garden_motif and settings.garden_cart_bloom %} garden-cart-motif{% endif %}{% if show_garden_world %} has-garden-world garden-world-sections--{{ settings.garden_world_sections }}{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
     {%- if hide_store_chrome -%}
       <script>
         if (window.navigation && typeof window.navigation.addEventListener === 'function') {
@@ -417,6 +428,14 @@
     {%- unless hide_header_footer -%}
       {% sections 'footer-group' %}
     {%- endunless -%}
+
+    {%- if show_garden_world -%}
+      {%- render 'garden-world' -%}
+    {%- endif -%}
+
+    {%- if settings.garden_game -%}
+      {%- render 'pollen-dream-launcher' -%}
+    {%- endif -%}
 
     <ul hidden>
       <li id="a11y-refresh-page-message">{{ 'accessibility.refresh_page' | t }}</li>

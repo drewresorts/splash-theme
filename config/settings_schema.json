@@ -1487,7 +1487,7 @@
     "settings": [
       {
         "type": "paragraph",
-        "content": "Carries the garden splash's 3D flowers through the store. They are pre-rendered into one small image (about 20KB), so no 3D code loads outside the splash page."
+        "content": "Carries the garden splash's 3D flowers through the store: small pre-rendered flowers (one image of about 20KB) on cards, the cart and above the footer, and, optionally, the 3D flower world behind every page."
       },
       {
         "type": "checkbox",
@@ -1519,6 +1519,96 @@
         "label": "Use the flower colors picked on the splash page",
         "default": true,
         "info": "When visitors pick a color on the garden splash, the flowers across the store take that color too."
+      },
+      {
+        "type": "header",
+        "content": "Flower world"
+      },
+      {
+        "type": "paragraph",
+        "content": "The splash's flowers, formed into the logo, stay behind every other page as a slowly drifting 3D backdrop. The splash pages and the garden shop page show their own garden instead. The 3D code loads only after the page itself has loaded."
+      },
+      {
+        "type": "checkbox",
+        "id": "garden_world",
+        "label": "Show the flower world behind every page",
+        "default": true
+      },
+      {
+        "type": "image_picker",
+        "id": "garden_world_logo",
+        "label": "Logo shape",
+        "info": "Use the same image as the garden splash's Logo shape, so the flowers form the same logo on every page. Leave blank for the Duet wordmark."
+      },
+      {
+        "type": "select",
+        "id": "garden_world_density",
+        "label": "Density",
+        "default": "overgrown",
+        "options": [
+          {
+            "value": "airy",
+            "label": "Airy — larger flowers"
+          },
+          {
+            "value": "lush",
+            "label": "Lush"
+          },
+          {
+            "value": "overgrown",
+            "label": "Overgrown — smaller, more flowers"
+          }
+        ],
+        "info": "Match the garden splash for the same flowers."
+      },
+      {
+        "type": "range",
+        "id": "garden_world_veil",
+        "label": "Fade flowers",
+        "min": 0,
+        "max": 90,
+        "step": 5,
+        "unit": "%",
+        "default": 55,
+        "info": "Washes the page color over the flowers so text and products stand out."
+      },
+      {
+        "type": "select",
+        "id": "garden_world_sections",
+        "label": "Section backgrounds",
+        "default": "translucent",
+        "options": [
+          {
+            "value": "solid",
+            "label": "Solid — as designed"
+          },
+          {
+            "value": "translucent",
+            "label": "Translucent — flowers show faintly"
+          },
+          {
+            "value": "clear",
+            "label": "Clear — flowers show fully"
+          }
+        ],
+        "info": "For the sections on each page. The store header and footer stay solid."
+      },
+      {
+        "type": "header",
+        "content": "Pollen Dream game"
+      },
+      {
+        "type": "checkbox",
+        "id": "garden_game",
+        "label": "Enable the Pollen Dream game",
+        "default": true,
+        "info": "A small first-person game in the 3D garden, opened from the splash and shop menus. Any menu link to /#pollen-dream opens it too. It loads only when a visitor starts it."
+      },
+      {
+        "type": "text",
+        "id": "garden_game_label",
+        "label": "Menu label",
+        "default": "Pollen Dream"
       }
     ]
   }

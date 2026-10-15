@@ -1,0 +1,61 @@
+{%- comment -%}
+  Opens the Pollen Dream game (assets/pollen-dream.js) from any
+  [data-pollen-dream] button, or any link to #pollen-dream, such as a menu
+  link to /#pollen-dream. A page opened at #pollen-dream starts with the
+  game's title screen. Nothing of the game loads until then.
+  Rendered by layout/theme.liquid when Theme settings → Pollen Dream is on.
+{%- endcomment -%}
+<script>
+  (function () {
+    'use strict';
+    if (window.pollenDream) return;
+    var urls = {
+      game: {{ 'pollen-dream.js' | asset_url | json }},
+      garden: {{ 'garden-splash.js' | asset_url | json }},
+      css: {{ 'component-pollen-dream.css' | asset_url | json }},
+    };
+    var busy = false;
+
+    function launch(trigger) {
+      if (busy) return;
+      busy = true;
+      var returnTo = trigger;
+      var sel = trigger && trigger.getAttribute('data-return-focus');
+      if (sel) returnTo = document.querySelector(sel) || trigger;
+      import(urls.game)
+        .then(function (game) {
+          return game.openPollenDream({ gardenUrl: urls.garden, cssUrl: urls.css, returnFocus: returnTo });
+        })
+        .catch(function (e) {
+          console.error('pollen-dream:', e);
+        })
+        .then(function () {
+          busy = false;
+        });
+    }
+
+    function isGameLink(a) {
+      return a && a.tagName === 'A' && a.hash === '#pollen-dream' && a.pathname === location.pathname;
+    }
+
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest) return;
+      var button = e.target.closest('[data-pollen-dream]');
+      var link = e.target.closest('a[href*="#pollen-dream"]');
+      if (!button && !isGameLink(link)) return;
+      e.preventDefault();
+      launch(button || link);
+    });
+
+    function fromHash() {
+      if (location.hash !== '#pollen-dream') return;
+      history.replaceState(null, '', location.pathname + location.search);
+      launch(null);
+    }
+    window.addEventListener('hashchange', fromHash);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fromHash, { once: true });
+    else fromHash();
+
+    window.pollenDream = launch;
+  })();
+</script>

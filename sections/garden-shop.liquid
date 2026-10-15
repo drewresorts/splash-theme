@@ -63,6 +63,13 @@
         {%- for link in shop_menu.links -%}
           <li><a href="{{ link.url }}" class="garden-shop__nav-link">{{ link.title | escape }}</a></li>
         {%- endfor -%}
+        {%- if settings.garden_game -%}
+          <li>
+            <button type="button" class="garden-shop__nav-link garden-shop__nav-link--game" data-pollen-dream data-return-focus="#GardenShop-{{ section.id }} [data-shop-menu]">
+              {{- settings.garden_game_label | default: 'Pollen Dream' | escape -}}
+            </button>
+          </li>
+        {%- endif -%}
         {%- if section.settings.show_cart_link -%}
           <li>
             <a href="{{ routes.cart_url }}" class="garden-shop__nav-link">
@@ -111,6 +118,10 @@
       }
       button.addEventListener('click', function () {
         toggle();
+      });
+      // Starting the game closes the menu; the game puts focus back on the menu button when it ends.
+      nav.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('[data-pollen-dream]')) toggle(false);
       });
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && root.classList.contains('is-nav-open')) toggle(false);
@@ -287,6 +298,15 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     text-decoration: none;
+  }
+
+  .garden-shop__nav-link--game {
+    width: 100%;
+    margin: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
   }
 
   .garden-shop__nav-link:hover,

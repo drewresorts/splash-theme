@@ -48,6 +48,24 @@
   <canvas class="garden-splash__canvas" data-garden-canvas aria-hidden="true"></canvas>
   <canvas class="garden-splash__overlay" data-garden-overlay aria-hidden="true"></canvas>
 
+  {%- if has_menu -%}
+    {%- comment -%}
+      Once the flowers have formed the logo, the logo itself opens the menu.
+      garden-splash.js sizes this button to the logo and shows it then.
+    {%- endcomment -%}
+    <button
+      type="button"
+      class="garden-splash__logo-trigger"
+      data-garden-logo-trigger
+      data-garden-nav-toggle
+      data-garden-ui
+      aria-expanded="false"
+      aria-controls="GardenSplashNav-{{ section.id }}"
+      aria-label="{{ shop.name | escape }}: {{ menu_label | escape }}"
+      hidden
+    ></button>
+  {%- endif -%}
+
   {%- capture logo_img -%}
     {%- if logo_image != blank -%}
       {{
@@ -90,6 +108,7 @@
     <div class="garden-splash__hud garden-splash__hud--tr" data-garden-ui>
       <button
         type="button"
+        id="GardenSplashMenu-{{ section.id }}"
         class="garden-splash__menu garden-splash__menu--{{ menu_style }}"
         data-garden-menu
         data-garden-nav-toggle
@@ -149,6 +168,9 @@
       data-garden-ui
       aria-label="{{ garden_menu.title | escape }}"
     >
+      <button type="button" class="garden-splash__nav-close" data-garden-nav-toggle>
+        {{- menu_close_label | escape -}}
+      </button>
       <ol class="garden-splash__nav-list" role="list">
         {%- for link in garden_menu.links -%}
           <li class="garden-splash__nav-item">
@@ -166,6 +188,18 @@
             {%- endif -%}
           </li>
         {%- endfor -%}
+        {%- if settings.garden_game -%}
+          <li class="garden-splash__nav-item">
+            <button
+              type="button"
+              class="garden-splash__nav-link garden-splash__nav-link--game"
+              data-pollen-dream
+              data-return-focus="#GardenSplashMenu-{{ section.id }}"
+            >
+              {{- settings.garden_game_label | default: 'Pollen Dream' | escape -}}
+            </button>
+          </li>
+        {%- endif -%}
       </ol>
     </nav>
   {%- endif -%}
@@ -174,24 +208,39 @@
 {%- if has_menu -%}
   <script>
     // The menu works on its own, whether or not the 3D garden manages to start.
+    // The flower logo (once formed) or the menu button opens it; Escape, the
+    // close button or either trigger closes it. Focus stays inside while it
+    // is open and goes back to whichever trigger opened it.
     (function () {
       var root = document.getElementById('GardenSplash-{{ section.id }}');
-      if (!root) return;
+      if (!root || root.toggleNav) return;
       var nav = root.querySelector('[data-garden-nav]');
       var menu = root.querySelector('[data-garden-menu]');
       var label = root.querySelector('[data-garden-menu-label]');
       var toggles = root.querySelectorAll('[data-garden-nav-toggle]');
       if (!nav) return;
-      function toggle(force) {
+      var opener = null;
+      function focusables() {
+        return Array.prototype.filter.call(nav.querySelectorAll('a[href], button:not([disabled])'), function (el) {
+          return el.offsetParent !== null;
+        });
+      }
+      function toggle(force, quiet) {
         var open = typeof force === 'boolean' ? force : !root.classList.contains('is-nav-open');
+        if (open === root.classList.contains('is-nav-open')) return;
         root.classList.toggle('is-nav-open', open);
-        for (var i = 0; i < toggles.length; i++) toggles[i].setAttribute('aria-expanded', String(open));
+        document.documentElement.classList.toggle('garden-nav-locked', open);
+        for (var i = 0; i < toggles.length; i++) {
+          if (toggles[i].hasAttribute('aria-controls')) toggles[i].setAttribute('aria-expanded', String(open));
+        }
         if (label) label.textContent = open ? menu.getAttribute('data-close-label') : menu.getAttribute('data-open-label');
         if (open) {
-          var first = nav.querySelector('a');
+          opener = root.contains(document.activeElement) ? document.activeElement : menu;
+          var first = nav.querySelector('a, button:not(.garden-splash__nav-close)');
           if (first) first.focus({ preventScroll: true });
-        } else if (menu && root.contains(document.activeElement)) {
-          menu.focus({ preventScroll: true });
+        } else if (!quiet) {
+          var back = opener && opener.offsetParent !== null ? opener : menu;
+          if (back) back.focus({ preventScroll: true });
         }
       }
       root.toggleNav = toggle;
@@ -200,8 +249,36 @@
           toggle();
         });
       }
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && root.classList.contains('is-nav-open')) toggle(false);
+      // Starting the game closes the menu; the game puts focus back when it ends.
+      nav.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('[data-pollen-dream]')) toggle(false, true);
+      });
+      function onKey(e) {
+        if (!root.isConnected) {
+          document.removeEventListener('keydown', onKey);
+          return;
+        }
+        if (!root.classList.contains('is-nav-open')) return;
+        if (e.key === 'Escape') {
+          toggle(false);
+        } else if (e.key === 'Tab') {
+          var items = focusables();
+          if (!items.length) return;
+          var first = items[0];
+          var last = items[items.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && (document.activeElement === last || !nav.contains(document.activeElement))) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+      document.addEventListener('keydown', onKey);
+      // Coming back with the browser's back button: the menu starts closed.
+      window.addEventListener('pageshow', function (e) {
+        if (e.persisted) toggle(false, true);
       });
     })();
   </script>
@@ -452,12 +529,53 @@
     outline-offset: 3px;
   }
 
+  /* ---------- The formed logo as the menu button ---------- */
+
+  .garden-splash__logo-trigger {
+    position: absolute;
+    left: var(--gs-trigger-x, 0);
+    top: var(--gs-trigger-y, 0);
+    z-index: 4;
+    width: var(--gs-trigger-w, 0);
+    height: var(--gs-trigger-h, 0);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .garden-splash__logo-trigger[hidden] {
+    display: none;
+  }
+
+  .garden-splash__logo-trigger:focus-visible {
+    outline: 1px dashed var(--gs-ink, #191f6b);
+    outline-offset: 4px;
+  }
+
+  /* Without the 3D garden the flat logo in the center opens the menu instead. */
+  .garden-splash.is-static .garden-splash__logo-trigger {
+    display: block;
+    left: 50%;
+    top: 50%;
+    width: min(60vw, 22rem);
+    height: min(30vw, 11rem);
+    transform: translate(-50%, -50%);
+  }
+
+  .garden-splash.is-nav-open .garden-splash__logo-trigger {
+    visibility: hidden;
+  }
+
   /* ---------- Menu ---------- */
 
+  /* It opens out of the logo: a circle that grows from the logo's center. */
   .garden-splash__nav {
     position: absolute;
     inset: 0;
-    z-index: 5;
+    z-index: 7;
     display: flex;
     align-items: center;
     padding: 72px max(16px, 8vw);
@@ -466,13 +584,79 @@
     overflow-y: auto;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.12s linear, visibility 0s linear 0.12s;
+    clip-path: circle(0 at var(--gs-origin-x, 50%) var(--gs-origin-y, 50%));
+    transition: opacity 0.3s linear, clip-path 0.45s cubic-bezier(0.6, 0, 0.8, 0.2), visibility 0s linear 0.45s;
   }
 
   .garden-splash.is-nav-open .garden-splash__nav {
     opacity: 1;
     visibility: visible;
-    transition: opacity 0.12s linear;
+    clip-path: circle(150vmax at var(--gs-origin-x, 50%) var(--gs-origin-y, 50%));
+    transition: opacity 0.2s linear, clip-path 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .garden-splash__nav-list {
+    transform: scale(0.97);
+    transform-origin: var(--gs-origin-x, 50%) var(--gs-origin-y, 50%);
+    transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .garden-splash.is-nav-open .garden-splash__nav-list {
+    transform: none;
+  }
+
+  /* The menu has its own close button where the menu button was. */
+  .garden-splash.is-nav-open .garden-splash__hud--tr {
+    visibility: hidden;
+  }
+
+  .garden-splash__nav-close {
+    position: absolute;
+    top: max(16px, env(safe-area-inset-top));
+    right: max(16px, env(safe-area-inset-right));
+    margin: 0;
+    padding: 8px 12px;
+    border: 1px solid currentColor;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .garden-splash__nav-close:hover,
+  .garden-splash__nav-close:focus-visible {
+    background: var(--gs-ink, #b9e5fb);
+    color: var(--gs-ground, #191f6b);
+    outline: none;
+  }
+
+  /* The game's entry sits in the list like any other link. */
+  .garden-splash__nav-link--game {
+    width: 100%;
+    margin: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .garden-splash__nav-link--game::after {
+    content: '✱';
+    margin-left: auto;
+    font-size: 0.6em;
+    color: var(--gs-hero, #f04e62);
+  }
+
+  /* No page scroll behind an open menu. */
+  html.garden-nav-locked,
+  html.garden-nav-locked body {
+    overflow: hidden;
   }
 
   .garden-splash__nav-list {
@@ -547,7 +731,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .garden-splash__nav {
+    .garden-splash__nav,
+    .garden-splash.is-nav-open .garden-splash__nav,
+    .garden-splash__nav-list {
       transition: none;
     }
   }
@@ -612,7 +798,7 @@
       "id": "menu",
       "label": "Navigation menu",
       "default": "main-menu",
-      "info": "Opened by the menu button in the top-right corner."
+      "info": "Opened by the menu button in the top-right corner, or by clicking the flower logo once it has formed. Theme settings → Garden motif adds the Pollen Dream game to the end of it."
     },
     {
       "type": "url",
