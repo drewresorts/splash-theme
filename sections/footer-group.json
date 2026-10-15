@@ -11,18 +11,6 @@
   "name": "t:sections.footer.name",
   "type": "footer",
   "sections": {
-    "garden-strip": {
-      "type": "garden-strip",
-      "settings": {
-        "flower_count": 18,
-        "height": 64,
-        "seed": 4,
-        "grow": true,
-        "full_width": true,
-        "padding_top": 16,
-        "padding_bottom": 0
-      }
-    },
     "footer": {
       "type": "footer",
       "blocks": {
@@ -70,7 +58,6 @@
     }
   },
   "order": [
-    "garden-strip",
     "footer"
   ]
 }
