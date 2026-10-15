@@ -1,0 +1,21 @@
+{
+  "layout": "wall",
+  "sections": {
+    "wall": {
+      "type": "duet-wall",
+      "settings": {
+        "relay_url": "",
+        "theme": "house",
+        "weather": "none",
+        "look_ps1": false,
+        "look_dither": false,
+        "look_mirror": false,
+        "look_trails": false,
+        "sound": false
+      }
+    }
+  },
+  "order": [
+    "wall"
+  ]
+}
