@@ -57,7 +57,6 @@
         "account",
         "cart"
       ],
-      "disabled": true,
       "settings": {
         "menu": "main-menu",
         "background": "transparent",
@@ -72,16 +71,17 @@
     },
     "header": {
       "type": "header",
+      "disabled": true,
       "settings": {
         "logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png",
         "logo_width": 100,
         "mobile_logo_width": 100,
         "logo_link": "",
         "logo_alt": "",
-        "logo_position": "middle-left",
+        "logo_position": "top-center",
         "mobile_logo_position": "center",
         "menu": "main-menu",
-        "menu_type_desktop": "dropdown",
+        "menu_type_desktop": "drawer",
         "sticky_header_type": "on-scroll-up",
         "show_line_separator": true,
         "color_scheme": "scheme-1",
