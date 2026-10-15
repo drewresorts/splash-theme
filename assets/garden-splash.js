@@ -659,13 +659,14 @@ class GardenSplash extends HTMLElement {
       };
       return mat;
     };
-    const plastic = (opts) => snap(new THREE.MeshPhongMaterial(Object.assign({ color: 0xffffff, specular: 0xffffff, shininess: 70, flatShading: true }, opts)));
+    // A satin finish: soft, dim highlights (the eyes alone stay glossy).
+    const plastic = (opts) => snap(new THREE.MeshPhongMaterial(Object.assign({ color: 0xffffff, specular: 0x2a2a2a, shininess: 14, flatShading: true }, opts)));
     this.materials = {
       plastic: plastic({}),
-      petal: plastic({ side: THREE.DoubleSide, shininess: 90 }),
-      gloss: plastic({ shininess: 140, flatShading: false }),
-      foliage: plastic({ shininess: 30, specular: 0x777777, side: THREE.DoubleSide }),
-      lid: plastic({ shininess: 50, side: THREE.DoubleSide, flatShading: false }),
+      petal: plastic({ side: THREE.DoubleSide, shininess: 16 }),
+      gloss: plastic({ shininess: 30, specular: 0x444444, flatShading: false }),
+      foliage: plastic({ shininess: 10, specular: 0x1e1e1e, side: THREE.DoubleSide }),
+      lid: plastic({ shininess: 18, side: THREE.DoubleSide, flatShading: false }),
     };
     this.makeMaterial = plastic;
     this.snapMaterial = snap;
@@ -925,7 +926,7 @@ class GardenSplash extends HTMLElement {
   eyeMaterial(iris) {
     const key = colorKey(iris);
     if (!this.eyeTextures.has(key)) {
-      const m = this.makeMaterial({ map: eyeTexture(iris), shininess: 160, flatShading: false });
+      const m = this.makeMaterial({ map: eyeTexture(iris), specular: 0xbbbbbb, shininess: 120, flatShading: false });
       this.eyeTextures.set(key, m);
     }
     return this.eyeTextures.get(key);
@@ -1005,6 +1006,8 @@ class GardenSplash extends HTMLElement {
    */
   bindEgg() {
     if (this.logoTrigger) {
+      // On the logo, one tap still opens the menu, a moment later; quick
+      // repeated taps are the hidden game instead, and never open the menu.
       this.logoTrigger.addEventListener(
         'click',
         (e) => {
@@ -1012,6 +1015,16 @@ class GardenSplash extends HTMLElement {
           e.preventDefault();
           e.stopImmediatePropagation();
           this.eggTap(e.clientX, e.clientY);
+          clearTimeout(this.eggMenuTimer);
+          if (this.egg && this.egg.taps === 1) {
+            this.eggMenuTimer = window.setTimeout(() => {
+              if (!this.egg || this.egg.taps !== 1) return;
+              this.egg.taps = 0;
+              const header = document.querySelector('duet-header');
+              if (header && header.openMenu) header.openMenu(this.logoTrigger);
+              else if (this.toggleNav) this.toggleNav(true);
+            }, 420);
+          }
         },
         true
       );
@@ -1039,8 +1052,10 @@ class GardenSplash extends HTMLElement {
     const x = cx - r.left;
     const y = cy - r.top;
     this.project();
+    // A logo that is only the asterisk has no separate asterisk part: all of it counts.
+    const any = !this.flowers.some((f) => f.star);
     for (const f of this.flowers) {
-      if (f.star && Math.hypot(f.sx - x, f.sy - y) < Math.max(this.base * 1.3, f.sr)) return true;
+      if ((f.star || any) && Math.hypot(f.sx - x, f.sy - y) < Math.max(this.base * 1.3, f.sr)) return true;
     }
     return false;
   }
@@ -1070,8 +1085,9 @@ class GardenSplash extends HTMLElement {
     const level = (egg.taps || 5) / 5;
     const k = this.reduced ? 0 : smooth(Math.min(1, egg.pulse));
     const t = this.elapsed;
+    const any = !this.flowers.some((f) => f.star);
     for (const f of this.flowers) {
-      if (!f.star) continue;
+      if (!f.star && !any) continue;
       if (f.rot0 === undefined) f.rot0 = f.rot;
       f.lift = k * (14 + 46 * level) * (0.6 + 0.4 * Math.sin(f.id * 1.7 + t * 12));
       f.rot = f.rot0 + k * Math.sin(t * (10 + 10 * level) + f.id) * (0.15 + 0.3 * level);
