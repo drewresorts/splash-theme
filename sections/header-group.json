@@ -14,19 +14,19 @@
     "duet_header": {
       "type": "duet-header",
       "blocks": {
+        "search": {
+          "type": "search",
+          "disabled": true,
+          "settings": {
+            "position": "left"
+          }
+        },
         "menu": {
           "type": "menu",
           "settings": {
             "style": "text",
             "label": "Menu",
             "position": "right"
-          }
-        },
-        "search": {
-          "type": "search",
-          "disabled": true,
-          "settings": {
-            "position": "left"
           }
         },
         "logo": {
@@ -50,8 +50,8 @@
         }
       },
       "block_order": [
-        "menu",
         "search",
+        "menu",
         "logo",
         "account",
         "cart"
