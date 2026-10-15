@@ -1526,7 +1526,7 @@
       },
       {
         "type": "paragraph",
-        "content": "The splash's flowers, formed into the logo, stay behind every other page as a slowly drifting 3D backdrop. The splash pages and the garden shop page show their own garden instead. The 3D code loads only after the page itself has loaded."
+        "content": "The splash's flowers, formed into the logo, stay behind every other page as a slowly drifting 3D backdrop. A page with its own Garden background section shows that instead. The 3D code loads only after the page itself has loaded."
       },
       {
         "type": "checkbox",

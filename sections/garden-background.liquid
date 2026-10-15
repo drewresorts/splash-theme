@@ -12,6 +12,13 @@
   if section.settings.flower_logo != blank
     assign flower_logo_url = section.settings.flower_logo | image_url: width: 900
   endif
+
+  # The flowers form the logo (the same arrangement as the splash and every
+  # other page), or wave as a scattered bed. Blank (never saved) is the logo.
+  assign bed_mode = 'world'
+  if section.settings.arrangement == 'wave'
+    assign bed_mode = 'background'
+  endif
 -%}
 {%- capture palette_json -%}
   ["{{ section.settings.color_1 }}","{{ section.settings.color_2 }}","{{ section.settings.color_3 }}","{{ section.settings.color_4 }}","{{ section.settings.color_5 }}"]
@@ -19,7 +26,7 @@
 
 <garden-splash
   class="garden-background"
-  data-mode="background"
+  data-mode="{{ bed_mode }}"
   data-palette="{{ palette_json | strip | escape }}"
   data-foliage-color="{{ section.settings.foliage_color }}"
   data-center-color="{{ section.settings.color_5 }}"
@@ -100,7 +107,24 @@
   "settings": [
     {
       "type": "paragraph",
-      "content": "The garden splash's flower bed, fully bloomed and waving slowly behind the whole page. Content scrolls over it. Sections on this page should have transparent backgrounds for it to show through."
+      "content": "The garden splash's flowers behind the whole page, either formed into the logo or as a bloomed bed waving slowly. Content scrolls over it. Sections on this page should have transparent backgrounds for it to show through."
+    },
+    {
+      "type": "select",
+      "id": "arrangement",
+      "label": "Flowers",
+      "default": "logo",
+      "options": [
+        {
+          "value": "logo",
+          "label": "Formed into the logo"
+        },
+        {
+          "value": "wave",
+          "label": "Scattered, waving"
+        }
+      ],
+      "info": "Formed into the logo: the same arrangement as on the splash, drifting gently. Wave speed and Grow from seed only apply to the waving bed."
     },
     {
       "type": "select",

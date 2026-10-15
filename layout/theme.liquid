@@ -329,12 +329,13 @@
         assign hide_header_footer = true
       endif
 
-      # The flower world behind every other page. The splash pages and the
-      # garden shop page draw their own garden.
+      # The flower world behind every page except the splash pages. A page
+      # with its own Garden background section (the shop page) keeps that
+      # one: the world steps aside in garden-splash.js.
       assign show_garden_world = false
       # A setting added in code reads as blank until Theme settings are next
       # saved, so blank counts as on: only an explicit "off" turns these off.
-      if settings.garden_world != false and hide_header_footer == false and template.name != 'password' and template.name != 'gift_card'
+      if settings.garden_world != false and hide_store_chrome == false and template.name != 'password' and template.name != 'gift_card'
         assign show_garden_world = true
       endif
     -%}
