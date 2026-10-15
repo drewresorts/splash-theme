@@ -57,6 +57,7 @@
         "account",
         "cart"
       ],
+      "disabled": true,
       "settings": {
         "menu": "main-menu",
         "background": "transparent",
@@ -71,7 +72,6 @@
     },
     "header": {
       "type": "header",
-      "disabled": true,
       "settings": {
         "logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png",
         "logo_width": 100,
