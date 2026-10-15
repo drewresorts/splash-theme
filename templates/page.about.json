@@ -1,105 +1,124 @@
 {
   "name": "About",
   "sections": {
-    "main": {
-      "type": "main-page",
-      "settings": {
-        "padding_top": 36,
-        "padding_bottom": 20
-      }
-    },
-    "story": {
-      "type": "image-with-text",
+    "mission": {
+      "type": "duet-mission",
       "blocks": {
-        "story_heading": {
-          "type": "heading",
+        "selection": {
+          "type": "pillar",
           "settings": {
-            "heading": "Our story",
-            "heading_size": "h1"
+            "title": "Selection",
+            "text": "<p>A tightly edited inventory: the houses, pieces and conditions we would buy ourselves, chosen for craft and lasting value rather than volume.</p>"
           }
         },
-        "story_text": {
-          "type": "text",
+        "certainty": {
+          "type": "pillar",
           "settings": {
-            "text": "<p>Edit this section in the theme editor, or replace it with your own image and copy. The page title and main content above come from the page in the Shopify admin.</p>",
-            "text_style": "body"
+            "title": "Certainty",
+            "text": "<p>Every item is reviewed for authenticity before it is listed, and every sale is backed by our authenticity guarantee.</p>"
+          }
+        },
+        "experience": {
+          "type": "pillar",
+          "settings": {
+            "title": "Experience",
+            "text": "<p>Online or in our store, shopping with Duet should feel personal, unhurried and honest, from the first look to long after the piece is yours.</p>"
           }
         }
       },
       "block_order": [
-        "story_heading",
-        "story_text"
+        "selection",
+        "certainty",
+        "experience"
       ],
       "settings": {
-        "height": "small",
-        "desktop_image_width": "medium",
-        "layout": "text_first",
-        "desktop_content_position": "top",
-        "desktop_content_alignment": "left",
-        "content_layout": "no-overlap",
-        "color_scheme": "scheme-2",
-        "mobile_content_alignment": "left",
-        "padding_top": 36,
-        "padding_bottom": 36
-      }
-    },
-    "values": {
-      "type": "multicolumn",
-      "blocks": {
-        "col_1": {
-          "type": "column",
-          "settings": {
-            "title": "What we do",
-            "text": "<p>Describe your mission or focus in a short paragraph.</p>",
-            "link_label": "",
-            "link": ""
-          }
-        },
-        "col_2": {
-          "type": "column",
-          "settings": {
-            "title": "How we work",
-            "text": "<p>Share your process, values, or what makes you different.</p>",
-            "link_label": "",
-            "link": ""
-          }
-        },
-        "col_3": {
-          "type": "column",
-          "settings": {
-            "title": "Why it matters",
-            "text": "<p>Connect with customers through the outcome you create for them.</p>",
-            "link_label": "",
-            "link": ""
-          }
-        }
-      },
-      "block_order": [
-        "col_1",
-        "col_2",
-        "col_3"
-      ],
-      "settings": {
-        "title": "",
-        "heading_size": "h1",
-        "image_width": "full",
-        "image_ratio": "adapt",
-        "columns_desktop": 3,
-        "column_alignment": "left",
-        "background_style": "none",
+        "eyebrow": "About Duet",
+        "heading": "Our mission",
+        "heading_tag": "h1",
+        "text": "<p>Duet exists to make owning luxury feel certain. We bring together pieces worth keeping, check every one of them before it reaches you, and stand behind each sale with a guarantee no one else offers.</p>",
         "button_label": "",
         "button_link": "",
-        "swipe_on_mobile": false,
-        "color_scheme": "scheme-1",
-        "columns_mobile": "1",
-        "padding_top": 36,
-        "padding_bottom": 52
+        "padding_top": 60,
+        "padding_bottom": 40
+      }
+    },
+    "authenticity": {
+      "type": "duet-authenticity",
+      "blocks": {
+        "step_1": {
+          "type": "step",
+          "settings": {
+            "title": "Reviewed before it's listed",
+            "text": "<p>Our team inspects every item for authenticity and condition before it goes on sale.</p>"
+          }
+        },
+        "step_2": {
+          "type": "step",
+          "settings": {
+            "title": "Verify it yourself",
+            "text": "<p>Want a second opinion? Have your purchase reviewed by any authenticator we endorse.</p>"
+          }
+        },
+        "step_3": {
+          "type": "step",
+          "settings": {
+            "title": "Send us the report",
+            "text": "<p>If their report finds the item is not authentic, send it to us with your order number.</p>"
+          }
+        },
+        "step_4": {
+          "type": "step",
+          "settings": {
+            "title": "Paid back, and then some",
+            "text": "<p>We refund the full price you paid and pay you the item's price again on top.</p>"
+          }
+        },
+        "authenticator_1": {
+          "type": "authenticator",
+          "settings": {
+            "name": ""
+          }
+        },
+        "authenticator_2": {
+          "type": "authenticator",
+          "settings": {
+            "name": ""
+          }
+        },
+        "authenticator_3": {
+          "type": "authenticator",
+          "settings": {
+            "name": ""
+          }
+        }
+      },
+      "block_order": [
+        "step_1",
+        "step_2",
+        "step_3",
+        "step_4",
+        "authenticator_1",
+        "authenticator_2",
+        "authenticator_3"
+      ],
+      "settings": {
+        "button_label": "Make a claim",
+        "button_link": "/pages/contact",
+        "padding_top": 40,
+        "padding_bottom": 40
+      }
+    },
+    "location": {
+      "type": "duet-location",
+      "settings": {
+        "padding_top": 40,
+        "padding_bottom": 72
       }
     }
   },
   "order": [
-    "main",
-    "story",
-    "values"
+    "mission",
+    "authenticity",
+    "location"
   ]
 }
