@@ -61,7 +61,15 @@
     <nav class="garden-shop__nav" id="GardenShopNav-{{ section.id }}" aria-label="{{ shop_menu.title | escape }}">
       <ul class="garden-shop__nav-list" role="list">
         {%- for link in shop_menu.links -%}
-          <li><a href="{{ link.url }}" class="garden-shop__nav-link">{{ link.title | escape }}</a></li>
+          <li>
+            <a href="{{ link.url }}" class="garden-shop__nav-link">{{ link.title | escape }}</a>
+            {%- for child in link.links -%}
+              <a href="{{ child.url }}" class="garden-shop__nav-link garden-shop__nav-link--sub">{{ child.title | escape }}</a>
+              {%- for grandchild in child.links -%}
+                <a href="{{ grandchild.url }}" class="garden-shop__nav-link garden-shop__nav-link--sub garden-shop__nav-link--deep">{{ grandchild.title | escape }}</a>
+              {%- endfor -%}
+            {%- endfor -%}
+          </li>
         {%- endfor -%}
         {%- if settings.garden_game != false -%}
           <li>
@@ -256,7 +264,7 @@
     inset: 0;
     z-index: 15;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     padding: 9.6rem max(1.6rem, 8vw);
     background: color-mix(in srgb, var(--gs-page, #fff) 90%, transparent);
     overflow-y: auto;
@@ -276,7 +284,8 @@
     gap: 0.4rem;
     width: 100%;
     max-width: 72rem;
-    margin: 0;
+    /* Centered when it fits; scrolls from the first item when it doesn't. */
+    margin: auto 0;
     padding: 0;
     list-style: none;
   }
@@ -298,6 +307,17 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     text-decoration: none;
+  }
+
+  .garden-shop__nav-link--sub {
+    padding: 0.6rem 0 0.6rem 2.4rem;
+    font-size: 1.3rem;
+    letter-spacing: 0.14em;
+  }
+
+  .garden-shop__nav-link--deep {
+    padding-left: 4rem;
+    opacity: 0.8;
   }
 
   .garden-shop__nav-link--game {

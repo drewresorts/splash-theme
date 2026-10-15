@@ -182,6 +182,11 @@
                     <a href="{{ child.url }}" class="garden-splash__nav-link garden-splash__nav-link--sub">
                       {{- child.title | escape -}}
                     </a>
+                    {%- for grandchild in child.links -%}
+                      <a href="{{ grandchild.url }}" class="garden-splash__nav-link garden-splash__nav-link--sub garden-splash__nav-link--deep">
+                        {{- grandchild.title | escape -}}
+                      </a>
+                    {%- endfor -%}
                   </li>
                 {%- endfor -%}
               </ul>
@@ -583,7 +588,7 @@
     inset: 0;
     z-index: 7;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     padding: 72px max(16px, 8vw);
     background: color-mix(in srgb, var(--gs-ground, #191f6b) 88%, transparent);
     cursor: default;
@@ -670,7 +675,8 @@
     gap: 4px;
     width: 100%;
     max-width: 720px;
-    margin: 0;
+    /* Centered when it fits; scrolls from the first item when it doesn't. */
+    margin: auto 0;
     padding: 0;
     list-style: none;
     counter-reset: garden-nav;
@@ -718,6 +724,11 @@
     margin: -6px 0 12px 40px;
     padding: 0;
     list-style: none;
+  }
+
+  .garden-splash__nav-link--deep {
+    padding-left: 12px;
+    opacity: 0.8;
   }
 
   .garden-splash__nav-link--sub {

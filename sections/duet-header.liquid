@@ -146,7 +146,16 @@
               <ul class="duet-header__nav-sublist" role="list">
                 {%- for child in link.links -%}
                   <li>
-                    <a href="{{ child.url }}" class="duet-header__nav-link duet-header__nav-link--sub">{{ child.title | escape }}</a>
+                    <a href="{{ child.url }}" class="duet-header__nav-link duet-header__nav-link--sub"{% if child.current %} aria-current="page"{% endif %}>{{ child.title | escape }}</a>
+                    {%- if child.links != blank -%}
+                      <ul class="duet-header__nav-sublist duet-header__nav-sublist--deep" role="list">
+                        {%- for grandchild in child.links -%}
+                          <li>
+                            <a href="{{ grandchild.url }}" class="duet-header__nav-link duet-header__nav-link--sub"{% if grandchild.current %} aria-current="page"{% endif %}>{{ grandchild.title | escape }}</a>
+                          </li>
+                        {%- endfor -%}
+                      </ul>
+                    {%- endif -%}
                   </li>
                 {%- endfor -%}
               </ul>
@@ -427,9 +436,9 @@
     inset: 0;
     z-index: 40;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     padding: 9.6rem max(1.6rem, 8vw);
-    background: color-mix(in srgb, var(--dh-panel, #fff) 92%, transparent);
+    background: color-mix(in srgb, var(--dh-panel, #fff) 97%, transparent);
     color: var(--dh-ink, #191f6b);
     font-family: var(--dh-mono);
     overflow-y: auto;
@@ -474,7 +483,8 @@
     gap: 0.4rem;
     width: 100%;
     max-width: 72rem;
-    margin: 0;
+    /* Centered when it fits; scrolls from the first item when it doesn't. */
+    margin: auto 0;
     padding: 0;
     list-style: none;
     counter-reset: duet-nav;
@@ -537,6 +547,11 @@
     margin: -0.6rem 0 1.2rem 4rem;
     padding: 0;
     list-style: none;
+  }
+
+  .duet-header__nav-sublist--deep {
+    margin: 0 0 0.6rem 1.6rem;
+    opacity: 0.8;
   }
 
   .duet-header__nav-link--sub {
