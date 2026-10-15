@@ -16,7 +16,8 @@
  * flower (nearby eyes blink). Once arranged, the logo itself opens the menu.
  * The splash can be zoomed into, with no controls shown: scroll or pinch on
  * a trackpad, pinch on a touchscreen, or press and hold then slide up/down.
- * Zoomed in, dragging moves around and the render sharpens.
+ * Zoomed in, dragging moves around and the render sharpens. Now and then a
+ * bee flies through, sometimes landing on a flower for a moment.
  *
  * Modes (data-mode):
  *   (none)      the splash: grows, forms the logo, then stays as the
@@ -553,6 +554,10 @@ class GardenSplash extends HTMLElement {
     if (this.onWorldPause) window.removeEventListener('duet:world-pause', this.onWorldPause);
     if (this.onWorldResume) window.removeEventListener('duet:world-resume', this.onWorldResume);
     if (this.onEggClick) document.removeEventListener('click', this.onEggClick);
+    if (this.bee) {
+      this.bee.materials.forEach((m) => m.dispose());
+      this.bee = null;
+    }
     if (this.renderer) {
       this.clearMeshes();
       this.renderer.dispose();
@@ -1672,6 +1677,7 @@ class GardenSplash extends HTMLElement {
     if (this.background && !this.reduced) this.wave(t);
     if (!this.background) this.drift(t, dt);
     if (this.arranged && !this.background && !this.reduced) this.blow(t);
+    if (this.arranged && !this.backdrop && !this.reduced) this.flyBee(t, dt);
     if (this.egg && this.egg.pulse > 0) this.eggReact(dt);
 
     for (const f of this.flowers) {
@@ -1759,6 +1765,217 @@ class GardenSplash extends HTMLElement {
       const a = k * 0.6 * motion;
       this.keyLight.position.set(-0.7 * Math.cos(a) - 0.5 * Math.sin(a), 0.9 * Math.cos(a * 0.8), 1.2);
     }
+  }
+
+  /* ---------------- the bee ---------------- */
+
+  /*
+   * A small bee in the same plastic, vertex-snapped style as the flowers:
+   * a banded gold and ocean body, a head, a sting and two clear wings on
+   * hinges. Built once, on its first visit, and reused. Faces +x.
+   */
+  buildBee() {
+    const G = this.geometries;
+    const mat = (color, extra) => this.makeMaterial(Object.assign({ color, shininess: 110 }, extra));
+    const gold = mat(0xf2a834);
+    const ink = mat(0x191f6b);
+    const wing = this.makeMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, shininess: 160, depthWrite: false, flatShading: false });
+    const group = new THREE.Group();
+    const part = (geo, m, x, y, z, sx, sy, sz) => {
+      const o = new THREE.Mesh(geo, m);
+      o.position.set(x, y, z);
+      o.scale.set(sx, sy, sz);
+      group.add(o);
+      return o;
+    };
+    // Body: overlapping bands, tapering toward the sting.
+    [
+      [-0.05, 0.5, gold],
+      [-0.45, 0.47, ink],
+      [-0.82, 0.43, gold],
+      [-1.15, 0.34, ink],
+      [-1.42, 0.22, gold],
+    ].forEach(([x, r, m]) => part(G.ball, m, x, 0, 0, r * 0.95, r, r));
+    part(G.ball, ink, 0.55, 0, 0.05, 0.36, 0.38, 0.36);
+    part(G.tube, ink, -1.55, 0, 0, 0.3, 0.05, 0.05).rotation.z = Math.PI;
+    // Two feelers.
+    [-1, 1].forEach((side) => {
+      const f = part(G.tube, ink, 0.75, 0.12 * side, 0.2, 0.42, 0.025, 0.025);
+      f.rotation.set(0, -0.5, 0.45 * side);
+    });
+    // Wings hinge along the body's back and flap about it.
+    const wings = [-1, 1].map((side) => {
+      const hinge = new THREE.Group();
+      hinge.position.set(-0.2, 0.12 * side, 0.38);
+      const w = new THREE.Mesh(this.geometries.round, wing);
+      w.rotation.z = (side * Math.PI) / 2 - side * 0.35;
+      w.scale.set(1.15, 0.7, 0.4);
+      hinge.add(w);
+      group.add(hinge);
+      return { hinge, side };
+    });
+    group.visible = false;
+    this.scene.add(group);
+    this.bee = { group, wings, materials: [gold, ink, wing], phase: 'away', recent: [] };
+  }
+
+  /* A point just off screen, in a random direction from the center. */
+  beeEdge(angle) {
+    const R = Math.hypot(this.w, this.h) / 2 + this.base * 3;
+    return new THREE.Vector3(this.w / 2 + Math.cos(angle) * R, this.h / 2 + Math.sin(angle) * R, lerp(140, 230, Math.random()));
+  }
+
+  /* A flight along a gentle curve, from a to b, swinging to one side. */
+  beeLeg(a, b, speed) {
+    const mid = a.clone().lerp(b, 0.5);
+    const d = a.distanceTo(b);
+    const side = (Math.random() - 0.5) * 0.9 * d;
+    const n = new THREE.Vector3(-(b.y - a.y), b.x - a.x, 0).normalize();
+    mid.addScaledVector(n, side);
+    mid.z = Math.max(a.z, b.z) + 30;
+    return { a, c: mid, b, t: 0, dur: clamp(d / speed, 1.2, 6) };
+  }
+
+  /* Picks a flower to land on: an open one on screen, not one used lately. */
+  beeTarget() {
+    const recent = this.bee.recent;
+    const m = this.base;
+    const ok = this.flowers.filter((f) => f.p >= 1 && !recent.includes(f.id) && f.dest[0] > m && f.dest[0] < this.w - m && f.dest[1] > m * 2 && f.dest[1] < this.h - m);
+    if (!ok.length) return null;
+    const f = ok[Math.floor(Math.random() * ok.length)];
+    recent.push(f.id);
+    if (recent.length > 12) recent.shift();
+    return f;
+  }
+
+  /* Where the bee sits on a flower: on top of its petals. */
+  beeSeat(f) {
+    return new THREE.Vector3(f.dest[0], this.h - f.dest[1], f.z + f.r * 0.6 * f.g + this.base * 0.35);
+  }
+
+  /*
+   * The bee's visit: in from a random direction, then either down onto a
+   * flower for a moment and away in another random direction, or (about one
+   * time in four) straight past. Positions are in the bed's own space,
+   * like the flowers: x right, y up, z toward the viewer.
+   */
+  flyBee(t, dt) {
+    if (!this.bee) {
+      if (this.nextBee === undefined) this.nextBee = t + 5 + Math.random() * 6;
+      if (t < this.nextBee) return;
+      this.buildBee();
+    }
+    const bee = this.bee;
+    const g = bee.group;
+    const speed = Math.max(220, this.w * 0.32);
+    const toScreen = (v) => new THREE.Vector3(v.x, this.h - v.y, v.z);
+
+    if (bee.phase === 'away') {
+      if (this.nextBee !== undefined && t < this.nextBee) return;
+      const inAngle = Math.random() * TAU;
+      const start = toScreen(this.beeEdge(inAngle));
+      bee.outAngle = inAngle + Math.PI + (Math.random() - 0.5) * 2.4;
+      bee.flower = Math.random() < 0.75 ? this.beeTarget() : null;
+      g.scale.setScalar(this.base * 0.75);
+      g.visible = true;
+      if (bee.flower) {
+        const seat = this.beeSeat(bee.flower);
+        bee.hover = seat.clone().setZ(seat.z + this.base * 1.4);
+        bee.leg = this.beeLeg(start, bee.hover, speed);
+        bee.phase = 'in';
+      } else {
+        bee.leg = this.beeLeg(start, toScreen(this.beeEdge(bee.outAngle)), speed);
+        bee.phase = 'past';
+      }
+      bee.yaw = Math.atan2(bee.leg.b.y - start.y, bee.leg.b.x - start.x);
+      g.position.copy(start);
+    }
+
+    const flap = (rate, amount) => {
+      bee.flapT = (bee.flapT || 0) + dt * rate;
+      for (const w of bee.wings) w.hinge.rotation.x = w.side * (0.15 + amount * (0.5 + 0.5 * Math.sin(bee.flapT)));
+    };
+    const along = (leg) => {
+      leg.t = Math.min(1, leg.t + dt / leg.dur);
+      const e = smooth(leg.t);
+      const u = 1 - e;
+      const p = new THREE.Vector3()
+        .addScaledVector(leg.a, u * u)
+        .addScaledVector(leg.c, 2 * u * e)
+        .addScaledVector(leg.b, e * e);
+      // A bee's flight wobbles.
+      p.z += Math.sin(t * 7) * this.base * 0.12;
+      p.x += Math.sin(t * 3.3) * this.base * 0.15;
+      return p;
+    };
+    const head = (to, k) => {
+      const want = Math.atan2(to.y - g.position.y, to.x - g.position.x);
+      let d = want - bee.yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      bee.yaw += d * Math.min(1, dt * k);
+    };
+
+    if (bee.phase === 'in' || bee.phase === 'out' || bee.phase === 'past') {
+      const p = along(bee.leg);
+      if (p.distanceToSquared(g.position) > 1e-4) head(p, 8);
+      g.position.copy(p);
+      flap(55, 1);
+      if (bee.leg.t >= 1) {
+        if (bee.phase === 'in') {
+          bee.phase = 'land';
+          bee.k = 0;
+        } else {
+          g.visible = false;
+          bee.phase = 'away';
+          this.nextBee = t + 14 + Math.random() * 16;
+        }
+      }
+    } else if (bee.phase === 'land' || bee.phase === 'up') {
+      // Down onto the petals, or back up off them.
+      bee.k = Math.min(1, bee.k + dt / 0.8);
+      const seat = this.beeSeat(bee.flower);
+      const e = smooth(bee.k);
+      const from = bee.phase === 'land' ? bee.hover : seat;
+      const to = bee.phase === 'land' ? seat : bee.hover;
+      g.position.lerpVectors(from, to, e);
+      flap(bee.phase === 'land' ? lerp(55, 20, e) : 55, bee.phase === 'land' ? lerp(1, 0.4, e) : 1);
+      if (bee.k >= 1) {
+        if (bee.phase === 'land') {
+          bee.phase = 'rest';
+          bee.restUntil = t + 1.6 + Math.random() * 2.2;
+          bee.dip = 1;
+        } else {
+          bee.leg = this.beeLeg(g.position.clone(), toScreen(this.beeEdge(bee.outAngle)), speed);
+          bee.phase = 'out';
+        }
+      }
+    } else if (bee.phase === 'rest') {
+      // A moment on the flower: wings flick now and then, the bee turns a little.
+      const f = bee.flower;
+      g.position.copy(this.beeSeat(f));
+      bee.yaw += Math.sin(t * 1.3) * dt * 0.6;
+      const flick = Math.sin(t * 2.1) > 0.6;
+      flap(flick ? 40 : 4, flick ? 0.8 : 0.2);
+      if (t > bee.restUntil) {
+        bee.phase = 'up';
+        bee.k = 0;
+        bee.hover = this.beeSeat(f).setZ(this.beeSeat(f).z + this.base * 1.4);
+      }
+    }
+
+    // The flower gives a little under the bee as it lands.
+    if (bee.dip > 0 && bee.flower) {
+      bee.dip = Math.max(0, bee.dip - dt / 0.7);
+      const f = bee.flower;
+      if (!this.gust) {
+        f.lift = -Math.sin(Math.PI * (1 - bee.dip)) * this.base * 0.18;
+        f.shown = -1;
+      }
+    }
+
+    // Leaning into turns, nose slightly down in flight.
+    const flying = bee.phase !== 'rest';
+    g.rotation.set(0, flying ? 0.15 : 0, bee.yaw, 'ZYX');
   }
 
   /* ---------------- zoom ---------------- */
@@ -2037,6 +2254,8 @@ class GardenSplash extends HTMLElement {
       const k = (120 - this.camera.position.z) / dir.z;
       return out.copy(this.camera.position).addScaledVector(dir, k);
     }
+    // Otherwise they watch the bee, if one is about.
+    if (!nav && this.bee && this.bee.group.visible) return out.copy(this.bee.group.position);
     if (!nav && this.arranged && this.elapsed % 17 > 12) return out.set(this.w / 2, this.h / 2, 80);
     return null;
   }
