@@ -23,7 +23,13 @@
     },
     "wall_remote": {
       "type": "duet-wall-remote",
-      "settings": {}
+      "settings": {
+        "wall_page": "wall",
+        "heading": "The wall",
+        "text": "<p>You found it. This is projected on the wall in our shop right now, and you can change it.</p>",
+        "fine_print": "One change every little while. Changes wear off after a few minutes.",
+        "trigger": "#MainContent h1"
+      }
     }
   },
   "order": [
