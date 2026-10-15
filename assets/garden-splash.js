@@ -19,7 +19,8 @@
  * Zoomed in, dragging moves around and the render sharpens. Now and then a
  * bee flies through, sometimes landing on a flower for a moment. Drawing a
  * full circle around the logo lies the visitor down on their back in the
- * flowers, looking up at a night sky whose stars gather into the logo.
+ * flowers, looking up at a night sky whose white stars gather into the logo.
+ * The splash's weather follows the real season (see the seasons section).
  *
  * Modes (data-mode):
  *   (none)      the splash: grows, forms the logo, then stays as the
@@ -190,6 +191,44 @@ const renderScale = (w) => (w < 750 ? 0.85 : 0.5);
 // The splash itself is drawn sharp (up to 1.25x on desktop, 1.5x on phones),
 // as long as the device keeps up (see adapt()).
 const splashScale = (w, dpr) => Math.max(renderScale(w), Math.min(dpr, w < 750 ? 1.5 : 1.25));
+// PS1 style: a low internal resolution, scaled up with hard pixels.
+const ps1Scale = (w) => (w < 750 ? 0.9 : 0.6);
+
+/*
+ * The seasons, by the visitor's real date. Meteorological seasons:
+ * December-February is winter in the north (summer in the south), and so
+ * on. Returns the season and how far through it today is (0 to 1).
+ */
+const SEASON_NAMES = ['winter', 'spring', 'summer', 'autumn'];
+function seasonOf(date, south) {
+  const m = date.getMonth();
+  const k = (m + 1) % 12;
+  let i = Math.floor(k / 3);
+  if (south) i = (i + 2) % 4;
+  const start = new Date(date.getFullYear(), m - (k % 3), 1);
+  const end = new Date(start.getFullYear(), start.getMonth() + 3, 1);
+  return { name: SEASON_NAMES[i], p: (date - start) / (end - start) };
+}
+
+/* Each season's light, and how often the wind gusts and the bees visit (seconds; no bees in winter). */
+const SEASON_LOOK = {
+  winter: { key: 2.3, keyColor: [212, 226, 255], amb: 1.0, ambTint: [205, 220, 255], gusts: [10, 18], bees: null },
+  spring: { key: 2.5, keyColor: [255, 255, 250], amb: 0.9, ambTint: null, gusts: [7, 14], bees: [12, 26] },
+  summer: { key: 2.8, keyColor: [255, 241, 216], amb: 0.95, ambTint: [255, 240, 220], gusts: [9, 16], bees: [6, 14] },
+  autumn: { key: 2.4, keyColor: [255, 226, 192], amb: 0.9, ambTint: [240, 214, 190], gusts: [3, 7], bees: [22, 40] },
+};
+
+/* 15-bit color with a 4x4 Bayer dither, as on the PlayStation. */
+const DITHER_GLSL = `
+uniform float uDither;
+const float BAYER[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
+vec3 psxColor(vec3 c) {
+  if (uDither < 0.5) return c;
+  ivec2 p = ivec2(mod(gl_FragCoord.xy, 4.0));
+  float b = BAYER[p.y * 4 + p.x] / 16.0;
+  return floor(clamp(c, 0.0, 1.0) * 31.0 + b) / 31.0;
+}
+`;
 
 /* Bridson's Poisson-disc sampling: evenly spread, never on a grid. */
 function poissonDisc(x0, y0, x1, y1, minDist, rng, seedPoint) {
@@ -434,13 +473,14 @@ class GardenSplash extends HTMLElement {
 
   /* How fine the vertex-snapping grid is: coarse behind pages (the wobble), per render pixel on the splash. */
   snapTo(rs) {
-    const k = this.backdrop ? 0.25 : 1;
+    // PS1 style snaps to every other render pixel: the wobble shows without shaking the logo apart.
+    const k = this.backdrop ? 0.25 : this.ps1 ? 0.5 : 1;
     this.snap.value.set(this.w * rs * k, this.h * rs * k);
   }
 
   init() {
     // The splash is drawn crisp, with smoothed edges; behind other pages the bed stays coarse and light.
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: !this.isBackdropEl(), alpha: true, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: !this.isBackdropEl() && this.dataset.style === 'smooth', alpha: true, powerPreference: 'high-performance' });
     this.renderer.setClearColor(0x000000, 0);
     this.octx = this.overlay.getContext('2d');
 
@@ -584,6 +624,10 @@ class GardenSplash extends HTMLElement {
       this.bee.materials.forEach((m) => m.dispose());
       this.bee = null;
     }
+    if (this.weather) {
+      this.weather.disposables.forEach((x) => x.dispose());
+      this.weather = null;
+    }
     if (this.onNightKey) document.removeEventListener('keydown', this.onNightKey);
     document.documentElement.classList.remove('garden-night');
     if (this.sky) {
@@ -604,6 +648,13 @@ class GardenSplash extends HTMLElement {
     this.world = d.mode === 'world';
     // Either way it sits behind a page: no overlay, no inspecting, fewer frames.
     this.backdrop = this.background || this.world;
+    // Weather and light follow the real season on the splash, unless turned off or fixed to one.
+    this.weatherOn = !this.backdrop && d.weather !== 'false';
+    this.seasonSetting = d.season || 'auto';
+    this.south = d.hemisphere === 'south';
+    // The splash's graphics style: PS1 (low resolution, wobble, dither) or smooth.
+    this.ps1 = this.backdrop || d.style !== 'smooth';
+    this.classList.toggle('is-ps1', this.ps1);
     this.waveSpeed = clamp(parseFloat(d.waveSpeed) || 1, 0.2, 3);
     this.densityName = DENSITY[d.density] ? d.density : 'lush';
     this.heroColor = parseColor(d.centerColor) || [240, 78, 98];
@@ -647,15 +698,20 @@ class GardenSplash extends HTMLElement {
 
     // Every vertex snaps to a coarse screen grid, the way early console 3D wobbled.
     this.snap = { value: new THREE.Vector2(160, 90) };
+    // And, like the PlayStation, colors are cut to 32 levels per channel with
+    // a 4x4 ordered dither (uDither 1), except in the smooth graphics style.
+    this.dither = { value: this.ps1 === false ? 0 : 1 };
     const snap = (mat) => {
       mat.onBeforeCompile = (shader) => {
         shader.uniforms.uSnap = this.snap;
+        shader.uniforms.uDither = this.dither;
         shader.vertexShader = shader.vertexShader
           .replace('void main() {', 'uniform vec2 uSnap;\nvoid main() {')
           .replace(
             '#include <project_vertex>',
             '#include <project_vertex>\n  gl_Position.xy = floor(gl_Position.xy / gl_Position.w * uSnap + 0.5) / uSnap * gl_Position.w;'
           );
+        shader.fragmentShader = shader.fragmentShader.replace('void main() {', DITHER_GLSL + 'void main() {').replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.rgb = psxColor(gl_FragColor.rgb);');
       };
       return mat;
     };
@@ -1119,7 +1175,7 @@ class GardenSplash extends HTMLElement {
     // Behind other pages the bed is drawn small and scaled up with hard pixels;
     // the splash is drawn at full sharpness and steps down only if it must.
     this.rsFloor = renderScale(W);
-    this.rs = this.backdrop ? this.rsFloor : Math.min(this.rsCap || 9, splashScale(W, this.dpr));
+    this.rs = this.backdrop ? this.rsFloor : Math.min(this.rsCap || 9, this.ps1 ? ps1Scale(W) : splashScale(W, this.dpr));
     this.renderer.setPixelRatio(this.rs);
     this.rsNow = this.rs;
     this.renderer.setSize(W, H, false);
@@ -1771,6 +1827,7 @@ class GardenSplash extends HTMLElement {
 
     if (this.background && !this.reduced) this.wave(t);
     if (!this.background) this.drift(t, dt);
+    if (this.weatherOn) this.updateWeather(t, dt);
     if (this.arranged && !this.background && !this.reduced && !this.night) this.blow(t);
     if (this.arranged && !this.backdrop && !this.reduced) {
       if (!this.night) this.flyBee(t, dt);
@@ -1961,6 +2018,8 @@ class GardenSplash extends HTMLElement {
    */
   flyBee(t, dt) {
     if (!this.bee) {
+      // No bees in winter.
+      if (this.seasonNow && !SEASON_LOOK[this.seasonNow.name].bees) return;
       if (this.nextBee === undefined) this.nextBee = t + 5 + Math.random() * 6;
       if (t < this.nextBee) return;
       this.buildBee();
@@ -2027,7 +2086,8 @@ class GardenSplash extends HTMLElement {
         } else {
           g.visible = false;
           bee.phase = 'away';
-          this.nextBee = t + 14 + Math.random() * 16;
+          const gap = this.seasonNow ? SEASON_LOOK[this.seasonNow.name].bees : [14, 30];
+          this.nextBee = gap ? t + lerp(gap[0], gap[1], Math.random()) : Infinity;
         }
       }
     } else if (bee.phase === 'land' || bee.phase === 'up') {
@@ -2161,14 +2221,7 @@ class GardenSplash extends HTMLElement {
     this.renderer.setClearColor(0x000000, 0);
     this.camera.fov = FOV;
     this.camera.updateProjectionMatrix();
-    if (this.keyLight) {
-      this.keyLight.intensity = 2.6;
-      this.keyLight.color.set(0xffffff);
-    }
-    if (this.ambient) {
-      this.ambient.intensity = 0.9;
-      this.ambient.color.copy(toColor(mix(POWDER, this.soil, 0.4)));
-    }
+    this.applyDayLight();
     this.scene.fog.color.copy(this.fogColor);
     this.scene.fog.near = this.camDist + 30;
     this.scene.fog.far = this.camDist + 320;
@@ -2240,7 +2293,8 @@ class GardenSplash extends HTMLElement {
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
       geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
       // Sizes in screen pixels (three scales them by the pixel ratio).
-      const mat = new THREE.PointsMaterial({ size, sizeAttenuation: false, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      // PS1 style: hard square pixels; smooth style: soft round glows.
+      const mat = new THREE.PointsMaterial({ size: this.ps1 ? Math.max(1, Math.round(size * 0.25)) / (this.rs || 1) : size, sizeAttenuation: false, map: this.ps1 ? null : tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
       const pts = new THREE.Points(geo, mat);
       pts.frustumCulled = false;
       pts.renderOrder = -1;
@@ -2258,7 +2312,7 @@ class GardenSplash extends HTMLElement {
     });
     const logoPts = points(logo.length, 8);
 
-    // The far sky: many faint stars, a few constellations joined by faint lines.
+    // The far sky: many faint stars, and a few brighter ones grouped in constellations.
     const field = [];
     for (let i = 0; i < 1100; i++) {
       field.push({
@@ -2268,7 +2322,6 @@ class GardenSplash extends HTMLElement {
         ph: Math.random() * TAU,
       });
     }
-    const lines = [];
     for (let k = 0; k < 7; k++) {
       // Around the edges of the view, away from the logo.
       const a = Math.random() * TAU;
@@ -2278,7 +2331,6 @@ class GardenSplash extends HTMLElement {
       for (let j = 0; j < n; j++) {
         const p = c.clone().add(new THREE.Vector3((Math.random() - 0.5) * viewW * 0.16, (Math.random() - 0.5) * viewH * 0.16, 0));
         field.push({ p, col: WHITE, tw: 0.6 + Math.random(), ph: Math.random() * TAU, bright: true });
-        if (prev) lines.push(prev, p);
         prev = p;
       }
     }
@@ -2286,25 +2338,32 @@ class GardenSplash extends HTMLElement {
     const fp = fieldPts.geometry.attributes.position;
     field.forEach((s, i) => fp.setXYZ(i, s.p.x, s.p.y, s.p.z));
     fp.needsUpdate = true;
-    const lineGeo = new THREE.BufferGeometry().setFromPoints(lines);
-    const lineMat = new THREE.LineBasicMaterial({ color: toColor(WHITE), transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
-    const constellations = new THREE.LineSegments(lineGeo, lineMat);
-    constellations.renderOrder = -1;
-    group.add(constellations);
-    disposables.push(lineGeo, lineMat);
-
-    // Soft glows of color deep in the sky, in the house palette.
-    const glows = [this.heroAccent, this.foliage, this.heroColor].map((c, k) => {
-      const m = new THREE.SpriteMaterial({ map: tex, color: toColor(c), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
-      const sp = new THREE.Sprite(m);
-      const a = (k / 3) * TAU + Math.random();
-      sp.position.set(eye.x + Math.cos(a) * viewW * 0.3, eye.y + Math.sin(a) * viewH * 0.3, eye.z + D * 1.4);
-      sp.scale.setScalar(viewW * (0.5 + Math.random() * 0.3));
-      sp.renderOrder = -2;
-      group.add(sp);
-      disposables.push(m);
-      return sp;
-    });
+    // The sky itself: a coarse grid of colors, deep ocean blue with patches
+    // of wine and teal, dithered in banded steps the PS1 way.
+    const skyGeo = new THREE.PlaneGeometry(viewW * 2.4, viewH * 2.4, 12, 9);
+    const sc = [];
+    const sp = skyGeo.attributes.position;
+    const blobs = [this.heroAccent, this.foliage, this.heroColor].map((c) => [c, Math.random() * TAU, 0.2 + Math.random() * 0.25]);
+    for (let i = 0; i < sp.count; i++) {
+      const u = sp.getX(i) / (viewW * 1.2);
+      const v = sp.getY(i) / (viewH * 1.2);
+      let c = mix([5, 7, 28], [16, 20, 66], Math.max(0, 1 - Math.hypot(u, v) * 0.9));
+      for (const [tint, a, r] of blobs) {
+        const d = Math.hypot(u - Math.cos(a) * 0.45, v - Math.sin(a) * 0.4);
+        c = mix(c, mix(tint, [10, 12, 40], 0.7), Math.max(0, 1 - d / r) * 0.6);
+      }
+      // Vertex colors are linear, like everything three.js shades.
+      const lin = toColor(c);
+      sc.push(lin.r, lin.g, lin.b);
+    }
+    skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
+    const skyMat = this.snapMaterial(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide }));
+    const skyPlane = new THREE.Mesh(skyGeo, skyMat);
+    skyPlane.position.set(eye.x, eye.y, eye.z + D * 1.45);
+    skyPlane.renderOrder = -3;
+    group.add(skyPlane);
+    disposables.push(skyGeo, skyMat);
+    const glows = [skyPlane];
 
     // A shooting star: a short line, bright at its head, fading along its tail.
     const shootGeo = new THREE.BufferGeometry();
@@ -2350,10 +2409,11 @@ class GardenSplash extends HTMLElement {
     const dark = smooth(range(p, 0.1, 0.8));
     const NIGHT = [7, 10, 38];
     this.renderer.setClearColor(toColor(NIGHT), dark);
-    this.keyLight.intensity = lerp(2.6, 0.7, dark);
-    this.keyLight.color.copy(toColor(mix(WHITE, POWDER, dark)));
-    this.ambient.intensity = lerp(0.9, 0.45, dark);
-    this.ambient.color.copy(toColor(mix(mix(POWDER, this.soil, 0.4), OCEAN, dark * 0.7)));
+    const day = this.dayLight();
+    this.keyLight.intensity = lerp(day.key, 0.7, dark);
+    this.keyLight.color.copy(toColor(mix(day.keyColor, POWDER, dark)));
+    this.ambient.intensity = lerp(day.amb, 0.45, dark);
+    this.ambient.color.copy(toColor(mix(day.ambColor, OCEAN, dark * 0.7)));
     this.scene.fog.color.copy(this.fogColor).lerp(toColor(NIGHT), dark);
     // The haze that softens the bed from above would swallow it as the camera turns: push it away.
     const haze = smooth(range(p, 0, 0.3));
@@ -2384,10 +2444,7 @@ class GardenSplash extends HTMLElement {
       fc.setXYZ(i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
     });
     fc.needsUpdate = true;
-    sky.group.children.forEach((o) => {
-      if (o.isLineSegments) o.material.opacity = 0.18 * show;
-    });
-    sky.glows.forEach((g, k) => (g.material.opacity = (0.07 + 0.02 * Math.sin(t * 0.3 + k)) * show));
+    sky.glows.forEach((g) => (g.material.opacity = dark));
 
     // Now and then a shooting star, like the bees by day.
     if (!this.reduced && p >= 1) {
@@ -2421,6 +2478,218 @@ class GardenSplash extends HTMLElement {
 
     // Flower eyes look up at the sky too.
     this.viewDirty = true;
+  }
+
+  /* ---------------- seasons and weather ---------------- */
+
+  /*
+   * The season now (by the visitor's date, or the one chosen in the theme
+   * editor) and how much of each kind of weather it brings, rising to a
+   * peak mid-season and shading into the next one at its end: the last
+   * weeks of autumn bring the first snow, early spring the last of it,
+   * late summer the first falling leaves.
+   */
+  season() {
+    const fixed = SEASON_NAMES.includes(this.seasonSetting);
+    const s = fixed ? { name: this.seasonSetting, p: 0.5 } : seasonOf(new Date(), this.south);
+    const peak = 0.45 + 0.55 * Math.sin(Math.PI * s.p);
+    const w = { snow: 0, rain: 0, leaves: 0, petals: 0, pollen: 0 };
+    if (s.name === 'winter') {
+      w.snow = peak;
+    } else if (s.name === 'spring') {
+      w.rain = 0.9 * peak;
+      w.petals = 0.6;
+      w.snow = Math.max(0, 0.25 - s.p) * 1.6;
+    } else if (s.name === 'summer') {
+      w.pollen = peak;
+      w.leaves = Math.max(0, s.p - 0.8) * 2;
+    } else {
+      w.leaves = peak;
+      w.snow = Math.max(0, s.p - 0.75) * 1.6;
+    }
+    return Object.assign(s, { weights: w });
+  }
+
+  dayLight() {
+    const look = SEASON_LOOK[(this.seasonNow && this.seasonNow.name) || 'spring'];
+    const base = mix(POWDER, this.soil, 0.4);
+    const wet = this.weather ? this.weather.wet : 0;
+    return {
+      key: look.key * (1 - 0.18 * wet),
+      keyColor: look.keyColor,
+      amb: look.amb,
+      ambColor: look.ambTint ? mix(base, look.ambTint, 0.3) : base,
+    };
+  }
+
+  applyDayLight() {
+    if (!this.keyLight || !this.ambient || this.night) return;
+    const day = this.dayLight();
+    this.keyLight.intensity = day.key;
+    this.keyLight.color.copy(toColor(day.keyColor));
+    this.ambient.intensity = day.amb;
+    this.ambient.color.copy(toColor(day.ambColor));
+  }
+
+  /* Particles for every kind of weather, made once; each frame only as many are drawn as the weather calls for. */
+  buildWeather() {
+    const group = new THREE.Group();
+    const disposables = [];
+    const pts = (n, color, px) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+      geo.setDrawRange(0, 0);
+      const mat = new THREE.PointsMaterial({ color: toColor(color), size: px / Math.max(0.5, this.rs || 1), sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false, fog: false });
+      const o = new THREE.Points(geo, mat);
+      o.frustumCulled = false;
+      group.add(o);
+      disposables.push(geo, mat);
+      return o;
+    };
+    const flakes = (n, geo, mat, colors) => {
+      const o = new THREE.InstancedMesh(geo, mat, n);
+      o.count = 0;
+      o.frustumCulled = false;
+      const c = new THREE.Color();
+      for (let i = 0; i < n; i++) o.setColorAt(i, c.copy(toColor(pick(Math.random, colors))));
+      group.add(o);
+      disposables.push(o);
+      return o;
+    };
+    const rainGeo = new THREE.BufferGeometry();
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(180 * 6), 3));
+    rainGeo.setDrawRange(0, 0);
+    const rainMat = new THREE.LineBasicMaterial({ color: toColor(mix(POWDER, OCEAN, 0.25)), transparent: true, opacity: 0.6, depthWrite: false, fog: false });
+    const rain = new THREE.LineSegments(rainGeo, rainMat);
+    rain.frustumCulled = false;
+    group.add(rain);
+    disposables.push(rainGeo, rainMat);
+    const kinds = {
+      // Pale blue-grey, so it shows against the white page as well as over the flowers.
+      snow: { n: 380, o: pts(380, [196, 208, 230], 3) },
+      pollen: { n: 140, o: pts(140, [242, 178, 70], 2) },
+      rain: { n: 180, o: rain },
+      leaves: { n: 60, o: flakes(60, this.geometries.leaf, this.materials.foliage, [[166, 39, 73], [201, 104, 52], [222, 150, 60], [140, 70, 40], [240, 78, 98]]) },
+      petals: { n: 50, o: flakes(50, this.geometries.round, this.materials.petal, [[255, 255, 255], [255, 210, 220], [240, 78, 98], [185, 229, 251]]) },
+    };
+    // Each particle: position, speed, and a phase for its sway. y below -1e5 means not in the air.
+    for (const k of Object.values(kinds)) k.p = Array.from({ length: k.n }, () => ({ x: 0, y: -1e6, z: 0, s: Math.random(), ph: Math.random() * TAU, spin: Math.random() * TAU }));
+    group.renderOrder = 5;
+    this.scene.add(group);
+    this.weather = { group, disposables, kinds, wet: 0, wind: 0, shower: Math.random() * TAU, flurry: Math.random() * TAU, dummy: new THREE.Object3D() };
+  }
+
+  /* Where a particle at height z can be and still be on screen: the view narrows toward the camera. */
+  weatherBox(z) {
+    const k = (this.camDist - z) / this.camDist;
+    return { x0: this.w / 2 - (this.w / 2) * k, x1: this.w / 2 + (this.w / 2) * k, y0: this.h / 2 - (this.h / 2) * k, y1: this.h / 2 + (this.h / 2) * k };
+  }
+
+  updateWeather(t, dt) {
+    if (!this.camDist || !this.w) return;
+    // The season is looked at again every minute, so a visit across a season's turn still follows it.
+    if (!this.seasonNow || t - (this.seasonAt || 0) > 60) {
+      this.seasonNow = this.season();
+      this.seasonAt = t;
+      this.applyDayLight();
+    }
+    if (!this.weather) this.buildWeather();
+    const W = this.weather;
+    const quiet = this.reduced || !!this.night;
+    W.group.visible = !quiet;
+    if (quiet) return;
+    const w = this.seasonNow.weights;
+
+    // How hard it is coming down right now: snow in flurries, rain in passing showers.
+    const flurry = 0.55 + 0.45 * Math.sin(t * 0.05 + W.flurry);
+    const shower = smooth(clamp((Math.sin((t * TAU) / 80 + W.shower) - 0.1) * 2, 0, 1));
+    const level = {
+      snow: w.snow * flurry,
+      rain: w.rain * shower,
+      leaves: w.leaves * (0.7 + 0.3 * Math.sin(t * 0.07)),
+      // Petals drift between showers.
+      petals: w.petals * (1 - shower),
+      pollen: w.pollen,
+    };
+    const wetBefore = W.wet;
+    W.wet = lerp(W.wet, level.rain > 0.05 ? 1 : 0, 1 - Math.exp(-dt * 0.8));
+    if (Math.abs(W.wet - wetBefore) > 0.002) this.applyDayLight();
+
+    // The wind: a light drift, pushed hard while a gust sweeps through.
+    const gust = this.gust ? this.gust.dir * 140 * this.gust.strength : 0;
+    W.wind = lerp(W.wind, (this.seasonNow.name === 'autumn' ? 25 : 10) + gust, 1 - Math.exp(-dt * 2));
+    const d = W.dummy;
+
+    for (const [name, kind] of Object.entries(W.kinds)) {
+      const want = Math.round(kind.n * clamp(level[name], 0, 1));
+      let shown = 0;
+      for (let i = 0; i < kind.n; i++) {
+        const q = kind.p[i];
+        const live = q.y > -1e5;
+        if (!live || q.out) {
+          // Past the number wanted, a particle that lands stays down.
+          if (i >= want) {
+            q.y = -1e6;
+            q.out = false;
+            continue;
+          }
+          // (Re)spawn at a random height: at the top of the view (the bottom for rising
+          // pollen), or anywhere in it when the weather first starts.
+          q.z = lerp(30, this.camDist * 0.45, Math.random());
+          const b = this.weatherBox(q.z);
+          q.x = lerp(b.x0 - 40, b.x1 + 40, Math.random());
+          if (name === 'pollen') q.y = live ? b.y0 - 10 : lerp(b.y0, b.y1, Math.random());
+          else q.y = live ? b.y1 + 20 : lerp(b.y0, b.y1 + 20, Math.random());
+          q.out = false;
+        }
+        // Each kind falls (or rises) in its own way. World y is up the screen.
+        const sway = Math.sin(t * (1.1 + q.s) + q.ph);
+        let vx = 0;
+        let vy = 0;
+        if (name === 'snow') {
+          vy = -(25 + 35 * q.s);
+          vx = W.wind * 0.6 + sway * 14;
+        } else if (name === 'rain') {
+          vy = -(700 + 250 * q.s);
+          vx = W.wind * 1.5 - 120;
+        } else if (name === 'leaves' || name === 'petals') {
+          vy = -((name === 'leaves' ? 50 : 30) + 35 * q.s);
+          vx = W.wind * 1.4 + sway * 38;
+          q.spin += dt * (1.5 + q.s * 2);
+        } else {
+          vy = 8 + 10 * q.s;
+          vx = W.wind * 0.4 + sway * 10;
+        }
+        q.x += vx * dt;
+        q.y += vy * dt;
+        const b = this.weatherBox(q.z);
+        if (q.y < b.y0 - 40 || q.y > b.y1 + 40 || q.x < b.x0 - 120 || q.x > b.x1 + 120) q.out = true;
+
+        if (name === 'snow' || name === 'pollen') {
+          kind.o.geometry.attributes.position.setXYZ(shown, q.x, q.y, q.z);
+        } else if (name === 'rain') {
+          // A short streak along its fall.
+          const pos = kind.o.geometry.attributes.position;
+          pos.setXYZ(shown * 2, q.x, q.y, q.z);
+          pos.setXYZ(shown * 2 + 1, q.x - vx * 0.035, q.y - vy * 0.035, q.z);
+        } else {
+          const size = this.base * (name === 'leaves' ? 0.9 : 0.55);
+          d.position.set(q.x, q.y, q.z);
+          d.rotation.set(Math.sin(q.spin) * 1.2, q.spin * 0.7, q.spin + q.ph);
+          d.scale.set(size, size * 0.6, size * 0.6);
+          d.updateMatrix();
+          kind.o.setMatrixAt(shown, d.matrix);
+        }
+        shown++;
+      }
+      if (kind.o.isInstancedMesh) {
+        kind.o.count = shown;
+        kind.o.instanceMatrix.needsUpdate = true;
+      } else {
+        kind.o.geometry.setDrawRange(0, name === 'rain' ? shown * 2 : shown);
+        kind.o.geometry.attributes.position.needsUpdate = true;
+      }
+    }
   }
 
   /* ---------------- zoom ---------------- */
@@ -2681,7 +2950,8 @@ class GardenSplash extends HTMLElement {
     }
     if (done) {
       this.gust = null;
-      this.nextGust = t + 7 + Math.random() * 8;
+      const gap = this.seasonNow ? SEASON_LOOK[this.seasonNow.name].gusts : [7, 15];
+      this.nextGust = t + lerp(gap[0], gap[1], Math.random());
     }
   }
 

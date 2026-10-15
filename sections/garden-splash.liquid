@@ -48,6 +48,10 @@
   data-density="{{ section.settings.density }}"
   {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
   {% if flower_logo_mobile_url != blank %}data-flower-logo-mobile="{{ flower_logo_mobile_url }}"{% endif %}
+  data-style="{{ section.settings.graphics_style | default: 'ps1' }}"
+  data-weather="{% if section.settings.weather == false %}false{% else %}true{% endif %}"
+  data-season="{{ section.settings.season | default: 'auto' }}"
+  data-hemisphere="{{ section.settings.hemisphere | default: 'north' }}"
   style="--gs-ground: {{ section.settings.soil_color }}; --gs-ink: {{ hud_ink }}; --gs-hero: {{ section.settings.center_color }}; --gs-logo-width: {{ logo_width }}px; --gs-menu-image-width: {{ section.settings.menu_image_width | default: 64 }}px;"
 >
   <canvas class="garden-splash__canvas" data-garden-canvas aria-hidden="true"></canvas>
@@ -322,13 +326,18 @@
     -webkit-touch-callout: none;
   }
 
-  /* The 3D render, drawn at the screen's own sharpness. */
+  /* The 3D render. In the PS1 style it is drawn at a low resolution and scaled up with hard pixels. */
   .garden-splash__canvas {
     position: absolute;
     inset: 0;
     display: block;
     width: 100%;
     height: 100%;
+  }
+
+  .garden-splash.is-ps1 .garden-splash__canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
   }
 
   .garden-splash__overlay {
@@ -1016,6 +1025,78 @@
         {
           "value": "packed",
           "label": "Packed — most flowers, the logo filled in solid"
+        }
+      ]
+    },
+    {
+      "type": "header",
+      "content": "Look & weather"
+    },
+    {
+      "type": "select",
+      "id": "graphics_style",
+      "label": "Graphics style",
+      "default": "ps1",
+      "options": [
+        {
+          "value": "ps1",
+          "label": "PS1 — low resolution, wobble, dithered color"
+        },
+        {
+          "value": "smooth",
+          "label": "Smooth — sharp, with smoothed edges"
+        }
+      ]
+    },
+    {
+      "type": "checkbox",
+      "id": "weather",
+      "label": "Seasonal weather",
+      "default": true,
+      "info": "The weather and light follow the real season on each visitor's date: snow in winter, passing showers and drifting petals in spring, warm light and floating pollen in summer, falling leaves and stronger wind in autumn. It builds toward the middle of each season and shades into the next. Off for visitors who turn off motion."
+    },
+    {
+      "type": "select",
+      "id": "season",
+      "label": "Season",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Automatic, by today's date"
+        },
+        {
+          "value": "spring",
+          "label": "Always spring"
+        },
+        {
+          "value": "summer",
+          "label": "Always summer"
+        },
+        {
+          "value": "autumn",
+          "label": "Always autumn"
+        },
+        {
+          "value": "winter",
+          "label": "Always winter"
+        }
+      ],
+      "info": "Choose one to preview it, then set it back to Automatic."
+    },
+    {
+      "type": "select",
+      "id": "hemisphere",
+      "label": "Hemisphere",
+      "default": "north",
+      "options": [
+        {
+          "value": "north",
+          "label": "Northern (winter in December)"
+        },
+        {
+          "value": "south",
+          "label": "Southern (summer in December)"
         }
       ]
     },
