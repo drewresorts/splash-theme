@@ -14,6 +14,9 @@
  * Interaction is utilitarian: crosshair and coordinate readout, hover or
  * tap to inspect, press and drag to speed up growth, tap to recolor a
  * flower (nearby eyes blink). Once arranged, the logo itself opens the menu.
+ * The splash can be zoomed into, with no controls shown: scroll or pinch on
+ * a trackpad, pinch on a touchscreen, or press and hold then slide up/down.
+ * Zoomed in, dragging moves around and the render sharpens.
  *
  * Modes (data-mode):
  *   (none)      the splash: grows, forms the logo, then stays as the
@@ -451,6 +454,7 @@ class GardenSplash extends HTMLElement {
     this.setupScene();
     this.bindEvents();
     this.bindEgg();
+    if (!this.backdrop) this.bindZoom();
     if (this.backdrop) {
       // The bed sits behind the page, so the eyes follow the pointer across it.
       this.onWindowPointer = (e) => {
@@ -919,7 +923,7 @@ class GardenSplash extends HTMLElement {
       const p = this.pointer;
       if (!p.down || p.id !== e.pointerId) return;
       const [x, y] = local(e);
-      if (Math.hypot(x - p.sx, y - p.sy) < 14 && e.timeStamp - p.st < 450) this.tap(x, y);
+      if (!this.gestured && Math.hypot(x - p.sx, y - p.sy) < 14 && e.timeStamp - p.st < 450) this.tap(x, y);
       p.down = false;
       if (e.pointerType !== 'mouse') p.active = false;
     };
@@ -1053,6 +1057,7 @@ class GardenSplash extends HTMLElement {
     // The 3D render is drawn small and scaled up by CSS with nearest-neighbour.
     this.rs = renderScale(W);
     this.renderer.setPixelRatio(this.rs);
+    this.rsNow = this.rs;
     this.renderer.setSize(W, H, false);
     this.snap.value.set(W * this.rs * 0.25, H * this.rs * 0.25);
 
@@ -1069,6 +1074,7 @@ class GardenSplash extends HTMLElement {
     this.overlay.height = Math.round(H * this.dpr);
 
     this.camBase = this.camera.position.clone();
+    if (this.view) this.resetView(true);
 
     if (!this.maskReady) return;
     // A small height change (mobile browser chrome) keeps the same field, re-placed.
@@ -1452,7 +1458,7 @@ class GardenSplash extends HTMLElement {
       v.set(f.x, this.h - f.y, f.z).project(this.camera);
       f.sx = (v.x * 0.5 + 0.5) * this.w;
       f.sy = (-v.y * 0.5 + 0.5) * this.h;
-      f.sr = f.r * f.g * (this.camDist / (this.camDist - f.z));
+      f.sr = f.r * f.g * (this.camDist / (this.camera.position.z - f.z));
     }
   }
 
@@ -1545,7 +1551,8 @@ class GardenSplash extends HTMLElement {
     if (!n) return 1;
     let sum = 0;
     for (const f of this.flowers) sum += f.g;
-    return sum / n;
+    // Zoomed in, flowers are bigger on screen, so reaches grow with them.
+    return (sum / n) * (this.view ? this.view.z : 1);
   }
 
   nearest(x, y, reach) {
@@ -1663,7 +1670,7 @@ class GardenSplash extends HTMLElement {
     }
 
     if (this.background && !this.reduced) this.wave(t);
-    if (this.arranged && !this.background) this.drift(t, dt);
+    if (!this.background) this.drift(t, dt);
     if (this.arranged && !this.background && !this.reduced) this.blow(t);
     if (this.egg && this.egg.pulse > 0) this.eggReact(dt);
 
@@ -1688,6 +1695,10 @@ class GardenSplash extends HTMLElement {
       this.classList.add('is-bloomed');
     }
 
+    if (this.viewDirty) {
+      this.viewDirty = false;
+      this.project();
+    }
     if (this.backdrop) {
       this.inspected = null;
     } else if (ptr.active && ptr.type === 'mouse' && !ptr.down) {
@@ -1730,23 +1741,253 @@ class GardenSplash extends HTMLElement {
    */
   drift(t, dt) {
     if (!this.camBase) return;
-    const motion = this.reduced ? 0 : smooth(range(t - (this.calmFrom || 0), 0, 3));
+    const v = this.view;
+    if (v) this.easeView(dt);
+    const Z = v ? v.z : 1;
+    const cx = v ? v.cx : this.w / 2;
+    const cy = v ? this.h - v.cy : this.h / 2;
+    const motion = this.reduced || !this.arranged ? 0 : smooth(range(t - (this.calmFrom || 0), 0, 3));
     const nav = this.classList.contains('is-nav-open') && !this.reduced ? 1 : 0;
     this.navLean = lerp(this.navLean || 0, nav, 1 - Math.exp(-dt * 5));
     const k = t * 0.12;
-    const sway = this.camDist * 0.035 * motion;
+    const sway = (this.camDist * 0.035 * motion) / Z;
     const c = this.camera;
-    c.position.set(
-      this.camBase.x + Math.sin(k) * sway,
-      this.camBase.y + Math.sin(k * 0.77 + 1) * sway * 0.7,
-      this.camBase.z * (1 - 0.06 * this.navLean)
-    );
+    c.position.set(cx + Math.sin(k) * sway, cy + Math.sin(k * 0.77 + 1) * sway * 0.7, (this.camBase.z / Z) * (1 - 0.06 * this.navLean));
     const look = this.logoBox ? [this.logoBox.x + this.logoBox.w / 2, this.h - (this.logoBox.y + this.logoBox.h / 2)] : [this.w / 2, this.h / 2];
-    c.lookAt(lerp(this.w / 2, look[0], this.navLean), lerp(this.h / 2, look[1], this.navLean), 0);
+    c.lookAt(lerp(cx, look[0], this.navLean), lerp(cy, look[1], this.navLean), 0);
     if (this.keyLight) {
       const a = k * 0.6 * motion;
       this.keyLight.position.set(-0.7 * Math.cos(a) - 0.5 * Math.sin(a), 0.9 * Math.cos(a * 0.8), 1.2);
     }
+  }
+
+  /* ---------------- zoom ---------------- */
+
+  /*
+   * The view: zoom z (1 = the whole logo, as laid out) and the screen point
+   * cx, cy (y down) at the center of the view. Gestures set the targets; the
+   * view eases to them. At zoom z one screen pixel covers 1/z of the bed.
+   */
+  resetView(now) {
+    const v = this.view || (this.view = {});
+    v.tz = 1;
+    v.tcx = this.w / 2;
+    v.tcy = this.h / 2;
+    if (now || v.z === undefined) Object.assign(v, { z: 1, cx: v.tcx, cy: v.tcy });
+    this.classList.remove('is-zoomed');
+  }
+
+  maxZoom() {
+    // Close enough that one flower fills much of the screen, never inside the petals.
+    return Math.max(1, Math.min(8, this.camDist / 120));
+  }
+
+  /* Zooms to z, keeping the bed point (wx, wy) under the screen point (sx, sy). */
+  zoomTo(z, wx, wy, sx, sy) {
+    const v = this.view;
+    v.tz = clamp(z, 1, this.maxZoom());
+    v.tcx = wx - (sx - this.w / 2) / v.tz;
+    v.tcy = wy - (sy - this.h / 2) / v.tz;
+    this.clampView();
+  }
+
+  /* The bed point under a screen point, for the target view. */
+  bedAt(sx, sy) {
+    const v = this.view;
+    return [v.tcx + (sx - this.w / 2) / v.tz, v.tcy + (sy - this.h / 2) / v.tz];
+  }
+
+  /* Keeps the view inside the bed as laid out on screen. */
+  clampView() {
+    const v = this.view;
+    const hw = this.w / 2 / v.tz;
+    const hh = this.h / 2 / v.tz;
+    v.tcx = clamp(v.tcx, hw, this.w - hw);
+    v.tcy = clamp(v.tcy, hh, this.h - hh);
+    const zoomed = v.tz > 1.02;
+    if (zoomed !== this.classList.contains('is-zoomed')) this.classList.toggle('is-zoomed', zoomed);
+    this.start();
+  }
+
+  easeView(dt) {
+    const v = this.view;
+    if (this.classList.contains('is-nav-open') && v.tz !== 1) this.resetView();
+    const f = 1 - Math.exp(-dt * 14);
+    const moving = Math.abs(v.tz - v.z) > 1e-4 || Math.abs(v.tcx - v.cx) > 0.01 || Math.abs(v.tcy - v.cy) > 0.01;
+    if (!moving) return;
+    v.z += (v.tz - v.z) * f;
+    v.cx += (v.tcx - v.cx) * f;
+    v.cy += (v.tcy - v.cy) * f;
+    if (Math.abs(v.tz - v.z) < 1e-3) v.z = v.tz;
+    // Taps and the inspector use on-screen positions, which a zoom moves.
+    this.viewDirty = true;
+    clearTimeout(this.detailTimer);
+    this.detailTimer = window.setTimeout(() => this.sharpen(), 160);
+  }
+
+  /*
+   * Once the view settles, the low-resolution render sharpens with the zoom,
+   * so the flowers' detail shows instead of bigger pixels.
+   */
+  sharpen() {
+    if (!this.renderer || !this.view) return;
+    const Z = this.view.z;
+    const most = Math.max(this.rs, Math.min(this.dpr || 1, 1.5));
+    const rs = Math.round(Math.min(most, this.rs * (1 + (Z - 1) * 0.6)) * 8) / 8;
+    if (rs === this.rsNow) return;
+    this.rsNow = rs;
+    this.renderer.setPixelRatio(rs);
+    this.renderer.setSize(this.w, this.h, false);
+    this.snap.value.set(this.w * rs * 0.25, this.h * rs * 0.25);
+    this.start();
+  }
+
+  /*
+   * The gestures a visitor would try without being told, and no others:
+   *   scroll wheel or trackpad: zoom toward the cursor (a trackpad pinch
+   *     arrives as a wheel event with ctrlKey; Safari sends gesture events);
+   *   two fingers: pinch to zoom, and move together to pan;
+   *   one finger held still, then slid: up zooms in, down zooms out;
+   *   zoomed in, one finger or the mouse drags the view.
+   * A gesture never also counts as a tap, so it doesn't open the menu,
+   * recolor a flower or count toward the hidden game.
+   */
+  bindZoom() {
+    this.resetView(true);
+    const local = (e) => {
+      const r = this.getBoundingClientRect();
+      return [e.clientX - r.left, e.clientY - r.top];
+    };
+    const navOpen = () => this.classList.contains('is-nav-open');
+    const pts = new Map();
+    let g = null;
+    let holdTimer = 0;
+
+    this.addEventListener(
+      'wheel',
+      (e) => {
+        if (navOpen() || !this.renderer || this.failed) return;
+        e.preventDefault();
+        const [x, y] = local(e);
+        const d = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
+        const [wx, wy] = this.bedAt(x, y);
+        this.zoomTo(this.view.tz * Math.exp(-d * (e.ctrlKey ? 0.012 : 0.0025)), wx, wy, x, y);
+        this.markInteracted();
+      },
+      { passive: false }
+    );
+
+    let safari = null;
+    this.addEventListener('gesturestart', (e) => {
+      e.preventDefault();
+      const [x, y] = local(e);
+      safari = { z0: this.view.tz, x, y, w: this.bedAt(x, y) };
+    });
+    this.addEventListener('gesturechange', (e) => {
+      e.preventDefault();
+      if (safari) this.zoomTo(safari.z0 * e.scale, safari.w[0], safari.w[1], safari.x, safari.y);
+    });
+    this.addEventListener('gestureend', (e) => {
+      e.preventDefault();
+      safari = null;
+    });
+
+    const endGrowth = () => {
+      this.pointer.down = false;
+      this.gestured = true;
+    };
+    this.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (navOpen() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        this.gestured = false;
+        const [x, y] = local(e);
+        pts.set(e.pointerId, { x, y });
+        clearTimeout(holdTimer);
+        if (pts.size === 2) {
+          const [a, b] = [...pts.values()];
+          const mx = (a.x + b.x) / 2;
+          const my = (a.y + b.y) / 2;
+          g = { mode: 'pinch', d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), z0: this.view.tz, w: this.bedAt(mx, my) };
+          endGrowth();
+        } else if (pts.size === 1) {
+          g = { mode: null, id: e.pointerId, sx: x, sy: y, lx: x, ly: y };
+          if (e.pointerType !== 'mouse') {
+            holdTimer = window.setTimeout(() => {
+              if (!g || g.mode !== null || g.id !== e.pointerId) return;
+              g.mode = 'hold';
+              g.z0 = this.view.tz;
+              g.w = this.bedAt(g.lx, g.ly);
+              g.hx = g.lx;
+              g.hy = g.ly;
+              endGrowth();
+              if (navigator.vibrate) navigator.vibrate(8);
+            }, 320);
+          }
+        }
+      },
+      true
+    );
+    this.addEventListener(
+      'pointermove',
+      (e) => {
+        const pt = pts.get(e.pointerId);
+        if (!pt || !g) return;
+        const [x, y] = local(e);
+        pt.x = x;
+        pt.y = y;
+        if (g.mode === 'pinch' && pts.size >= 2) {
+          const [a, b] = [...pts.values()];
+          const d = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
+          this.zoomTo((g.z0 * d) / g.d0, g.w[0], g.w[1], (a.x + b.x) / 2, (a.y + b.y) / 2);
+        } else if (g.mode === 'hold' && e.pointerId === g.id) {
+          // Slide up to zoom in, down to zoom out, around the point first held.
+          this.zoomTo(g.z0 * Math.exp((g.hy - y) * 0.012), g.w[0], g.w[1], g.hx, g.hy);
+        } else if (g.mode === 'pan' && e.pointerId === g.id) {
+          const v = this.view;
+          v.tcx -= (x - g.lx) / v.tz;
+          v.tcy -= (y - g.ly) / v.tz;
+          this.clampView();
+        } else if (g.mode === null && e.pointerId === g.id && Math.hypot(x - g.sx, y - g.sy) > 10) {
+          clearTimeout(holdTimer);
+          if (this.view.tz > 1.02) {
+            g.mode = 'pan';
+            endGrowth();
+            try {
+              this.setPointerCapture(e.pointerId);
+            } catch (err) {
+              /* best effort */
+            }
+          } else {
+            g.mode = 'none';
+          }
+        }
+        g.lx = x;
+        g.ly = y;
+      },
+      true
+    );
+    const up = (e) => {
+      if (!pts.delete(e.pointerId)) return;
+      clearTimeout(holdTimer);
+      // Lifting one finger of a pinch doesn't start a pan with the other.
+      if (pts.size === 0) g = null;
+      else if (g) g.mode = 'done';
+    };
+    this.addEventListener('pointerup', up, true);
+    this.addEventListener('pointercancel', up, true);
+    // The click that ends a zoom or pan gesture isn't a tap.
+    this.addEventListener(
+      'click',
+      (e) => {
+        if (!this.gestured) return;
+        this.gestured = false;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      },
+      true
+    );
+    this.addEventListener('contextmenu', (e) => e.pointerType !== 'mouse' && e.preventDefault());
   }
 
   /*

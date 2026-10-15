@@ -314,6 +314,7 @@
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
   }
 
   /* The 3D render is drawn at low resolution and scaled up with hard pixels. */
@@ -578,6 +579,19 @@
 
   .garden-splash.is-nav-open .garden-splash__logo-trigger {
     visibility: hidden;
+  }
+
+  /* Zoomed in, the logo is for looking at: taps reach the flowers, drags move the view. */
+  .garden-splash.is-zoomed {
+    cursor: grab;
+  }
+
+  .garden-splash.is-zoomed:active {
+    cursor: grabbing;
+  }
+
+  .garden-splash.is-zoomed .garden-splash__logo-trigger {
+    pointer-events: none;
   }
 
   /* ---------- Menu ---------- */
