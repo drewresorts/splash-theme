@@ -12,6 +12,34 @@
   "sections": {
     "wall": {
       "type": "duet-wall",
+      "blocks": {
+        "clip_UUJ3t6": {
+          "type": "clip",
+          "settings": {
+            "src_url": "https://cdn.shopify.com/videos/c/o/v/6eee9fa1268b4fbc94adaaf4fe866ce2.mp4",
+            "title": ""
+          }
+        },
+        "clip_6qtcjq": {
+          "type": "clip",
+          "settings": {
+            "src_url": "https://cdn.shopify.com/videos/c/o/v/a6d42cda365e4e47ac81ef7a70fc44ce.mp4",
+            "title": ""
+          }
+        },
+        "clip_AHpdY3": {
+          "type": "clip",
+          "settings": {
+            "src_url": "https://cdn.shopify.com/videos/c/o/v/60052096f1b04ae69d335e12917f80bd.mp4",
+            "title": ""
+          }
+        }
+      },
+      "block_order": [
+        "clip_UUJ3t6",
+        "clip_6qtcjq",
+        "clip_AHpdY3"
+      ],
       "settings": {
         "relay_url": "",
         "theme": "house",
