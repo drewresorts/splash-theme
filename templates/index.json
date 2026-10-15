@@ -12,8 +12,7 @@
     "garden_splash_duet": {
       "type": "garden-splash",
       "settings": {
-        "logo": "shopify://shop_images/spellout-black.png",
-        "logo_position": "top",
+        "logo_position": "none",
         "logo_width": 120,
         "menu": "main-menu",
         "logo_link": "",

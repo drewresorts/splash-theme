@@ -17,13 +17,14 @@
         "menu": {
           "type": "menu",
           "settings": {
-            "style": "icon",
+            "style": "text",
             "label": "Menu",
-            "position": "left"
+            "position": "right"
           }
         },
         "search": {
           "type": "search",
+          "disabled": true,
           "settings": {
             "position": "left"
           }
@@ -38,13 +39,13 @@
         "account": {
           "type": "account",
           "settings": {
-            "position": "right"
+            "position": "left"
           }
         },
         "cart": {
           "type": "cart",
           "settings": {
-            "position": "right"
+            "position": "left"
           }
         }
       },
@@ -57,7 +58,7 @@
       ],
       "settings": {
         "menu": "main-menu",
-        "background": "solid",
+        "background": "transparent",
         "ink_color": "#191f6b",
         "bar_color": "#ffffff",
         "panel_color": "#ffffff",
@@ -69,6 +70,7 @@
     },
     "header": {
       "type": "header",
+      "disabled": true,
       "settings": {
         "logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png",
         "logo_width": 100,
@@ -89,8 +91,7 @@
         "margin_bottom": 0,
         "padding_top": 20,
         "padding_bottom": 20
-      },
-      "disabled": true
+      }
     }
   },
   "order": [
