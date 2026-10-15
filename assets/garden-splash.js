@@ -181,8 +181,9 @@ const LOGO_SPACING = { airy: 0.5, lush: 0.36, overgrown: 0.27 };
 /* The render is under-resolved on purpose, then scaled up with nearest-neighbour. */
 // Narrow screens get more pixels, or the small flowers that spell the logo turn to mush.
 const renderScale = (w) => (w < 750 ? 0.85 : 0.5);
-// The splash itself is drawn sharper, as long as the device keeps up (see adapt()).
-const splashScale = (w, dpr) => Math.max(renderScale(w), Math.min(dpr, w < 750 ? 1.25 : 0.9));
+// The splash itself is drawn at the screen's full sharpness (up to 2x), as
+// long as the device keeps up (see adapt()).
+const splashScale = (w, dpr) => Math.max(renderScale(w), Math.min(dpr, 2));
 
 /* Bridson's Poisson-disc sampling: evenly spread, never on a grid. */
 function poissonDisc(x0, y0, x1, y1, minDist, rng, seedPoint) {
@@ -420,8 +421,20 @@ class GardenSplash extends HTMLElement {
     if (e) console.error('garden-splash:', e);
   }
 
+  isBackdropEl() {
+    const m = this.dataset.mode;
+    return m === 'world' || m === 'background';
+  }
+
+  /* How fine the vertex-snapping grid is: coarse behind pages (the wobble), per render pixel on the splash. */
+  snapTo(rs) {
+    const k = this.backdrop ? 0.25 : 1;
+    this.snap.value.set(this.w * rs * k, this.h * rs * k);
+  }
+
   init() {
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, alpha: true, powerPreference: 'high-performance' });
+    // The splash is drawn crisp, with smoothed edges; behind other pages the bed stays coarse and light.
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: !this.isBackdropEl(), alpha: true, powerPreference: 'high-performance' });
     this.renderer.setClearColor(0x000000, 0);
     this.octx = this.overlay.getContext('2d');
 
@@ -754,8 +767,15 @@ class GardenSplash extends HTMLElement {
    * or the alpha channel of a logo chosen in the theme editor.
    * data-garden-mask records which, for debugging on a live store.
    */
+  /* The logo shape for this screen: a phone version below 750px wide, if one is set. */
+  maskSource() {
+    const d = this.dataset;
+    return (this.w && this.w < 750 && d.flowerLogoMobile) || d.flowerLogo || '';
+  }
+
   loadMask() {
-    const src = this.dataset.flowerLogo;
+    const src = this.maskSource();
+    this.maskSrc = src;
     if (!src) {
       this.setMask(WORDMARK.w, WORDMARK.h, wordmarkAlpha());
       this.dataset.gardenMask = 'builtin';
@@ -1073,14 +1093,14 @@ class GardenSplash extends HTMLElement {
     this.h = H;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    // The 3D render is drawn small and scaled up by CSS with nearest-neighbour.
-    // Behind other pages the bed stays coarse; the splash starts sharp and steps down if it must.
+    // Behind other pages the bed is drawn small and scaled up with hard pixels;
+    // the splash is drawn at full sharpness and steps down only if it must.
     this.rsFloor = renderScale(W);
     this.rs = this.backdrop ? this.rsFloor : Math.min(this.rsCap || 9, splashScale(W, this.dpr));
     this.renderer.setPixelRatio(this.rs);
     this.rsNow = this.rs;
     this.renderer.setSize(W, H, false);
-    this.snap.value.set(W * this.rs * 0.25, H * this.rs * 0.25);
+    this.snapTo(this.rs);
 
     // Perspective camera looking straight down; the z = 0 plane maps 1:1 to the screen.
     const dist = H / 2 / Math.tan((FOV * Math.PI) / 360);
@@ -1099,6 +1119,11 @@ class GardenSplash extends HTMLElement {
     if (this.night) this.endNight();
 
     if (!this.maskReady) return;
+    // Crossing the phone width with a separate phone logo: load that shape, then lay it out.
+    if (this.maskSource() !== this.maskSrc) {
+      this.loadMask().then(() => !this.failed && this.resize(true));
+      return;
+    }
     // A small height change (mobile browser chrome) keeps the same field, re-placed.
     if (relayout || !this.flowers.length) this.generate();
     else this.buildMeshes();
@@ -1660,19 +1685,20 @@ class GardenSplash extends HTMLElement {
   }
 
   /*
-   * Keeps the splash smooth: if frames take too long for a couple of
-   * seconds, the render resolution steps down (never below the original
-   * coarse look), and stays down for the visit to this page.
+   * Keeps the splash smooth: once the logo has formed (growing is the
+   * busiest moment and passes), if frames keep taking too long the render
+   * resolution steps down a quarter at a time, never below the original
+   * coarse look, and stays down for the visit to this page.
    */
   adapt(ms) {
-    if (ms <= 0 || ms > 250) return;
+    if (ms <= 0 || ms > 250 || !this.arranged || this.elapsed - (this.calmFrom || 0) < 1.5) return;
     const q = this.quality || (this.quality = { avg: 16, since: 0 });
     q.avg += (ms - q.avg) * 0.05;
     q.since += ms;
-    if (q.since < 2000) return;
+    if (q.since < 2500) return;
     q.since = 0;
-    if (q.avg > 26 && this.rs > this.rsFloor + 0.01) {
-      this.rs = Math.max(this.rsFloor, Math.round((this.rs - 0.15) * 20) / 20);
+    if (q.avg > 28 && this.rs > this.rsFloor + 0.01) {
+      this.rs = Math.max(this.rsFloor, Math.round((this.rs - 0.25) * 20) / 20);
       this.rsCap = this.rs;
       this.rsNow = 0;
       if (this.view && this.view.z > 1.02) this.sharpen();
@@ -1684,7 +1710,7 @@ class GardenSplash extends HTMLElement {
     this.rsNow = rs;
     this.renderer.setPixelRatio(rs);
     this.renderer.setSize(this.w, this.h, false);
-    this.snap.value.set(this.w * rs * 0.25, this.h * rs * 0.25);
+    this.snapTo(rs);
   }
 
   update(dt) {
@@ -2444,7 +2470,7 @@ class GardenSplash extends HTMLElement {
   sharpen() {
     if (!this.renderer || !this.view) return;
     const Z = this.view.z;
-    const most = Math.max(this.rs, Math.min(this.dpr || 1, 1.5));
+    const most = Math.max(this.rs, Math.min(this.dpr || 1, 2));
     const rs = Math.round(Math.min(most, this.rs * (1 + (Z - 1) * 0.6)) * 8) / 8;
     if (rs === this.rsNow) return;
     this.applyScale(rs);

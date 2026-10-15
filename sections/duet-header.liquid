@@ -42,11 +42,24 @@
               <a href="{{ routes.root_url }}" class="duet-header__logo" {{ block.shopify_attributes }}>
                 {%- if block.settings.logo != blank -%}
                   {%- assign logo_alt = block.settings.logo.alt | default: shop.name -%}
+                  {%- liquid
+                    assign logo_class = ''
+                    if block.settings.logo_mobile != blank
+                      assign logo_class = 'duet-header__logo-desktop'
+                    endif
+                  -%}
                   {{
                     block.settings.logo
                     | image_url: width: 600
-                    | image_tag: widths: '200, 300, 400, 600', sizes: '(min-width: 750px) 240px, 40vw', loading: 'eager', alt: logo_alt
+                    | image_tag: widths: '200, 300, 400, 600', sizes: '(min-width: 750px) 240px, 40vw', loading: 'eager', alt: logo_alt, class: logo_class
                   }}
+                  {%- if block.settings.logo_mobile != blank -%}
+                    {{
+                      block.settings.logo_mobile
+                      | image_url: width: 400
+                      | image_tag: widths: '150, 200, 300, 400', sizes: '40vw', loading: 'eager', alt: logo_alt, class: 'duet-header__logo-mobile'
+                    }}
+                  {%- endif -%}
                 {%- else -%}
                   <span class="duet-header__logo-text">{{ shop.name | escape }}</span>
                 {%- endif -%}
@@ -360,6 +373,20 @@
     display: block;
     width: 100%;
     height: auto;
+  }
+
+  .duet-header__logo .duet-header__logo-mobile {
+    display: none;
+  }
+
+  @media (max-width: 749px) {
+    .duet-header__logo .duet-header__logo-desktop {
+      display: none;
+    }
+
+    .duet-header__logo .duet-header__logo-mobile {
+      display: block;
+    }
   }
 
   .duet-header__logo-text {
@@ -740,6 +767,7 @@
       "limit": 1,
       "settings": [
         { "type": "image_picker", "id": "logo", "label": "Logo image", "info": "Leave blank to show the store name." },
+        { "type": "image_picker", "id": "logo_mobile", "label": "Logo image on phones", "info": "Optional. Shown instead on screens narrower than 750px." },
         {
           "type": "select",
           "id": "position",

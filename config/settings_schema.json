@@ -1541,6 +1541,12 @@
         "info": "Use the same image as the garden splash's Logo shape, so the flowers form the same logo on every page. Leave blank for the Duet wordmark."
       },
       {
+        "type": "image_picker",
+        "id": "garden_world_logo_mobile",
+        "label": "Logo shape on phones",
+        "info": "Optional. Used instead on screens narrower than 750px. Use the same image as the garden splash's phone logo shape."
+      },
+      {
         "type": "select",
         "id": "garden_world_density",
         "label": "Density",

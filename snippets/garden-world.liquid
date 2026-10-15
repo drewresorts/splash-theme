@@ -14,6 +14,10 @@
   if settings.garden_world_logo != blank
     assign flower_logo_url = settings.garden_world_logo | image_url: width: 900
   endif
+  assign flower_logo_mobile_url = ''
+  if settings.garden_world_logo_mobile != blank
+    assign flower_logo_mobile_url = settings.garden_world_logo_mobile | image_url: width: 900
+  endif
 -%}
 <garden-splash
   class="garden-world"
@@ -26,6 +30,7 @@
   data-duration="5"
   data-density="{{ settings.garden_world_density | default: 'overgrown' }}"
   {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
+  {% if flower_logo_mobile_url != blank %}data-flower-logo-mobile="{{ flower_logo_mobile_url }}"{% endif %}
   style="--gw-veil: {{ settings.garden_world_veil | default: 55 | divided_by: 100.0 }};"
   aria-hidden="true"
 >

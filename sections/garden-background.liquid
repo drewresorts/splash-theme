@@ -12,6 +12,10 @@
   if section.settings.flower_logo != blank
     assign flower_logo_url = section.settings.flower_logo | image_url: width: 900
   endif
+  assign flower_logo_mobile_url = ''
+  if section.settings.flower_logo_mobile != blank
+    assign flower_logo_mobile_url = section.settings.flower_logo_mobile | image_url: width: 900
+  endif
 
   # The flowers form the logo (the same arrangement as the splash and every
   # other page), or wave as a scattered bed. Blank (never saved) is the logo.
@@ -37,6 +41,7 @@
   data-wave-speed="{{ section.settings.wave_speed | divided_by: 10.0 }}"
   data-grow-in="{{ section.settings.grow_in }}"
   {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
+  {% if flower_logo_mobile_url != blank %}data-flower-logo-mobile="{{ flower_logo_mobile_url }}"{% endif %}
   style="--gbg-veil: {{ section.settings.veil | divided_by: 100.0 }}; --gbg-page: {{ section.settings.page_color }};"
   aria-hidden="true"
 >
@@ -152,6 +157,12 @@
       "id": "flower_logo",
       "label": "Logo shape",
       "info": "The bed is sized as if the flowers were about to form this logo, as on the splash. Use the same image and density as the garden splash for identical flowers. Leave blank for the Duet wordmark."
+    },
+    {
+      "type": "image_picker",
+      "id": "flower_logo_mobile",
+      "label": "Logo shape on phones",
+      "info": "Optional. Used instead on screens narrower than 750px. Use the same image as the garden splash's phone logo shape."
     },
     {
       "type": "range",

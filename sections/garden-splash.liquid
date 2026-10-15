@@ -12,6 +12,10 @@
   if section.settings.flower_logo != blank
     assign flower_logo_url = section.settings.flower_logo | image_url: width: 900
   endif
+  assign flower_logo_mobile_url = ''
+  if section.settings.flower_logo_mobile != blank
+    assign flower_logo_mobile_url = section.settings.flower_logo_mobile | image_url: width: 900
+  endif
 
   assign has_menu = false
   if garden_menu != blank and garden_menu.links.size > 0
@@ -43,6 +47,7 @@
   data-duration="{{ section.settings.bloom_duration }}"
   data-density="{{ section.settings.density }}"
   {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
+  {% if flower_logo_mobile_url != blank %}data-flower-logo-mobile="{{ flower_logo_mobile_url }}"{% endif %}
   style="--gs-ground: {{ section.settings.soil_color }}; --gs-ink: {{ hud_ink }}; --gs-hero: {{ section.settings.center_color }}; --gs-logo-width: {{ logo_width }}px; --gs-menu-image-width: {{ section.settings.menu_image_width | default: 64 }}px;"
 >
   <canvas class="garden-splash__canvas" data-garden-canvas aria-hidden="true"></canvas>
@@ -317,15 +322,13 @@
     -webkit-touch-callout: none;
   }
 
-  /* The 3D render is drawn at low resolution and scaled up with hard pixels. */
+  /* The 3D render, drawn at the screen's own sharpness. */
   .garden-splash__canvas {
     position: absolute;
     inset: 0;
     display: block;
     width: 100%;
     height: 100%;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
   }
 
   .garden-splash__overlay {
@@ -822,6 +825,12 @@
       "id": "flower_logo",
       "label": "Logo shape",
       "info": "Once every flower has bloomed, they arrange themselves into this logo's silhouette. Use a logo with a transparent background. Leave blank to use the Duet wordmark."
+    },
+    {
+      "type": "image_picker",
+      "id": "flower_logo_mobile",
+      "label": "Logo shape on phones",
+      "info": "Optional. Used instead on screens narrower than 750px, for example a stacked logo or just the asterisk. Leave blank to use the logo shape above everywhere."
     },
     {
       "type": "range",
