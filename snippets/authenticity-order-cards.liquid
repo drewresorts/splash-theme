@@ -1,0 +1,119 @@
+{%- comment -%}
+  Certificate cards for one order. Rendered by authenticity-certificates.
+
+  Accepts:
+  - o: {Object} the order
+  - date_format: {String} strftime format for dates
+{%- endcomment -%}
+{%- liquid
+  assign certs = o.metafields.duet.authenticity.value
+  assign paid = false
+  if o.financial_status == 'paid' or o.financial_status == 'partially_refunded'
+    assign paid = true
+  endif
+-%}
+
+{%- for cert in certs -%}
+  {%- liquid
+    assign status = cert.status | default: 'minting'
+    case status
+      when 'ready'
+        assign status_label = 'Ready'
+      when 'in_wallet'
+        assign status_label = 'In your wallet'
+      when 'revoked'
+        assign status_label = 'Revoked'
+      else
+        assign status_label = 'Being minted'
+    endcase
+    assign line = o.line_items | where: 'id', cert.line_item_id | first
+    assign image = cert.image
+    if image == blank and line.image
+      assign image = line.image | image_url: width: 400
+    endif
+    assign owned_since = cert.purchased_at | default: o.created_at
+  -%}
+  <li class="authenticity-card authenticity-card--{{ status }}">
+    <div class="authenticity-card__media">
+      {%- if image != blank -%}
+        <img src="{{ image }}" alt="" loading="lazy" width="400" height="400">
+      {%- endif -%}
+    </div>
+    <div class="authenticity-card__body">
+      <p class="authenticity-card__label">Certificate of authenticity</p>
+      <h3 class="authenticity-card__title">
+        {{- cert.product_title | default: line.product.title | escape -}}
+        {%- if cert.variant_title != blank %} <span>{{ cert.variant_title | escape }}</span>{% endif -%}
+      </h3>
+      <dl class="authenticity-card__facts">
+        {%- if cert.serial != blank -%}
+          <div><dt>Serial</dt><dd>{{ cert.serial | escape }}</dd></div>
+        {%- endif -%}
+        {%- if cert.edition != blank -%}
+          <div><dt>Edition</dt><dd>{{ cert.edition | escape }}</dd></div>
+        {%- endif -%}
+        <div><dt>Owned since</dt><dd><time datetime="{{ owned_since | date: '%Y-%m-%dT%H:%M:%S%z' }}">{{ owned_since | date: date_format }}</time></dd></div>
+        <div><dt>Order</dt><dd><a href="{{ o.customer_url }}">{{ o.name }}</a></dd></div>
+        {%- if cert.token_id != blank -%}
+          <div>
+            <dt>Token</dt>
+            <dd>
+              {%- if cert.explorer_url != blank -%}
+                <a href="{{ cert.explorer_url }}" target="_blank" rel="noopener">#{{ cert.token_id }} on {{ cert.chain | default: 'chain' }}</a>
+              {%- else -%}
+                #{{ cert.token_id }}{% if cert.chain != blank %} on {{ cert.chain }}{% endif %}
+              {%- endif -%}
+            </dd>
+          </div>
+        {%- endif -%}
+        {%- if cert.holder != blank and status == 'in_wallet' -%}
+          <div><dt>Wallet</dt><dd>{{ cert.holder | escape }}</dd></div>
+        {%- endif -%}
+      </dl>
+      <p class="authenticity-card__status">
+        <span class="authenticity-card__dot" aria-hidden="true"></span>{{ status_label }}
+      </p>
+      {%- if status == 'minting' -%}
+        <p class="authenticity-card__note">We're minting your certificate now. We'll email you when it's ready.</p>
+      {%- elsif status == 'ready' and cert.transfer_url != blank -%}
+        <a class="authenticity-card__action" href="{{ cert.transfer_url }}">Transfer to my wallet</a>
+      {%- elsif status == 'revoked' -%}
+        <p class="authenticity-card__note">This certificate was revoked because the order was refunded.</p>
+      {%- endif -%}
+    </div>
+  </li>
+{%- endfor -%}
+
+{%- comment -%} Paid, certified items the app hasn't recorded yet: shown as being minted. {%- endcomment -%}
+{%- if paid -%}
+  {%- for line in o.line_items -%}
+    {%- if line.product.metafields.duet.authenticity_enabled.value == true -%}
+      {%- assign recorded = certs | where: 'line_item_id', line.id | size -%}
+      {%- if recorded == 0 -%}
+        <li class="authenticity-card authenticity-card--minting">
+          <div class="authenticity-card__media">
+            {%- if line.image -%}
+              {{ line.image | image_url: width: 400 | image_tag: loading: 'lazy', alt: '' }}
+            {%- endif -%}
+          </div>
+          <div class="authenticity-card__body">
+            <p class="authenticity-card__label">Certificate of authenticity</p>
+            <h3 class="authenticity-card__title">
+              {{- line.product.title | escape -}}
+              {%- unless line.variant.title == 'Default Title' %} <span>{{ line.variant.title | escape }}</span>{% endunless -%}
+            </h3>
+            <dl class="authenticity-card__facts">
+              {%- if line.quantity > 1 -%}
+                <div><dt>Pieces</dt><dd>{{ line.quantity }}, one certificate each</dd></div>
+              {%- endif -%}
+              <div><dt>Owned since</dt><dd><time datetime="{{ o.created_at | date: '%Y-%m-%dT%H:%M:%S%z' }}">{{ o.created_at | date: date_format }}</time></dd></div>
+              <div><dt>Order</dt><dd><a href="{{ o.customer_url }}">{{ o.name }}</a></dd></div>
+            </dl>
+            <p class="authenticity-card__status"><span class="authenticity-card__dot" aria-hidden="true"></span>Being minted</p>
+            <p class="authenticity-card__note">We're minting your certificate now. We'll email you when it's ready.</p>
+          </div>
+        </li>
+      {%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
