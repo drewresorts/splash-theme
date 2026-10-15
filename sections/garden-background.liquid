@@ -38,6 +38,7 @@
   data-soil-color="{{ section.settings.page_color }}"
   data-duration="5"
   data-density="{{ section.settings.density }}"
+  {% if settings.garden_follow_scheme != false %}data-follow-scheme="true"{% endif %}
   data-wave-speed="{{ section.settings.wave_speed | divided_by: 10.0 }}"
   data-grow-in="{{ section.settings.grow_in }}"
   {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}

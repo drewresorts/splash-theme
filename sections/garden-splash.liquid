@@ -144,22 +144,23 @@
 
   {%- if section.settings.show_schemes -%}
     {%- comment -%}
-      Visitor color schemes: the store's own colors first, then the same
-      palette turned around the color wheel (data-hue, in degrees). The
-      script works out each scheme's colors and paints the swatches.
+      Visitor color themes: the store's own colors first, then named themes.
+      The colors live in assets/garden-splash.js (SCHEMES), which also
+      paints the swatches.
     {%- endcomment -%}
     <div class="garden-splash__schemes" role="group" aria-label="Flower colors" data-garden-ui>
-      {%- assign scheme_names = 'House,Gold,Teal,Cobalt,Violet' | split: ',' -%}
-      {%- assign scheme_hues = '0,60,180,240,300' | split: ',' -%}
-      {%- for name in scheme_names -%}
+      <span class="garden-splash__scheme-name" aria-live="polite" data-garden-scheme-name></span>
+      {%- assign scheme_ids = 'house,camo,cotton-candy,circus,neon,tropical,noir' | split: ',' -%}
+      {%- assign scheme_names = 'House colors,Camo Fatigues,Cotton Candy,Circus,Neon,Tropical,Noir' | split: ',' -%}
+      {%- for id in scheme_ids -%}
         <button
           type="button"
           class="garden-splash__swatch"
           data-garden-scheme
-          data-hue="{{ scheme_hues[forloop.index0] }}"
+          data-scheme="{{ id }}"
           aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}"
-          aria-label="{{ name }} colors"
-          title="{{ name }}"
+          aria-label="{{ scheme_names[forloop.index0] }}"
+          title="{{ scheme_names[forloop.index0] }}"
         ></button>
       {%- endfor -%}
     </div>
@@ -475,14 +476,60 @@
   }
 
   .garden-splash__swatch {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     margin: 0;
     padding: 0;
     border: 1px solid var(--gs-ink, #191f6b);
     border-radius: 50%;
     background: conic-gradient(var(--s1) 0 33%, var(--s2) 0 67%, var(--s3) 0);
     cursor: pointer;
+  }
+
+  /* Each theme's swatch looks like its name. */
+  .garden-splash__swatch[data-scheme='camo'] {
+    background: radial-gradient(40% 30% at 25% 30%, #2f3524 98%, transparent),
+      radial-gradient(35% 28% at 72% 65%, #6b4f2e 98%, transparent),
+      radial-gradient(30% 40% at 70% 20%, #c3b091 98%, transparent),
+      radial-gradient(35% 25% at 30% 78%, #c3b091 98%, transparent), #78866b;
+  }
+
+  .garden-splash__swatch[data-scheme='cotton-candy'] {
+    background: conic-gradient(from 30deg, #ffb7d5, #a7d8f5, #cdb4f5, #b5ead7, #ffb7d5);
+    filter: saturate(1.1);
+  }
+
+  .garden-splash__swatch[data-scheme='circus'] {
+    background: repeating-conic-gradient(#e1251b 0 30deg, #f4ecd8 0 60deg);
+    box-shadow: inset 0 0 0 3px #ffc20e;
+  }
+
+  .garden-splash__swatch[data-scheme='neon'] {
+    background: radial-gradient(circle, #ff2bd6 0 28%, #1b1b3a 32% 52%, #39ff14 56% 66%, #1b1b3a 70%);
+    box-shadow: 0 0 6px #ff2bd6, 0 0 10px #00e5ff;
+  }
+
+  .garden-splash__swatch[data-scheme='tropical'] {
+    background: repeating-linear-gradient(135deg, #ff6f61 0 4px, #ffb000 0 8px, #00a6a6 0 12px);
+  }
+
+  .garden-splash__swatch[data-scheme='noir'] {
+    background: linear-gradient(135deg, #111 50%, #a8a8a8 50%);
+  }
+
+  /* The picked theme's name, just above the dots. */
+  .garden-splash__scheme-name {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    color: var(--gs-ink, #191f6b);
+    font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transform: translateX(-50%);
+    pointer-events: none;
   }
 
   .garden-splash__swatch[aria-pressed='true'] {
@@ -927,7 +974,7 @@
       "id": "show_schemes",
       "label": "Let visitors change the flower colors",
       "default": true,
-      "info": "Shows a row of color dots at the bottom of the screen: the colors below, then the same palette shifted to gold, teal, cobalt and violet hues."
+      "info": "Shows a row of color dots at the bottom of the screen: the colors below, then Camo Fatigues, Cotton Candy, Circus, Neon, Tropical and Noir."
     },
     {
       "type": "color",

@@ -44,9 +44,9 @@
       {%- if settings.garden_follow_scheme -%}
         <script>
           // The flower colors a visitor picked on the garden splash carry through the store.
-          // The hues match the swatches in sections/garden-splash.liquid.
+          // A rough hue for each theme in sections/garden-splash.liquid, for the drawn garden motifs.
           try {
-            var gardenHue = [0, 60, 180, 240, 300][parseInt(localStorage.getItem('garden-splash-scheme'), 10)];
+            var gardenHue = { camo: 80, 'cotton-candy': 300, circus: 20, neon: 290, tropical: 30 }[localStorage.getItem('garden-splash-scheme')];
             if (gardenHue) document.documentElement.style.setProperty('--garden-hue', gardenHue + 'deg');
           } catch (e) {}
         </script>
