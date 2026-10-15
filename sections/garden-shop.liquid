@@ -63,7 +63,7 @@
         {%- for link in shop_menu.links -%}
           <li><a href="{{ link.url }}" class="garden-shop__nav-link">{{ link.title | escape }}</a></li>
         {%- endfor -%}
-        {%- if settings.garden_game -%}
+        {%- if settings.garden_game != false -%}
           <li>
             <button type="button" class="garden-shop__nav-link garden-shop__nav-link--game" data-pollen-dream data-return-focus="#GardenShop-{{ section.id }} [data-shop-menu]">
               {{- settings.garden_game_label | default: 'Pollen Dream' | escape -}}

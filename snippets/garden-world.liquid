@@ -24,9 +24,9 @@
   data-center-accent="#A62749"
   data-soil-color="#FFFFFF"
   data-duration="5"
-  data-density="{{ settings.garden_world_density }}"
+  data-density="{{ settings.garden_world_density | default: 'overgrown' }}"
   {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
-  style="--gw-veil: {{ settings.garden_world_veil | divided_by: 100.0 }};"
+  style="--gw-veil: {{ settings.garden_world_veil | default: 55 | divided_by: 100.0 }};"
   aria-hidden="true"
 >
   <canvas class="garden-world__canvas" data-garden-canvas></canvas>

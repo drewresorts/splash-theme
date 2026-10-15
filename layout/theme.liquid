@@ -332,7 +332,9 @@
       # The flower world behind every other page. The splash pages and the
       # garden shop page draw their own garden.
       assign show_garden_world = false
-      if settings.garden_world and hide_header_footer == false and template.name != 'password' and template.name != 'gift_card'
+      # A setting added in code reads as blank until Theme settings are next
+      # saved, so blank counts as on: only an explicit "off" turns these off.
+      if settings.garden_world != false and hide_header_footer == false and template.name != 'password' and template.name != 'gift_card'
         assign show_garden_world = true
       endif
     -%}
@@ -391,7 +393,7 @@
     </script>
   </head>
 
-  <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.garden_motif and settings.garden_cart_bloom %} garden-cart-motif{% endif %}{% if show_garden_world %} has-garden-world garden-world-sections--{{ settings.garden_world_sections }}{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
+  <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.garden_motif and settings.garden_cart_bloom %} garden-cart-motif{% endif %}{% if show_garden_world %} has-garden-world garden-world-sections--{{ settings.garden_world_sections | default: 'translucent' }}{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
     {%- if hide_store_chrome -%}
       <script>
         if (window.navigation && typeof window.navigation.addEventListener === 'function') {
@@ -433,7 +435,7 @@
       {%- render 'garden-world' -%}
     {%- endif -%}
 
-    {%- if settings.garden_game -%}
+    {%- if settings.garden_game != false -%}
       {%- render 'pollen-dream-launcher' -%}
     {%- endif -%}
 
