@@ -9,43 +9,28 @@
  */
 {
   "sections": {
-    "garden-shop": {
+    "garden_shop_gapepN": {
       "type": "garden-shop",
+      "name": "Garden shop",
       "settings": {
+        "logo": "shopify://shop_images/spellout-black.png",
         "logo_width": 150,
         "logo_link": "",
         "menu": "main-menu",
         "show_cart_link": true,
-        "menu_style": "filled",
+        "menu_style": "outline",
         "menu_label": "Menu",
         "menu_close_label": "Close",
-        "menu_image_width": 100,
+        "menu_image": "shopify://shop_images/duet_web_menu_star.png",
+        "menu_image_width": 48,
         "ink_color": "#000000",
-        "page_color": "#ffffff",
+        "page_color": "#FFFFFF",
         "columns_desktop": 3,
-        "columns_mobile": "2"
-      }
-    },
-    "garden-background": {
-      "type": "garden-background",
-      "settings": {
-        "density": "overgrown",
-        "flower_logo": "shopify://shop_images/DUET_LOGO_SPELLOUT.png",
-        "wave_speed": 10,
-        "grow_in": false,
-        "veil": 60,
-        "page_color": "#ffffff",
-        "color_1": "#a62749",
-        "color_2": "#66a4c8",
-        "color_3": "#191f6b",
-        "color_4": "#b9e5fb",
-        "color_5": "#f04e62",
-        "foliage_color": "#66a4c8"
+        "columns_mobile": "1"
       }
     }
   },
   "order": [
-    "garden-shop",
-    "garden-background"
+    "garden_shop_gapepN"
   ]
 }
