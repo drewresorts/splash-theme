@@ -30,16 +30,23 @@ const DIVE = 3.6; // seconds from the overhead view of the logo down into its fl
 const CHAIN_R = 680; // buds this close to a pollinated flower wake up
 const HARVEST_TIME = 0.9; // seconds in a flower's light to gather its pollen
 const PLAYER_R = 10;
-const MOVE = { accel: 720, damp: 2.4, max: 240, boost: 1.75 };
-const LOOK = { mouse: 0.0022, drag: 0.004, touch: 0.006 };
+// Flight: the player always moves the way they look. Flapping is fast, gliding
+// slow; climbing under their own power is weak and they slowly sink, so height
+// comes from the rising gusts of wind.
+const FLIGHT = { flap: 210, dash: 330, glide: 85, brake: 20, sink: 55, climb: 0.3, ease: 2.6 };
+const TURN = { rate: 2.2, pitch: 1.3, ease: 10 };
+const LOOK = { mouse: 0.003, touch: 0.007, steer: 2.4, smooth: 22 };
+const UPDRAFT = { top: 760, lift: 400 };
 const OCEAN = [25, 31, 107];
 const POWDER = [185, 229, 251];
-const POLLEN = [255, 214, 120];
+const POLLEN = [242, 168, 52];
+const WIND = [102, 164, 200];
+const WHITE = [255, 255, 255];
 
 const STRINGS = {
   title: 'Pollen Dream',
   eyebrow: 'Duet',
-  intro: 'You are very small, and the garden is very large. Find the glowing flowers and fly into their light to gather pollen. Every flower you pollinate wakes the sleeping buds around it.',
+  intro: 'You are very small, and the garden is very large. You can’t climb on your own: rising gusts of wind, the swirling blue columns, lift you, and you can rest on any open flower. Ride the wind from flower to flower to reach the glowing ones and gather their pollen. Every flower you pollinate wakes the sleeping buds around it.',
   start: 'Start',
   resume: 'Resume',
   restart: 'Restart',
@@ -57,8 +64,10 @@ const STRINGS = {
   gathering: 'Gathering pollen…',
   heart: 'The heart of the garden is blooming',
   doneTitle: 'The garden is awake',
-  rise: 'Rise',
-  sink: 'Sink',
+  fly: 'Fly',
+  rising: 'Riding the wind',
+  resting: 'Resting on a flower',
+  carried: 'The wind carries you back to your last flower',
 };
 
 let current = null;
@@ -88,7 +97,8 @@ class PollenDream {
     this.move = { f: 0, r: 0, u: 0, boost: false };
     this.stick = { id: null, x: 0, y: 0, cx: 0, cy: 0 };
     this.lookDrag = { id: null, x: 0, y: 0 };
-    this.holds = { up: false, down: false };
+    this.holds = { fly: false };
+    this.cursor = { x: 0, y: 0, active: false };
     this.sound = true;
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.touch = window.matchMedia('(pointer: coarse)').matches;
@@ -252,6 +262,7 @@ class PollenDream {
       });
     }
     this.clearPollen();
+    this.clearUpdrafts();
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];
     if (this.renderer) {
@@ -271,8 +282,8 @@ class PollenDream {
     root.setAttribute('aria-labelledby', 'PollenDreamTitle');
     root.tabIndex = -1;
     const controls = this.touch
-      ? `<li><b>Left thumb</b> move</li><li><b>Right thumb</b> look around</li><li><b>${S.rise} / ${S.sink}</b> fly up and down</li>`
-      : `<li><b>W A S D</b> or <b>arrows</b> fly</li><li><b>Mouse</b> look around</li><li><b>Space</b> rise · <b>C</b> sink</li><li><b>Shift</b> dash</li><li><b>Esc</b> pause · <b>Esc</b> again to leave</li>`;
+      ? `<li><b>Left thumb</b> steer: you fly where you look</li><li><b>Hold ${S.fly}</b> to flap forward</li><li><b>Drag</b> anywhere to look around</li>`
+      : `<li><b>Mouse</b> look: you fly where you look</li><li><b>W</b> or <b>Space</b> flap forward · <b>S</b> slow down</li><li><b>A D</b> or <b>← →</b> turn · <b>↑ ↓</b> look up and down</li><li><b>Shift</b> dash</li><li><b>Esc</b> pause · <b>Esc</b> again to leave</li>`;
     root.innerHTML = `
       <canvas class="pollen-dream__canvas" aria-hidden="true"></canvas>
       <div class="pollen-dream__hud" data-hud hidden>
@@ -292,8 +303,7 @@ class PollenDream {
       <div class="pollen-dream__touch" data-touch hidden>
         <div class="pollen-dream__stick" data-stick aria-hidden="true"><span data-knob></span></div>
         <div class="pollen-dream__holds">
-          <button type="button" class="pollen-dream__hold" data-hold="up">${S.rise}</button>
-          <button type="button" class="pollen-dream__hold" data-hold="down">${S.sink}</button>
+          <button type="button" class="pollen-dream__hold" data-hold="fly">${S.fly}</button>
         </div>
       </div>
       <p class="pollen-dream__sr" role="status" aria-live="polite" data-announce></p>
@@ -430,7 +440,7 @@ class PollenDream {
   bindInput() {
     const on = { signal: this.abort.signal };
     const capture = { signal: this.abort.signal, capture: true };
-    const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyC', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight', 'ControlLeft'];
+    const KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight'];
 
     window.addEventListener(
       'keydown',
@@ -452,7 +462,7 @@ class PollenDream {
           this.pause();
           return;
         }
-        if (MOVE_KEYS.includes(e.code)) {
+        if (KEYS.includes(e.code)) {
           e.preventDefault();
           e.stopPropagation();
           this.keys.add(e.code);
@@ -465,7 +475,9 @@ class PollenDream {
     document.addEventListener('visibilitychange', () => document.hidden && this.state === 'play' && this.pause(), on);
     window.addEventListener('resize', () => this.resize(), on);
 
-    // Mouse look: pointer lock once the visitor presses Start, dragging otherwise.
+    // Mouse: with the pointer captured (after Start) moving it looks around;
+    // where it can't be captured, the cursor's distance from the center of
+    // the screen steers instead, like a flight stick. No dragging needed.
     document.addEventListener(
       'pointerlockchange',
       () => {
@@ -479,13 +491,19 @@ class PollenDream {
     document.addEventListener(
       'mousemove',
       (e) => {
-        if (this.state !== 'play' || !this.locked) return;
-        this.turn(e.movementX * LOOK.mouse, e.movementY * LOOK.mouse);
+        if (this.state !== 'play') return;
+        if (this.locked) {
+          this.turn(e.movementX * LOOK.mouse, e.movementY * LOOK.mouse);
+        } else {
+          this.cursor.x = (e.clientX / window.innerWidth) * 2 - 1;
+          this.cursor.y = (e.clientY / window.innerHeight) * 2 - 1;
+          this.cursor.active = e.target === this.canvas;
+        }
       },
       on
     );
 
-    // Touch and pen: a thumbstick on the left, look by dragging anywhere else.
+    // Touch: a steering stick on the left, a Fly button on the right, and dragging anywhere else looks around.
     const c = this.canvas;
     c.addEventListener(
       'pointerdown',
@@ -497,10 +515,10 @@ class PollenDream {
         }
         if (e.pointerType === 'mouse') {
           if (!this.locked) this.requestLock();
-          if (this.locked) return;
+          return;
         }
         if (this.lookDrag.id !== null) return;
-        this.lookDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, type: e.pointerType };
+        this.lookDrag = { id: e.pointerId, x: e.clientX, y: e.clientY };
         try {
           c.setPointerCapture(e.pointerId);
         } catch (err) {
@@ -514,8 +532,7 @@ class PollenDream {
       (e) => {
         const d = this.lookDrag;
         if (e.pointerId !== d.id) return;
-        const k = d.type === 'touch' ? LOOK.touch : LOOK.drag;
-        this.turn((e.clientX - d.x) * k, (e.clientY - d.y) * k);
+        this.turn((e.clientX - d.x) * LOOK.touch, (e.clientY - d.y) * LOOK.touch);
         d.x = e.clientX;
         d.y = e.clientY;
       },
@@ -526,6 +543,7 @@ class PollenDream {
     };
     c.addEventListener('pointerup', endLook, on);
     c.addEventListener('pointercancel', endLook, on);
+    c.addEventListener('mouseleave', () => (this.cursor.active = false), on);
 
     const stick = this.ui.stick;
     stick.addEventListener(
@@ -578,27 +596,53 @@ class PollenDream {
   }
 
   requestLock() {
-    // Without a lock (refused, or in the theme editor's frame) the mouse drags to look instead.
+    // Without a lock (refused, or in the theme editor's frame) the cursor steers instead.
     if (this.touch || !this.canvas.requestPointerLock) return;
     try {
       const r = this.canvas.requestPointerLock();
       if (r && r.catch) r.catch(() => {});
     } catch (e) {
-      /* dragging still works */
+      /* steering still works */
     }
   }
 
   clearInput() {
     this.keys.clear();
-    this.holds.up = this.holds.down = false;
+    this.holds.fly = false;
+    this.cursor.active = false;
     this.stick = { id: null, x: 0, y: 0 };
     this.lookDrag.id = null;
+    this.turnVel = 0;
     if (this.ui) this.ui.knob.style.transform = '';
   }
 
+  /* Look input moves where the view is heading; the view follows it smoothly (see steer()). */
   turn(dx, dy) {
-    this.yaw -= dx;
-    this.pitch = Math.max(-1.3, Math.min(1.3, this.pitch - dy));
+    this.aimYaw -= dx;
+    this.aimPitch = Math.max(-1.3, Math.min(1.3, this.aimPitch - dy));
+  }
+
+  /*
+   * Turning and looking: keys and the stick turn at a steady rate that eases
+   * in and out, the free cursor steers from the screen's center, and the view
+   * glides to where the input points, so it feels quick but never jerky.
+   */
+  steer(dt) {
+    const k = this.keys;
+    const s = this.stick;
+    let yawIn = (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) - (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - s.x;
+    let pitchIn = (k.has('ArrowUp') ? 1 : 0) - (k.has('ArrowDown') ? 1 : 0) - s.y;
+    if (this.cursor.active && !this.locked && !this.touch) {
+      const dead = (v) => (Math.abs(v) < 0.08 ? 0 : (v - Math.sign(v) * 0.08) / 0.92);
+      yawIn -= dead(this.cursor.x) * Math.abs(dead(this.cursor.x)) * (LOOK.steer / TURN.rate);
+      this.aimPitch = this.G.lerp(this.aimPitch, -this.cursor.y * 1.1, 1 - Math.exp(-dt * 4));
+    }
+    this.turnVel = this.G.lerp(this.turnVel || 0, yawIn * TURN.rate, 1 - Math.exp(-dt * TURN.ease));
+    this.aimYaw += this.turnVel * dt;
+    this.aimPitch = Math.max(-1.3, Math.min(1.3, this.aimPitch + pitchIn * TURN.pitch * dt));
+    const f = 1 - Math.exp(-dt * LOOK.smooth);
+    this.yaw += (this.aimYaw - this.yaw) * f;
+    this.pitch += (this.aimPitch - this.pitch) * f;
   }
 
   /* ---------------- game states ---------------- */
@@ -678,7 +722,8 @@ class PollenDream {
       foliage: live ? src.foliage : src.dataset.foliageColor,
       center: live ? src.heroColor : src.dataset.centerColor,
       accent: live ? src.heroAccent : src.dataset.centerAccent,
-      soil: '#191F6B',
+      // The same ground color as the page, so the light on the flowers matches too.
+      soil: live ? src.soil : WHITE,
       reduced: this.reduced,
       camDist: 1500,
     });
@@ -688,52 +733,28 @@ class PollenDream {
     const scene = bed.scene;
     this.scene = scene;
 
-    const horizon = G.mix(bed.heroColor, POWDER, 0.55);
-    const zenith = OCEAN;
-    this.horizon = horizon;
-    scene.fog = new THREE.Fog(G.toColor(horizon), 320, 2500);
-    scene.background = G.toColor(horizon);
+    // All white, like the page the garden lives on: only the flowers have color.
+    this.horizon = WHITE;
+    scene.fog = new THREE.Fog(G.toColor(WHITE), 320, 2500);
+    scene.background = G.toColor(WHITE);
 
     this.camera = new THREE.PerspectiveCamera(72, 1, 1, 7000);
     this.camera.up.set(0, 0, 1);
+    this.sky = new THREE.Object3D();
 
-    // Sky: a dome from the horizon color up to deep ocean blue.
-    const skyGeo = new THREE.SphereGeometry(5500, 24, 12);
-    const pos = skyGeo.attributes.position;
-    const colors = [];
-    for (let i = 0; i < pos.count; i++) {
-      const t = Math.max(0, pos.getY(i) / 5500);
-      const c = G.mix(horizon, zenith, Math.pow(t, 0.6));
-      colors.push(c[0] / 255, c[1] / 255, c[2] / 255);
-    }
-    skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    skyGeo.rotateX(Math.PI / 2); // its pole points up the world's z axis
-    const skyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false });
-    const sky = new THREE.Mesh(skyGeo, skyMat);
-    sky.renderOrder = -1;
-    scene.add(sky);
-    this.sky = sky;
-    this.disposables.push(skyGeo, skyMat);
-
-    // Ground: low, faceted hills in the leaf color, snapped like the flowers.
+    // The ground is white too; a soft shadow under the player shows how high they are.
     const rng = G.mulberry32(7);
     const size = this.bound * 3;
-    const groundGeo = new THREE.PlaneGeometry(size, size, 28, 28);
-    const gp = groundGeo.attributes.position;
-    const gc = [];
-    for (let i = 0; i < gp.count; i++) {
-      const x = gp.getX(i);
-      const y = gp.getY(i);
-      gp.setZ(i, G.FLOOR_Z - 8 + Math.sin(x * 0.004) * Math.cos(y * 0.005) * 6 + (rng() - 0.5) * 6);
-      const c = G.mix(G.tone(bed.foliage, -0.45), bed.foliage, rng() * 0.5);
-      gc.push(c[0] / 255, c[1] / 255, c[2] / 255);
-    }
-    groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(gc, 3));
-    groundGeo.computeVertexNormals();
-    const groundMat = bed.makeMaterial({ vertexColors: true, shininess: 10, specular: 0x222222 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    scene.add(ground);
+    const groundGeo = new THREE.PlaneGeometry(size, size, 1, 1);
+    groundGeo.translate(0, 0, G.FLOOR_Z - 6);
+    const groundMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    scene.add(new THREE.Mesh(groundGeo, groundMat));
     this.disposables.push(groundGeo, groundMat);
+    const shadowGeo = new THREE.CircleGeometry(16, 20);
+    const shadowMat = new THREE.MeshBasicMaterial({ color: G.toColor(OCEAN), transparent: true, opacity: 0.18, depthWrite: false });
+    this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    scene.add(this.shadow);
+    this.disposables.push(shadowGeo, shadowMat);
 
     // Grass: the bed's own leaf petal, standing up, giant at this scale.
     const blades = Math.round((this.touch ? 170 : 300) * Math.min(2, this.bound / BOUND));
@@ -768,7 +789,7 @@ class PollenDream {
     this.glowTex = new THREE.CanvasTexture(glow);
     this.disposables.push(this.glowTex);
 
-    // Dust drifting in the dusk light.
+    // Specks of pollen drifting in the air.
     const motes = this.touch ? 140 : 260;
     const mp = new Float32Array(motes * 3);
     for (let i = 0; i < motes; i++) {
@@ -778,7 +799,7 @@ class PollenDream {
     }
     const dustGeo = new THREE.BufferGeometry();
     dustGeo.setAttribute('position', new THREE.BufferAttribute(mp, 3));
-    const dustMat = new THREE.PointsMaterial({ size: 5, map: this.glowTex, color: G.toColor(POWDER), transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending });
+    const dustMat = new THREE.PointsMaterial({ size: 4, map: this.glowTex, color: G.toColor(G.mix(WIND, WHITE, 0.3)), transparent: true, opacity: 0.45, depthWrite: false });
     this.dust = new THREE.Points(dustGeo, dustMat);
     scene.add(this.dust);
     this.disposables.push(dustGeo, dustMat);
@@ -788,7 +809,7 @@ class PollenDream {
     const bp = new Float32Array(BURST * 3);
     const burstGeo = new THREE.BufferGeometry();
     burstGeo.setAttribute('position', new THREE.BufferAttribute(bp, 3));
-    const burstMat = new THREE.PointsMaterial({ size: 9, map: this.glowTex, color: G.toColor(POLLEN), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const burstMat = new THREE.PointsMaterial({ size: 9, map: this.glowTex, color: G.toColor(POLLEN), transparent: true, opacity: 0, depthWrite: false, fog: false });
     this.burst = { points: new THREE.Points(burstGeo, burstMat), vel: new Float32Array(BURST * 3), age: 1 };
     this.burst.points.frustumCulled = false;
     scene.add(this.burst.points);
@@ -799,8 +820,8 @@ class PollenDream {
     this.vel = new THREE.Vector3();
     this.fwd = new THREE.Vector3();
     this.tmp = new THREE.Vector3();
-    this.yaw = 0;
-    this.pitch = 0;
+    this.tmp2 = new THREE.Vector3();
+    this.face(0, 0);
   }
 
   /* ---------------- the garden ---------------- */
@@ -852,6 +873,7 @@ class PollenDream {
     if (!this.logo) bed.assignEyes(rng);
     bed.buildMeshes();
     this.buildPollen(chosen);
+    this.buildUpdrafts(rng, chosen);
 
     this.total = total;
     this.count = 0;
@@ -869,7 +891,8 @@ class PollenDream {
     bed.flowers = L.src.flowers.map((s, i) => {
       const x = (s.dest[0] - L.cx) * L.S;
       const y = (s.dest[1] - L.cy) * L.S;
-      const z = 60 + G.clamp((s.z + 25) / 55, 0, 1) * 300;
+      // Taller than on the page, so there is height to glide down from.
+      const z = 80 + G.clamp((s.z + 25) / 55, 0, 1) * 380;
       const f = bed.makeFlower(x, y, z, s.r * L.S, rng, { id: i + 1, startAt: 0, dur: 1, grow: 1, star: s.star });
       f.species = s.species;
       f.colorIndex = s.colorIndex;
@@ -923,16 +946,104 @@ class PollenDream {
       const n = 34;
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
-      const mat = new THREE.PointsMaterial({ size: 8, map: this.glowTex, color: G.toColor(POLLEN), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      const mat = new THREE.PointsMaterial({ size: 8, map: this.glowTex, color: G.toColor(POLLEN), transparent: true, depthWrite: false, fog: false });
       const points = new THREE.Points(geo, mat);
       points.frustumCulled = false;
-      const haloMat = new THREE.SpriteMaterial({ map: this.glowTex, color: G.toColor(G.mix(POLLEN, f.color, 0.35)), transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      const haloMat = new THREE.SpriteMaterial({ map: this.glowTex, color: G.toColor(G.mix(POLLEN, f.color, 0.25)), transparent: true, opacity: 0.5, depthWrite: false, fog: false });
       const halo = new THREE.Sprite(haloMat);
       this.scene.add(points, halo);
       const grains = [];
       for (let i = 0; i < n; i++) grains.push({ a: (i / n) * TAU * 3, rad: f.r * (0.15 + 0.5 * ((i * 37) % n) / n), h: (i % 7) * 0.12, s: 0.5 + ((i * 13) % 10) / 10 });
       return { f, points, halo, grains, fade: 1, k };
     });
+  }
+
+  /*
+   * Rising gusts: one near each glowing flower and more spread through the
+   * garden, never right under a flower head. Each is drawn as a swirl of
+   * specks rising faster as it surges, and a ring on the ground.
+   */
+  buildUpdrafts(rng, glowing) {
+    const THREE = this.THREE;
+    const G = this.G;
+    this.clearUpdrafts();
+    const flowers = this.bed.flowers;
+    const free = (x, y, rad) => flowers.every((f) => Math.hypot(f.x - x, -f.y - y) > rad * 0.7 + f.r * 0.9);
+    const list = [];
+    const add = (x, y) => {
+      const rad = G.lerp(95, 140, rng());
+      if (Math.hypot(x, y) > this.bound - 200 || !free(x, y, rad)) return false;
+      if (list.some((u) => Math.hypot(u.x - x, u.y - y) < u.rad + rad + 80)) return false;
+      list.push({ x, y, rad, top: G.lerp(620, 900, rng()), power: G.lerp(0.85, 1.15, rng()), period: G.lerp(5, 9, rng()), phase: rng() * TAU, rise: rng() * 1000 });
+      return true;
+    };
+    for (const f of glowing) {
+      for (let k = 0; k < 12; k++) {
+        const a = rng() * TAU;
+        const d = f.r * G.lerp(1.5, 2.6, rng()) + 70;
+        if (add(f.x + Math.cos(a) * d, -f.y + Math.sin(a) * d)) break;
+      }
+    }
+    const reach = this.bound - 250;
+    const field = G.poissonDisc(-reach, -reach, reach, reach, 620, rng, [0, 0]);
+    for (const [x, y] of field) {
+      if (list.length >= 44) break;
+      add(x, y);
+    }
+    this.updrafts = list;
+
+    const per = 18;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(list.length * per * 3), 3));
+    const mat = new THREE.PointsMaterial({ size: 7, map: this.glowTex, color: G.toColor(WIND), transparent: true, opacity: 0.7, depthWrite: false });
+    const points = new THREE.Points(geo, mat);
+    points.frustumCulled = false;
+    const ringGeo = new THREE.RingGeometry(0.82, 1, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color: G.toColor(WIND), transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
+    const rings = new THREE.InstancedMesh(ringGeo, ringMat, Math.max(1, list.length));
+    const d = new THREE.Object3D();
+    list.forEach((u, i) => {
+      d.position.set(u.x, u.y, G.FLOOR_Z - 4);
+      d.scale.setScalar(u.rad);
+      d.updateMatrix();
+      rings.setMatrixAt(i, d.matrix);
+    });
+    rings.count = list.length;
+    this.scene.add(points, rings);
+    this.wind = { points, rings, per };
+  }
+
+  clearUpdrafts() {
+    if (!this.wind) return;
+    const w = this.wind;
+    this.scene.remove(w.points, w.rings);
+    w.points.geometry.dispose();
+    w.points.material.dispose();
+    w.rings.geometry.dispose();
+    w.rings.material.dispose();
+    w.rings.dispose();
+    this.wind = null;
+    this.updrafts = [];
+  }
+
+  updateWind(dt) {
+    const w = this.wind;
+    if (!w) return;
+    const pos = w.points.geometry.attributes.position;
+    const floor = this.G.FLOOR_Z;
+    let i = 0;
+    for (const u of this.updrafts) {
+      const g = this.gust(u);
+      u.rise += dt * (70 + 260 * g);
+      const h = u.top - floor;
+      for (let k = 0; k < w.per; k++) {
+        const z = floor + ((u.rise + (k * h) / w.per) % h);
+        const a = u.phase + k * 2.39996 + (z / h) * 3 + this.time * 0.8;
+        const r = u.rad * (0.25 + 0.55 * (((k * 7) % w.per) / w.per));
+        pos.setXYZ(i++, u.x + Math.cos(a) * r, u.y + Math.sin(a) * r, z);
+      }
+    }
+    pos.needsUpdate = true;
   }
 
   clearPollen() {
@@ -946,20 +1057,42 @@ class PollenDream {
     this.pollen = null;
   }
 
+  /* Sets where the player looks, at once (no easing). */
+  face(yaw, pitch) {
+    this.yaw = this.aimYaw = yaw;
+    this.pitch = this.aimPitch = pitch;
+    this.turnVel = 0;
+  }
+
+  /*
+   * The player starts resting on a flower: in the logo, the tallest one in
+   * the asterisk; elsewhere, one at the edge of the garden. They face the
+   * nearest glowing flower.
+   */
   placePlayer() {
     this.vel.set(0, 0, 0);
+    this.carry = null;
+    const flowers = this.bed.flowers.filter((f) => !f.heart);
+    let start;
     if (this.logo) {
-      // Over the asterisk, facing along the logo.
       const [sx, sy] = this.logo.star;
-      const toward = Math.atan2(sy, -sx);
-      this.pos.set(sx - Math.cos(toward) * 90, -sy - Math.sin(toward) * 90, 440);
-      this.yaw = toward;
-      this.pitch = -0.38;
-      return;
+      const near = flowers.filter((f) => f.star && Math.hypot(f.x - sx, f.y - sy) < 900);
+      start = (near.length ? near : flowers).reduce((a, f) => (f.z > a.z ? f : a));
+    } else {
+      start = flowers.reduce((a, f) => (Math.hypot(f.x, f.y + WORLD_R) < Math.hypot(a.x, a.y + WORLD_R) ? f : a));
     }
-    this.pos.set(0, -WORLD_R - 120, 150);
-    this.yaw = Math.PI / 2;
-    this.pitch = -0.08;
+    if (start.p < 1) start.p = 1;
+    start.asleep = false;
+    start.folding = false;
+    this.perch = start;
+    this.pos.copy(this.perchSpot(start));
+    const target = (this.pollen || []).map((p) => p.f).filter((f) => f !== start && !f.pollinated).reduce((a, f) => (!a || Math.hypot(f.x - start.x, f.y - start.y) < Math.hypot(a.x - start.x, a.y - start.y) ? f : a), null);
+    this.face(target ? Math.atan2(-target.y + start.y, target.x - start.x) : Math.PI / 2, -0.15);
+  }
+
+  /* Where the player sits on top of a flower. */
+  perchSpot(f) {
+    return this.tmp2.set(f.x, -f.y, f.z + f.lift + f.r * 0.12 + f.r * 0.5 * f.g + PLAYER_R + 2);
   }
 
   /* ---------------- loop ---------------- */
@@ -1015,8 +1148,7 @@ class PollenDream {
       // A slow drift around the garden behind the title.
       const a = t * 0.05 - Math.PI / 2;
       this.pos.set(Math.cos(a) * 1250, Math.sin(a) * 1250, 260);
-      this.yaw = a + Math.PI;
-      this.pitch = -0.12;
+      this.face(a + Math.PI, -0.12);
     }
 
     // Look direction (z is up).
@@ -1057,6 +1189,12 @@ class PollenDream {
     bed.updateEyes(dt);
 
     this.updatePollen(dt);
+    this.updateWind(dt);
+    this.shadow.position.set(this.pos.x, this.pos.y, this.G.FLOOR_Z - 5);
+    const height = Math.max(0, this.pos.z - this.G.FLOOR_Z);
+    this.shadow.scale.setScalar(1 + height / 500);
+    this.shadow.material.opacity = 0.22 / (1 + height / 300);
+    this.shadow.visible = !this.dive;
     this.updateBurst(dt);
     this.updateDust(dt);
     if (this.state === 'play' || this.state === 'done') this.updateHud();
@@ -1072,33 +1210,36 @@ class PollenDream {
   }
 
   /* Flight: accelerate toward where you look, glide to a stop, never through a flower. */
+  /*
+   * Flight. The player moves the way they look: flapping (W, Space, Fly)
+   * fast, otherwise gliding slowly, always sinking a little. Their own climb
+   * is weak, so height comes from the rising gusts. They can land and rest on
+   * any open flower; drifting down to the ground, the wind carries them back
+   * to the last flower they rested on.
+   */
   fly(dt) {
+    const G = this.G;
+    if (this.carry) {
+      this.updateCarry(dt);
+      return;
+    }
+    this.steer(dt);
     const k = this.keys;
-    const s = this.stick;
-    const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - s.y;
-    const r = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + s.x;
-    const u = (k.has('Space') || k.has('KeyE') || this.holds.up ? 1 : 0) - (k.has('KeyC') || k.has('KeyQ') || k.has('ControlLeft') || this.holds.down ? 1 : 0);
-    const boost = k.has('ShiftLeft') || k.has('ShiftRight') ? MOVE.boost : 1;
+    const flap = k.has('KeyW') || k.has('Space') || this.holds.fly;
+    const dash = flap && (k.has('ShiftLeft') || k.has('ShiftRight'));
+    const brake = k.has('KeyS');
+    const resting = this.resting && !flap;
+    const speed = resting ? 0 : dash ? FLIGHT.dash : flap ? FLIGHT.flap : brake ? FLIGHT.brake : FLIGHT.glide;
 
-    const wish = this.tmp.set(0, 0, 0);
-    wish.addScaledVector(this.fwd, f);
-    wish.x += Math.sin(this.yaw) * r;
-    wish.y -= Math.cos(this.yaw) * r;
-    wish.z += u;
-    if (wish.lengthSq() > 1) wish.normalize();
-
-    this.vel.addScaledVector(wish, MOVE.accel * boost * dt);
-    this.vel.multiplyScalar(Math.exp(-MOVE.damp * dt));
-    const max = MOVE.max * boost;
-    if (this.vel.length() > max) this.vel.setLength(max);
+    const want = this.tmp.copy(this.fwd).multiplyScalar(speed);
+    if (want.z > 0) want.z *= FLIGHT.climb;
+    want.z -= FLIGHT.sink;
+    this.lift = this.updraftAt(this.pos);
+    want.z += this.lift;
+    this.vel.lerp(want, 1 - Math.exp(-dt * FLIGHT.ease));
     this.pos.addScaledVector(this.vel, dt);
 
-    // Ground, sky and the edge of the dream.
-    const floor = this.G.FLOOR_Z + PLAYER_R + 6;
-    if (this.pos.z < floor) {
-      this.pos.z = floor;
-      this.vel.z = Math.max(0, this.vel.z);
-    }
+    // The sky and the edge of the dream push back gently.
     if (this.pos.z > CEILING) {
       this.pos.z = CEILING;
       this.vel.z = Math.min(0, this.vel.z);
@@ -1110,7 +1251,8 @@ class PollenDream {
       this.vel.y -= Math.sin(a) * out * 6 * dt;
     }
 
-    // Stems and flower heads are solid; the player slides around them.
+    // Stems and flower heads are solid; the player slides around them and can land on top.
+    this.resting = false;
     for (const fl of this.bed.flowers) {
       const X = fl.x;
       const Y = -fl.y;
@@ -1125,18 +1267,27 @@ class PollenDream {
           this.pos.y = Y + (dy / dxy) * stem;
         }
       }
-      // An open head is a wide, flat disc of petals: the player is pushed out
-      // the shorter way, over or under it, or around its rim.
+      // A head is a flat disc of petals (a closed bud a narrower one): the
+      // player is pushed out the shorter way, over or under it, or around its rim.
       if (fl.p < 0.5) continue;
-      const rim = fl.r * 0.95 * fl.g + PLAYER_R;
-      const half = fl.r * 0.22 * fl.g + PLAYER_R;
-      const dz = this.pos.z - (headZ + fl.r * 0.08);
+      const rim = fl.r * (fl.p < 0.75 ? 0.45 : 0.95) * fl.g + PLAYER_R;
+      // Thick enough that a player resting on top sits above the cupped petals, with a view.
+      const half = fl.r * 0.5 * fl.g + PLAYER_R;
+      const dz = this.pos.z - (headZ + fl.r * 0.12);
       if (dxy < rim && Math.abs(dz) < half) {
         const vertical = half - Math.abs(dz);
         const radial = rim - dxy;
         if (vertical < radial) {
           this.pos.z += Math.sign(dz || 1) * vertical;
           if (this.vel.z * Math.sign(dz || 1) < 0) this.vel.z = 0;
+          if (dz > 0) {
+            // Landed on top: rest here, and remember it.
+            this.resting = true;
+            this.perch = fl;
+            const stop = Math.exp(-dt * 8);
+            this.vel.x *= stop;
+            this.vel.y *= stop;
+          }
         } else {
           this.pos.x = X + (dx / dxy) * rim;
           this.pos.y = Y + (dy / dxy) * rim;
@@ -1144,7 +1295,51 @@ class PollenDream {
       }
     }
 
+    // Down on the ground: the wind carries the player back to their last flower.
+    if (this.pos.z < G.FLOOR_Z + PLAYER_R + 8 && this.perch) {
+      this.carry = { t: 0, from: this.pos.clone(), to: this.perchSpot(this.perch).clone() };
+      this.vel.set(0, 0, 0);
+      this.announce(STRINGS.carried);
+      return;
+    }
+
     this.gather(dt);
+  }
+
+  /* An arc up and over, back onto the last flower. */
+  updateCarry(dt) {
+    const c = this.carry;
+    c.t = Math.min(1, c.t + dt / 1.8);
+    const e = this.G.smooth(c.t);
+    this.pos.lerpVectors(c.from, c.to, e);
+    this.pos.z += Math.sin(Math.PI * c.t) * 160;
+    if (c.t >= 1) {
+      this.carry = null;
+      this.resting = true;
+    }
+  }
+
+  /*
+   * Rising gusts of wind: columns that always lift a little and, every few
+   * seconds, surge. Inside one the lift is strongest at its center and fades
+   * near its top. Returns the upward speed they give at a point.
+   */
+  updraftAt(p) {
+    let lift = 0;
+    for (const u of this.updrafts || []) {
+      const d = Math.hypot(p.x - u.x, p.y - u.y);
+      if (d > u.rad || p.z > u.top) continue;
+      const across = 1 - (d / u.rad) ** 2;
+      const below = Math.min(1, (u.top - p.z) / 160);
+      lift += UPDRAFT.lift * u.power * across * below * this.gust(u);
+    }
+    return Math.min(lift, UPDRAFT.lift * 1.2);
+  }
+
+  /* How strongly a column blows right now: a steady breath, and a surge every few seconds. */
+  gust(u) {
+    const w = 0.5 + 0.5 * Math.sin((this.time * TAU) / u.period + u.phase);
+    return 0.4 + 0.6 * w * w;
   }
 
   /* Hovering in a glowing flower's light gathers its pollen. */
@@ -1246,7 +1441,7 @@ class PollenDream {
       const pulse = 1 + Math.sin(t * 2.2 + p.k) * 0.12 + f.harvest * 0.5;
       p.halo.position.set(cx, cy, cz + f.r * 0.2);
       p.halo.scale.setScalar(f.r * 2.6 * pulse * p.fade);
-      p.halo.material.opacity = 0.8 * p.fade;
+      p.halo.material.opacity = 0.5 * p.fade;
       p.halo.visible = p.fade > 0;
       p.points.visible = p.fade > 0;
       if (!p.points.visible) continue;
@@ -1340,8 +1535,11 @@ class PollenDream {
     ui.reticle.classList.toggle('is-gathering', h > 0);
     let prompt = '';
     if (this.heart && !this.complete) prompt = STRINGS.heart;
+    else if (this.state === 'play' && this.carry) prompt = STRINGS.carried;
     else if (this.state === 'play' && this.inside) prompt = STRINGS.gathering;
+    else if (this.state === 'play' && this.lift > 60) prompt = STRINGS.rising;
     else if (this.state === 'play' && n && this.nearD < 650) prompt = STRINGS.near;
+    else if (this.state === 'play' && this.resting) prompt = STRINGS.resting;
     if (ui.prompt.textContent !== prompt) ui.prompt.textContent = prompt;
   }
 

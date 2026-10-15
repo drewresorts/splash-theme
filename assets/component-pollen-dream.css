@@ -1,7 +1,7 @@
 /*
  * Pollen Dream (assets/pollen-dream.js): a full-screen layer over the page,
- * in the splash's interface language: monospace capitals, ocean plates,
- * powder ink and the fuchsia/teal double edge on titles.
+ * white like the site, in its interface language: monospace capitals,
+ * ocean ink and the fuchsia/teal double edge on titles.
  */
 html.pollen-dream-open,
 html.pollen-dream-open body {
@@ -9,10 +9,11 @@ html.pollen-dream-open body {
 }
 
 .pollen-dream {
-  --pd-ink: #b9e5fb;
-  --pd-plate: #191f6b;
+  --pd-ink: #191f6b;
+  --pd-plate: #ffffff;
   --pd-hero: #f04e62;
-  --pd-pollen: #ffd678;
+  --pd-accent: #a62749;
+  --pd-pollen: #f2a834;
   --pd-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
   position: fixed;
   inset: 0;
@@ -148,7 +149,7 @@ html.pollen-dream-open body {
 
 .pollen-dream__goal {
   padding-left: 12px;
-  border-left: 2px solid var(--pd-pollen);
+  border-left: 2px solid var(--pd-hero);
 }
 
 .pollen-dream__controls {
@@ -164,7 +165,7 @@ html.pollen-dream-open body {
 
 .pollen-dream__controls b {
   font-weight: 400;
-  color: var(--pd-pollen);
+  color: var(--pd-accent);
 }
 
 .pollen-dream__actions {
@@ -201,11 +202,13 @@ html.pollen-dream-open body {
 }
 
 .pollen-dream__button--primary:hover {
-  background: var(--pd-pollen);
+  background: var(--pd-hero);
+  border-color: var(--pd-hero);
+  color: #fff;
 }
 
 .pollen-dream button:focus-visible {
-  outline: 2px solid var(--pd-pollen);
+  outline: 2px solid var(--pd-hero);
   outline-offset: 3px;
 }
 
@@ -250,7 +253,7 @@ html.pollen-dream-open body {
 
 @keyframes pollen-dream-bump {
   30% {
-    color: var(--pd-pollen);
+    color: var(--pd-hero);
     transform: scale(1.06);
   }
 }
@@ -299,7 +302,7 @@ html.pollen-dream-open body {
   left: 50%;
   top: 0;
   border: 6px solid transparent;
-  border-bottom: 12px solid var(--pd-pollen);
+  border-bottom: 12px solid var(--pd-hero);
   border-top: 0;
   transform: translateX(-50%);
 }
@@ -313,7 +316,7 @@ html.pollen-dream-open body {
   height: 34px;
   margin: -17px 0 0 -17px;
   border-radius: 50%;
-  background: conic-gradient(var(--pd-pollen) calc(var(--p, 0) * 360deg), transparent 0);
+  background: conic-gradient(var(--pd-hero) calc(var(--p, 0) * 360deg), transparent 0);
   -webkit-mask: radial-gradient(circle, transparent 12px, #000 13px);
   mask: radial-gradient(circle, transparent 12px, #000 13px);
   opacity: 0.35;

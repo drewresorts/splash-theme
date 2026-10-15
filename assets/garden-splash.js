@@ -1664,6 +1664,7 @@ class GardenSplash extends HTMLElement {
 
     if (this.background && !this.reduced) this.wave(t);
     if (this.arranged && !this.background) this.drift(t, dt);
+    if (this.arranged && !this.background && !this.reduced) this.blow(t);
     if (this.egg && this.egg.pulse > 0) this.eggReact(dt);
 
     for (const f of this.flowers) {
@@ -1745,6 +1746,42 @@ class GardenSplash extends HTMLElement {
     if (this.keyLight) {
       const a = k * 0.6 * motion;
       this.keyLight.position.set(-0.7 * Math.cos(a) - 0.5 * Math.sin(a), 0.9 * Math.cos(a * 0.8), 1.2);
+    }
+  }
+
+  /*
+   * Now and then, once the logo has formed, a gust of wind runs through it:
+   * a front sweeps across the screen, and the flowers it passes lean with
+   * it, lift and spin a little, then settle back exactly where they were.
+   * Between gusts nothing moves, so the composition stays put.
+   */
+  blow(t) {
+    if (!this.gust) {
+      if (this.nextGust === undefined) this.nextGust = t + 2.5 + Math.random() * 3;
+      if (t < this.nextGust) return;
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      const width = Math.max(120, this.w * 0.22);
+      this.gust = { t0: t, dir, width, strength: 0.7 + Math.random() * 0.5, speed: this.w / (2.2 + Math.random()) };
+    }
+    const g = this.gust;
+    const start = g.dir > 0 ? -g.width : this.w + g.width;
+    const front = start + g.dir * g.speed * (t - g.t0);
+    const done = g.dir > 0 ? front > this.w + g.width * 2.5 : front < -g.width * 2.5;
+    for (const f of this.flowers) {
+      if (f.rot0 === undefined) f.rot0 = f.rot;
+      // How far behind the front this flower is (positive: the front has passed it).
+      const behind = (front - f.dest[0]) * g.dir;
+      // A quick lean as the front reaches it, easing out over a longer tail.
+      const k = done ? 0 : behind < 0 ? Math.exp(-((behind / (g.width * 0.35)) ** 2)) : Math.exp(-behind / g.width) * (1 + 0.25 * Math.sin(behind * 0.05));
+      const push = k * g.strength;
+      f.x = f.dest[0] + g.dir * push * this.base * 0.7;
+      f.lift = push * 26;
+      f.rot = f.rot0 + g.dir * push * 0.45 * Math.sin(f.id + t * 6);
+      f.shown = -1;
+    }
+    if (done) {
+      this.gust = null;
+      this.nextGust = t + 7 + Math.random() * 8;
     }
   }
 
