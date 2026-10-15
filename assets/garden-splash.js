@@ -17,7 +17,9 @@
  * The splash can be zoomed into, with no controls shown: scroll or pinch on
  * a trackpad, pinch on a touchscreen, or press and hold then slide up/down.
  * Zoomed in, dragging moves around and the render sharpens. Now and then a
- * bee flies through, sometimes landing on a flower for a moment.
+ * bee flies through, sometimes landing on a flower for a moment. Drawing a
+ * full circle around the logo lies the visitor down on their back in the
+ * flowers, looking up at a night sky whose stars gather into the logo.
  *
  * Modes (data-mode):
  *   (none)      the splash: grows, forms the logo, then stays as the
@@ -179,6 +181,8 @@ const LOGO_SPACING = { airy: 0.5, lush: 0.36, overgrown: 0.27 };
 /* The render is under-resolved on purpose, then scaled up with nearest-neighbour. */
 // Narrow screens get more pixels, or the small flowers that spell the logo turn to mush.
 const renderScale = (w) => (w < 750 ? 0.85 : 0.5);
+// The splash itself is drawn sharper, as long as the device keeps up (see adapt()).
+const splashScale = (w, dpr) => Math.max(renderScale(w), Math.min(dpr, w < 750 ? 1.25 : 0.9));
 
 /* Bridson's Poisson-disc sampling: evenly spread, never on a grid. */
 function poissonDisc(x0, y0, x1, y1, minDist, rng, seedPoint) {
@@ -455,7 +459,10 @@ class GardenSplash extends HTMLElement {
     this.setupScene();
     this.bindEvents();
     this.bindEgg();
-    if (!this.backdrop) this.bindZoom();
+    if (!this.backdrop) {
+      this.bindZoom();
+      this.bindNight();
+    }
     if (this.backdrop) {
       // The bed sits behind the page, so the eyes follow the pointer across it.
       this.onWindowPointer = (e) => {
@@ -558,6 +565,12 @@ class GardenSplash extends HTMLElement {
       this.bee.materials.forEach((m) => m.dispose());
       this.bee = null;
     }
+    if (this.onNightKey) document.removeEventListener('keydown', this.onNightKey);
+    document.documentElement.classList.remove('garden-night');
+    if (this.sky) {
+      this.sky.disposables.forEach((d) => d.dispose());
+      this.sky = null;
+    }
     if (this.renderer) {
       this.clearMeshes();
       this.renderer.dispose();
@@ -608,7 +621,8 @@ class GardenSplash extends HTMLElement {
     key.position.set(-0.7, 0.9, 1.2);
     scene.add(key);
     this.keyLight = key;
-    scene.add(new THREE.AmbientLight(toColor(mix(POWDER, this.soil, 0.4)), 0.9));
+    this.ambient = new THREE.AmbientLight(toColor(mix(POWDER, this.soil, 0.4)), 0.9);
+    scene.add(this.ambient);
 
     this.camera = new THREE.PerspectiveCamera(FOV, 1, 10, 5000);
 
@@ -993,7 +1007,7 @@ class GardenSplash extends HTMLElement {
 
   /* Whether a point on screen is on one of the asterisk's flowers. */
   eggHit(cx, cy) {
-    if (!this.arranged || !this.hasTargets || this.failed || !this.eggEnabled()) return false;
+    if (!this.arranged || !this.hasTargets || this.failed || this.night || !this.eggEnabled()) return false;
     const r = this.getBoundingClientRect();
     const x = cx - r.left;
     const y = cy - r.top;
@@ -1060,7 +1074,9 @@ class GardenSplash extends HTMLElement {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     // The 3D render is drawn small and scaled up by CSS with nearest-neighbour.
-    this.rs = renderScale(W);
+    // Behind other pages the bed stays coarse; the splash starts sharp and steps down if it must.
+    this.rsFloor = renderScale(W);
+    this.rs = this.backdrop ? this.rsFloor : Math.min(this.rsCap || 9, splashScale(W, this.dpr));
     this.renderer.setPixelRatio(this.rs);
     this.rsNow = this.rs;
     this.renderer.setSize(W, H, false);
@@ -1080,6 +1096,7 @@ class GardenSplash extends HTMLElement {
 
     this.camBase = this.camera.position.clone();
     if (this.view) this.resetView(true);
+    if (this.night) this.endNight();
 
     if (!this.maskReady) return;
     // A small height change (mobile browser chrome) keeps the same field, re-placed.
@@ -1621,6 +1638,7 @@ class GardenSplash extends HTMLElement {
         return;
       }
       const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
+      if (!this.backdrop) this.adapt(now - this.last);
       this.last = now;
       try {
         this.update(dt);
@@ -1639,6 +1657,34 @@ class GardenSplash extends HTMLElement {
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
+  }
+
+  /*
+   * Keeps the splash smooth: if frames take too long for a couple of
+   * seconds, the render resolution steps down (never below the original
+   * coarse look), and stays down for the visit to this page.
+   */
+  adapt(ms) {
+    if (ms <= 0 || ms > 250) return;
+    const q = this.quality || (this.quality = { avg: 16, since: 0 });
+    q.avg += (ms - q.avg) * 0.05;
+    q.since += ms;
+    if (q.since < 2000) return;
+    q.since = 0;
+    if (q.avg > 26 && this.rs > this.rsFloor + 0.01) {
+      this.rs = Math.max(this.rsFloor, Math.round((this.rs - 0.15) * 20) / 20);
+      this.rsCap = this.rs;
+      this.rsNow = 0;
+      if (this.view && this.view.z > 1.02) this.sharpen();
+      else this.applyScale(this.rs);
+    }
+  }
+
+  applyScale(rs) {
+    this.rsNow = rs;
+    this.renderer.setPixelRatio(rs);
+    this.renderer.setSize(this.w, this.h, false);
+    this.snap.value.set(this.w * rs * 0.25, this.h * rs * 0.25);
   }
 
   update(dt) {
@@ -1676,8 +1722,11 @@ class GardenSplash extends HTMLElement {
 
     if (this.background && !this.reduced) this.wave(t);
     if (!this.background) this.drift(t, dt);
-    if (this.arranged && !this.background && !this.reduced) this.blow(t);
-    if (this.arranged && !this.backdrop && !this.reduced) this.flyBee(t, dt);
+    if (this.arranged && !this.background && !this.reduced && !this.night) this.blow(t);
+    if (this.arranged && !this.backdrop && !this.reduced) {
+      if (!this.night) this.flyBee(t, dt);
+      else if (this.bee) this.bee.group.visible = false;
+    }
     if (this.egg && this.egg.pulse > 0) this.eggReact(dt);
 
     for (const f of this.flowers) {
@@ -1747,6 +1796,8 @@ class GardenSplash extends HTMLElement {
    */
   drift(t, dt) {
     if (!this.camBase) return;
+    if (this.night) this.updateNight(t, dt);
+    if (this.night && this.night.t > 0) return;
     const v = this.view;
     if (v) this.easeView(dt);
     const Z = v ? v.z : 1;
@@ -1978,6 +2029,350 @@ class GardenSplash extends HTMLElement {
     g.rotation.set(0, flying ? 0.15 : 0, bee.yaw, 'ZYX');
   }
 
+  /* ---------------- the night sky ---------------- */
+
+  /*
+   * The hidden night: drawing one full circle around the logo (a finger, or
+   * the mouse held down) turns the view over. The camera sinks into a small
+   * clearing among the flowers and tips back until it looks straight up,
+   * as if lying on your back in the bed: flower heads overhead against a
+   * night sky. Up there the stars, one for each flower and in its color,
+   * gather into the logo the way the flowers did, among faint
+   * constellations, twinkling, with a shooting star now and then. Another
+   * circle, Escape, or the menu brings the day back.
+   */
+  bindNight() {
+    let path = null;
+    this.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (this.classList.contains('is-nav-open') || !this.arranged || this.failed) return;
+        path = { id: e.pointerId, a: null, sum: 0, t0: e.timeStamp, n: 0 };
+      },
+      true
+    );
+    this.addEventListener(
+      'pointermove',
+      (e) => {
+        if (!path || e.pointerId !== path.id) return;
+        if (this.view && this.view.tz > 1.02) {
+          path = null;
+          return;
+        }
+        const r = this.getBoundingClientRect();
+        const b = this.logoBox || { x: 0, y: 0, w: this.w, h: this.h };
+        const dx = e.clientX - r.left - (b.x + b.w / 2);
+        const dy = e.clientY - r.top - (b.y + b.h / 2);
+        if (Math.hypot(dx, dy) < 40) return;
+        const a = Math.atan2(dy, dx);
+        if (path.a !== null) {
+          let d = a - path.a;
+          d = Math.atan2(Math.sin(d), Math.cos(d));
+          path.sum += d;
+        }
+        path.a = a;
+        if (Math.abs(path.sum) > TAU * 0.92 && e.timeStamp - path.t0 < 8000) {
+          path = null;
+          this.pointer.down = false;
+          this.gestured = true;
+          this.toggleNight();
+        }
+      },
+      true
+    );
+    const end = (e) => {
+      if (path && e.pointerId === path.id) path = null;
+    };
+    this.addEventListener('pointerup', end, true);
+    this.addEventListener('pointercancel', end, true);
+    this.onNightKey = (e) => {
+      if (e.key === 'Escape' && this.night && this.night.dir > 0) this.toggleNight();
+    };
+    document.addEventListener('keydown', this.onNightKey);
+  }
+
+  toggleNight() {
+    if (!this.night) {
+      if (!this.logoBox || !this.flowers.length) return;
+      if (this.view) this.resetView(true);
+      this.buildSky();
+      this.night = { t: 0, dir: 1, since: 0, nextShoot: 3 + Math.random() * 4 };
+      this.classList.add('is-night');
+    } else {
+      this.night.dir = -this.night.dir;
+    }
+    this.start();
+  }
+
+  endNight() {
+    this.night = null;
+    this.classList.remove('is-night');
+    document.documentElement.classList.remove('garden-night');
+    if (this.sky) this.sky.group.visible = false;
+    this.renderer.setClearColor(0x000000, 0);
+    this.camera.fov = FOV;
+    this.camera.updateProjectionMatrix();
+    if (this.keyLight) {
+      this.keyLight.intensity = 2.6;
+      this.keyLight.color.set(0xffffff);
+    }
+    if (this.ambient) {
+      this.ambient.intensity = 0.9;
+      this.ambient.color.copy(toColor(mix(POWDER, this.soil, 0.4)));
+    }
+    this.scene.fog.color.copy(this.fogColor);
+    this.scene.fog.near = this.camDist + 30;
+    this.scene.fog.far = this.camDist + 320;
+  }
+
+  /* A clearing in the logo to lie down in: flowers close all round, none right overhead. */
+  clearing() {
+    const b = this.logoBox;
+    const step = Math.max(10, this.base * 0.6);
+    const cx = b.x + b.w / 2;
+    const cy = b.y + b.h / 2;
+    let best = null;
+    let bestScore = Infinity;
+    for (let y = b.y; y <= b.y + b.h; y += step) {
+      for (let x = b.x; x <= b.x + b.w; x += step) {
+        let near = Infinity;
+        for (const f of this.flowers) near = Math.min(near, Math.hypot(f.dest[0] - x, f.dest[1] - y) - f.r * f.g);
+        if (near < this.base * 0.35 || near > this.base * 1.8) continue;
+        const score = Math.hypot(x - cx, y - cy) - near * 2;
+        if (score < bestScore) {
+          bestScore = score;
+          best = [x, y];
+        }
+      }
+    }
+    return best || [cx, b.y + b.h + this.base];
+  }
+
+  glowTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.3, 'rgba(255,255,255,0.7)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(c);
+  }
+
+  /* The sky and its stars, laid out for this screen and this clearing. */
+  buildSky() {
+    if (this.sky) {
+      this.scene.remove(this.sky.group);
+      this.sky.disposables.forEach((d) => d.dispose());
+    }
+    const group = new THREE.Group();
+    const disposables = [];
+    const tex = this.glowTexture();
+    disposables.push(tex);
+    const [gx, gy] = this.clearing();
+    // Lying in the clearing, a little above the ground, looking straight up.
+    const eye = new THREE.Vector3(gx, this.h - gy, FLOOR_Z + 8);
+    const fov = 72;
+    const D = 2600;
+    const viewW = 2 * D * Math.tan((fov * Math.PI) / 360) * (this.w / this.h);
+    const viewH = 2 * D * Math.tan((fov * Math.PI) / 360);
+    const b = this.logoBox;
+    const S = Math.min((0.62 * viewW) / b.w, (0.45 * viewH) / b.h);
+    const lcx = b.x + b.w / 2;
+    const lcy = b.y + b.h / 2;
+    // Looking up with the view turned over, screen right is +x and screen up is -y.
+    const skyPoint = (sx, sy, z) => new THREE.Vector3(eye.x + (sx - lcx) * S, eye.y + (sy - lcy) * S, eye.z + z);
+
+    const points = (n, size) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+      // Sizes in screen pixels (three scales them by the pixel ratio).
+      const mat = new THREE.PointsMaterial({ size, sizeAttenuation: false, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      const pts = new THREE.Points(geo, mat);
+      pts.frustumCulled = false;
+      pts.renderOrder = -1;
+      group.add(pts);
+      disposables.push(geo, mat);
+      return pts;
+    };
+
+    // One star for each flower, in its color, starting scattered across the sky.
+    const logo = this.flowers.map((f, i) => {
+      const to = skyPoint(f.dest[0], f.dest[1], D);
+      const from = new THREE.Vector3(eye.x + (Math.random() - 0.5) * viewW * 1.1, eye.y + (Math.random() - 0.5) * viewH * 1.1, eye.z + D);
+      const col = mix(f.star ? this.heroColor : f.color, WHITE, 0.4);
+      return { from, to, col, delay: 0.3 + ((f.dest[0] - b.x) / b.w) * 1.2 + Math.random() * 0.4, tw: 1.5 + Math.random() * 3, ph: Math.random() * TAU, i };
+    });
+    const logoPts = points(logo.length, 8);
+
+    // The far sky: many faint stars, a few constellations joined by faint lines.
+    const field = [];
+    for (let i = 0; i < 1100; i++) {
+      field.push({
+        p: new THREE.Vector3(eye.x + (Math.random() - 0.5) * viewW * 1.8, eye.y + (Math.random() - 0.5) * viewH * 1.8, eye.z + D * 1.3),
+        col: mix(WHITE, Math.random() < 0.3 ? POWDER : WHITE, 0.6).map((c) => c * (0.35 + Math.random() * 0.5)),
+        tw: 0.8 + Math.random() * 4,
+        ph: Math.random() * TAU,
+      });
+    }
+    const lines = [];
+    for (let k = 0; k < 7; k++) {
+      // Around the edges of the view, away from the logo.
+      const a = Math.random() * TAU;
+      const c = new THREE.Vector3(eye.x + Math.cos(a) * viewW * 0.42, eye.y + Math.sin(a) * viewH * 0.4, eye.z + D * 1.3);
+      let prev = null;
+      const n = 4 + Math.floor(Math.random() * 3);
+      for (let j = 0; j < n; j++) {
+        const p = c.clone().add(new THREE.Vector3((Math.random() - 0.5) * viewW * 0.16, (Math.random() - 0.5) * viewH * 0.16, 0));
+        field.push({ p, col: [235, 240, 255], tw: 0.6 + Math.random(), ph: Math.random() * TAU, bright: true });
+        if (prev) lines.push(prev, p);
+        prev = p;
+      }
+    }
+    const fieldPts = points(field.length, 2.6);
+    const fp = fieldPts.geometry.attributes.position;
+    field.forEach((s, i) => fp.setXYZ(i, s.p.x, s.p.y, s.p.z));
+    fp.needsUpdate = true;
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(lines);
+    const lineMat = new THREE.LineBasicMaterial({ color: toColor(POWDER), transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const constellations = new THREE.LineSegments(lineGeo, lineMat);
+    constellations.renderOrder = -1;
+    group.add(constellations);
+    disposables.push(lineGeo, lineMat);
+
+    // Soft glows of color deep in the sky, in the house palette.
+    const glows = [this.heroAccent, this.foliage, this.heroColor].map((c, k) => {
+      const m = new THREE.SpriteMaterial({ map: tex, color: toColor(c), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      const sp = new THREE.Sprite(m);
+      const a = (k / 3) * TAU + Math.random();
+      sp.position.set(eye.x + Math.cos(a) * viewW * 0.3, eye.y + Math.sin(a) * viewH * 0.3, eye.z + D * 1.4);
+      sp.scale.setScalar(viewW * (0.5 + Math.random() * 0.3));
+      sp.renderOrder = -2;
+      group.add(sp);
+      disposables.push(m);
+      return sp;
+    });
+
+    // A shooting star: a short line, bright at its head, fading along its tail.
+    const shootGeo = new THREE.BufferGeometry();
+    shootGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    shootGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array([1, 1, 1, 0, 0, 0]), 3));
+    const shootMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const shoot = new THREE.Line(shootGeo, shootMat);
+    shoot.frustumCulled = false;
+    shoot.visible = false;
+    group.add(shoot);
+    disposables.push(shootGeo, shootMat);
+
+    group.visible = false;
+    this.scene.add(group);
+    this.sky = { group, disposables, eye, fov, D, viewW, viewH, logo, logoPts, field, fieldPts, glows, shoot, gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D) };
+  }
+
+  /* Turning over, lying there, and turning back. */
+  updateNight(t, dt) {
+    const n = this.night;
+    const sky = this.sky;
+    n.t = clamp(n.t + (dt / (this.reduced ? 0.4 : 3.6)) * n.dir, 0, 1);
+    if (n.t <= 0 && n.dir < 0) {
+      this.endNight();
+      return;
+    }
+    if (this.classList.contains('is-nav-open') && n.dir > 0) n.dir = -1;
+    const p = n.t;
+    sky.group.visible = true;
+
+    // The camera: across to the clearing, down into it, tipping back to look up.
+    const c = this.camera;
+    // Sinking into the flowers first, then falling back to look up.
+    const across = smooth(range(p, 0, 0.5));
+    const down = smooth(range(p, 0.05, 0.75));
+    const tip = smooth(range(p, 0.5, 1));
+    c.position.set(lerp(this.camBase.x, sky.eye.x, across), lerp(this.camBase.y, sky.eye.y, across), lerp(this.camBase.z, sky.eye.z, down));
+    c.quaternion.setFromEuler(new THREE.Euler(Math.PI * tip, 0, 0));
+    c.fov = lerp(FOV, sky.fov, down);
+    c.updateProjectionMatrix();
+
+    // Night falls: the sky darkens behind everything, the light turns to moonlight.
+    const dark = smooth(range(p, 0.1, 0.8));
+    const NIGHT = [7, 10, 38];
+    this.renderer.setClearColor(toColor(NIGHT), dark);
+    this.keyLight.intensity = lerp(2.6, 0.7, dark);
+    this.keyLight.color.copy(toColor(mix(WHITE, POWDER, dark)));
+    this.ambient.intensity = lerp(0.9, 0.45, dark);
+    this.ambient.color.copy(toColor(mix(mix(POWDER, this.soil, 0.4), OCEAN, dark * 0.7)));
+    this.scene.fog.color.copy(this.fogColor).lerp(toColor(NIGHT), dark);
+    // The haze that softens the bed from above would swallow it as the camera turns: push it away.
+    const haze = smooth(range(p, 0, 0.3));
+    this.scene.fog.near = this.camDist + 30 + haze * 5000;
+    this.scene.fog.far = this.camDist + 320 + haze * 9000;
+    document.documentElement.classList.toggle('garden-night', dark > 0.5);
+
+    // Stars: lying down, they gather into the logo; twinkling all the while.
+    if (n.dir > 0 && p >= 1) n.since += dt;
+    const since = n.dir > 0 ? n.since : n.since * p;
+    const show = smooth(range(p, 0.45, 1));
+    const lp = sky.logoPts.geometry.attributes.position;
+    const lc = sky.logoPts.geometry.attributes.color;
+    for (const s of sky.logo) {
+      const k = this.reduced ? 1 : smooth(range(since - s.delay, 0, 2.8));
+      const x = lerp(s.from.x, s.to.x, k);
+      const y = lerp(s.from.y, s.to.y, k);
+      const lift = Math.sin(Math.PI * k) * 120;
+      lp.setXYZ(s.i, x, y, s.to.z - lift);
+      const tw = (this.reduced ? 1 : 0.85 + 0.25 * Math.sin(t * s.tw + s.ph)) * show * 1.15;
+      lc.setXYZ(s.i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
+    }
+    lp.needsUpdate = true;
+    lc.needsUpdate = true;
+    const fc = sky.fieldPts.geometry.attributes.color;
+    sky.field.forEach((s, i) => {
+      const tw = (this.reduced ? 0.8 : 0.5 + 0.5 * Math.sin(t * s.tw + s.ph) ** 2) * show * (s.bright ? 1.3 : 1);
+      fc.setXYZ(i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
+    });
+    fc.needsUpdate = true;
+    sky.group.children.forEach((o) => {
+      if (o.isLineSegments) o.material.opacity = 0.18 * show;
+    });
+    sky.glows.forEach((g, k) => (g.material.opacity = (0.07 + 0.02 * Math.sin(t * 0.3 + k)) * show));
+
+    // Now and then a shooting star, like the bees by day.
+    if (!this.reduced && p >= 1) {
+      n.nextShoot -= dt;
+      if (n.nextShoot <= 0 && !n.shot) {
+        const a = Math.random() * TAU;
+        const from = new THREE.Vector3(sky.eye.x + (Math.random() - 0.5) * sky.viewW * 0.9, sky.eye.y + (Math.random() - 0.5) * sky.viewH * 0.9, sky.eye.z + sky.D * 1.25);
+        n.shot = { from, dir: new THREE.Vector3(Math.cos(a), Math.sin(a), 0), len: sky.viewW * (0.08 + Math.random() * 0.08), speed: sky.viewW * (0.6 + Math.random() * 0.4), age: 0 };
+      }
+    }
+    const sh = n.shot;
+    if (sh) {
+      sh.age += dt;
+      const life = 1.1;
+      const head = sh.from.clone().addScaledVector(sh.dir, sh.speed * sh.age);
+      const tail = head.clone().addScaledVector(sh.dir, -sh.len * Math.min(1, sh.age * 4));
+      const pos = sky.shoot.geometry.attributes.position;
+      pos.setXYZ(0, head.x, head.y, head.z);
+      pos.setXYZ(1, tail.x, tail.y, tail.z);
+      pos.needsUpdate = true;
+      const fade = Math.sin(Math.PI * Math.min(1, sh.age / life)) * show;
+      sky.shoot.geometry.attributes.color.setXYZ(0, fade, fade, fade);
+      sky.shoot.geometry.attributes.color.needsUpdate = true;
+      sky.shoot.visible = true;
+      if (sh.age > life) {
+        n.shot = null;
+        sky.shoot.visible = false;
+        n.nextShoot = 5 + Math.random() * 9;
+      }
+    }
+
+    // Flower eyes look up at the sky too.
+    this.viewDirty = true;
+  }
+
   /* ---------------- zoom ---------------- */
 
   /*
@@ -2052,10 +2447,7 @@ class GardenSplash extends HTMLElement {
     const most = Math.max(this.rs, Math.min(this.dpr || 1, 1.5));
     const rs = Math.round(Math.min(most, this.rs * (1 + (Z - 1) * 0.6)) * 8) / 8;
     if (rs === this.rsNow) return;
-    this.rsNow = rs;
-    this.renderer.setPixelRatio(rs);
-    this.renderer.setSize(this.w, this.h, false);
-    this.snap.value.set(this.w * rs * 0.25, this.h * rs * 0.25);
+    this.applyScale(rs);
     this.start();
   }
 
@@ -2075,7 +2467,7 @@ class GardenSplash extends HTMLElement {
       const r = this.getBoundingClientRect();
       return [e.clientX - r.left, e.clientY - r.top];
     };
-    const navOpen = () => this.classList.contains('is-nav-open');
+    const navOpen = () => this.classList.contains('is-nav-open') || !!this.night;
     const pts = new Map();
     let g = null;
     let holdTimer = 0;

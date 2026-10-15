@@ -594,6 +594,16 @@
     pointer-events: none;
   }
 
+  /* The night sky (garden-splash.js): just the sky, no logo button or pointer readout. */
+  .garden-splash.is-night .garden-splash__logo-trigger,
+  .garden-splash.is-night .garden-splash__overlay {
+    display: none;
+  }
+
+  html.garden-night duet-header {
+    --dh-ink: #b9e5fb !important;
+  }
+
   /* ---------- Menu ---------- */
 
   /* It opens out of the logo: a circle that grows from the logo's center. */
