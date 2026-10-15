@@ -13,6 +13,7 @@
       "type": "garden-splash",
       "settings": {
         "logo_position": "none",
+        "flower_logo": "shopify://shop_images/spellout-black.png",
         "logo_width": 120,
         "menu": "main-menu",
         "logo_link": "",
