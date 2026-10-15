@@ -158,6 +158,8 @@ const DENSITY = {
   airy: { size: 1.18, spacing: 1.32 },
   lush: { size: 1, spacing: 1.18 },
   overgrown: { size: 0.84, spacing: 1.1 },
+  // Packed: the most flowers, slightly larger than their spacing, overlapping so the logo reads solid.
+  packed: { size: 0.78, spacing: 0.95 },
 };
 
 /* Growth milestones on a specimen's 0 → 1 progress. */
@@ -176,14 +178,18 @@ const BLINK = 0.2;
 const ARRANGE = 2.4; // seconds for the bed to glide into the logo
 
 /* Flower spacing as a fraction of the logo's letter-stroke width. */
-const LOGO_SPACING = { airy: 0.5, lush: 0.36, overgrown: 0.27 };
+const LOGO_SPACING = { airy: 0.5, lush: 0.36, overgrown: 0.27, packed: 0.21 };
+/* How big each flower is against its spacing in the logo; packed ones overlap. */
+const LOGO_FILL = { airy: 1, lush: 1, overgrown: 1, packed: 1.4 };
+/* The most flowers a logo is filled with before the spacing opens up. */
+const LOGO_MAX = { airy: 900, lush: 900, overgrown: 900, packed: 1300 };
 
 /* The render is under-resolved on purpose, then scaled up with nearest-neighbour. */
 // Narrow screens get more pixels, or the small flowers that spell the logo turn to mush.
 const renderScale = (w) => (w < 750 ? 0.85 : 0.5);
-// The splash itself is drawn at the screen's full sharpness (up to 2x), as
-// long as the device keeps up (see adapt()).
-const splashScale = (w, dpr) => Math.max(renderScale(w), Math.min(dpr, 2));
+// The splash itself is drawn sharp (up to 1.25x on desktop, 1.5x on phones),
+// as long as the device keeps up (see adapt()).
+const splashScale = (w, dpr) => Math.max(renderScale(w), Math.min(dpr, w < 750 ? 1.5 : 1.25));
 
 /* Bridson's Poisson-disc sampling: evenly spread, never on a grid. */
 function poissonDisc(x0, y0, x1, y1, minDist, rng, seedPoint) {
@@ -907,12 +913,13 @@ class GardenSplash extends HTMLElement {
       spots = poissonDisc(bx0, by0, bx1, by1, spacing, rng, [(bx0 + bx1) / 2, (by0 + by1) / 2])
         .map(([x, y]) => ({ x, y, h: hit(x, y) }))
         .filter((sp) => sp.h);
-      if (spots.length <= 900) break;
+      if (spots.length <= LOGO_MAX[this.densityName]) break;
       spacing *= 1.15;
     }
     this.base = spacing;
     this.logoBox = { x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 };
-    return spots.map((sp) => ({ x: sp.x, y: sp.y, r: spacing * lerp(0.9, 1.06, rng()), star: sp.h.star }));
+    const fill = LOGO_FILL[this.densityName];
+    return spots.map((sp) => ({ x: sp.x, y: sp.y, r: spacing * fill * lerp(0.9, 1.06, rng()), star: sp.h.star }));
   }
 
   eyeMaterial(iris) {
@@ -2059,11 +2066,11 @@ class GardenSplash extends HTMLElement {
 
   /*
    * The hidden night: drawing one full circle around the logo (a finger, or
-   * the mouse held down) turns the view over. The camera sinks into a small
-   * clearing among the flowers and tips back until it looks straight up,
-   * as if lying on your back in the bed: flower heads overhead against a
-   * night sky. Up there the stars, one for each flower and in its color,
-   * gather into the logo the way the flowers did, among faint
+   * the mouse held down) turns the view over. The camera sinks down onto
+   * the bed, just above the flower heads, and tips back until it looks
+   * straight up, as if lying on your back on the flowers: only the night
+   * sky in view. Up there the white stars, one for each flower, gather
+   * into the logo the way the flowers did, among faint
    * constellations, twinkling, with a shooting star now and then. Another
    * circle, Escape, or the menu brings the day back.
    */
@@ -2198,8 +2205,9 @@ class GardenSplash extends HTMLElement {
     const tex = this.glowTexture();
     disposables.push(tex);
     const [gx, gy] = this.clearing();
-    // Lying in the clearing, a little above the ground, looking straight up.
-    const eye = new THREE.Vector3(gx, this.h - gy, FLOOR_Z + 8);
+    // Lying just above the flower heads, looking straight up: nothing but sky in view.
+    const top = this.flowers.reduce((m, f) => Math.max(m, f.z + f.r * 0.6), 0);
+    const eye = new THREE.Vector3(gx, this.h - gy, top + 30);
     const fov = 72;
     const D = 2600;
     const viewW = 2 * D * Math.tan((fov * Math.PI) / 360) * (this.w / this.h);
@@ -2225,11 +2233,11 @@ class GardenSplash extends HTMLElement {
       return pts;
     };
 
-    // One star for each flower, in its color, starting scattered across the sky.
+    // One white star for each flower, starting scattered across the sky.
     const logo = this.flowers.map((f, i) => {
       const to = skyPoint(f.dest[0], f.dest[1], D);
       const from = new THREE.Vector3(eye.x + (Math.random() - 0.5) * viewW * 1.1, eye.y + (Math.random() - 0.5) * viewH * 1.1, eye.z + D);
-      const col = mix(f.star ? this.heroColor : f.color, WHITE, 0.4);
+      const col = WHITE;
       return { from, to, col, delay: 0.3 + ((f.dest[0] - b.x) / b.w) * 1.2 + Math.random() * 0.4, tw: 1.5 + Math.random() * 3, ph: Math.random() * TAU, i };
     });
     const logoPts = points(logo.length, 8);
@@ -2239,7 +2247,7 @@ class GardenSplash extends HTMLElement {
     for (let i = 0; i < 1100; i++) {
       field.push({
         p: new THREE.Vector3(eye.x + (Math.random() - 0.5) * viewW * 1.8, eye.y + (Math.random() - 0.5) * viewH * 1.8, eye.z + D * 1.3),
-        col: mix(WHITE, Math.random() < 0.3 ? POWDER : WHITE, 0.6).map((c) => c * (0.35 + Math.random() * 0.5)),
+        col: WHITE.map((c) => c * (0.35 + Math.random() * 0.5)),
         tw: 0.8 + Math.random() * 4,
         ph: Math.random() * TAU,
       });
@@ -2253,7 +2261,7 @@ class GardenSplash extends HTMLElement {
       const n = 4 + Math.floor(Math.random() * 3);
       for (let j = 0; j < n; j++) {
         const p = c.clone().add(new THREE.Vector3((Math.random() - 0.5) * viewW * 0.16, (Math.random() - 0.5) * viewH * 0.16, 0));
-        field.push({ p, col: [235, 240, 255], tw: 0.6 + Math.random(), ph: Math.random() * TAU, bright: true });
+        field.push({ p, col: WHITE, tw: 0.6 + Math.random(), ph: Math.random() * TAU, bright: true });
         if (prev) lines.push(prev, p);
         prev = p;
       }
@@ -2263,7 +2271,7 @@ class GardenSplash extends HTMLElement {
     field.forEach((s, i) => fp.setXYZ(i, s.p.x, s.p.y, s.p.z));
     fp.needsUpdate = true;
     const lineGeo = new THREE.BufferGeometry().setFromPoints(lines);
-    const lineMat = new THREE.LineBasicMaterial({ color: toColor(POWDER), transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const lineMat = new THREE.LineBasicMaterial({ color: toColor(WHITE), transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
     const constellations = new THREE.LineSegments(lineGeo, lineMat);
     constellations.renderOrder = -1;
     group.add(constellations);
