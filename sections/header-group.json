@@ -56,7 +56,6 @@
         "account",
         "cart"
       ],
-      "disabled": true,
       "settings": {
         "menu": "main-menu",
         "background": "transparent",
