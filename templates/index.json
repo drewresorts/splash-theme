@@ -22,7 +22,7 @@
         "menu_label": "Menu",
         "menu_close_label": "Close",
         "menu_image_width": 200,
-        "show_schemes": false,
+        "show_schemes": true,
         "center_color": "#f04e62",
         "center_accent_color": "#a62749",
         "color_1": "#a62749",
@@ -35,6 +35,10 @@
         "soil_color": "#ffffff",
         "bloom_duration": 4,
         "density": "overgrown",
+        "graphics_style": "ps1",
+        "weather": true,
+        "season": "auto",
+        "hemisphere": "north",
         "hint_text": ""
       }
     }
