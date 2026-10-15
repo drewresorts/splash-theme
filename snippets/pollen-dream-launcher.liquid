@@ -1,8 +1,11 @@
 {%- comment -%}
   Opens the Pollen Dream game (assets/pollen-dream.js) from any
-  [data-pollen-dream] button, or any link to #pollen-dream, such as a menu
-  link to /#pollen-dream. A page opened at #pollen-dream starts with the
-  game's title screen. Nothing of the game loads until then.
+  [data-pollen-dream] button, any link to #pollen-dream (such as a menu
+  link to /#pollen-dream), or the hidden one: five taps on the asterisk's
+  flowers (garden-splash.js sends "duet:egg"). When the page shows the
+  flowers formed into the logo, the game dives into that arrangement and
+  begins there. The game's name and whether it can be opened at all come
+  from the Duet header section. Nothing of the game loads until then.
   Rendered by layout/theme.liquid when Theme settings → Pollen Dream is on.
 {%- endcomment -%}
 <script>
@@ -16,15 +19,35 @@
     };
     var busy = false;
 
-    function launch(trigger) {
-      if (busy) return;
+    function header() {
+      return document.querySelector('[data-duet-header]');
+    }
+
+    // The page's own flowers, if they are formed into the logo: the game starts inside them.
+    function formedGarden() {
+      var all = document.querySelectorAll('garden-splash');
+      for (var i = 0; i < all.length; i++) {
+        if (all[i].arranged && all[i].hasTargets && all[i].flowers && all[i].flowers.length) return all[i];
+      }
+      return null;
+    }
+
+    function launch(trigger, garden) {
+      var h = header();
+      if (busy || (h && h.dataset.gameAccess === 'off')) return;
       busy = true;
       var returnTo = trigger;
       var sel = trigger && trigger.getAttribute('data-return-focus');
       if (sel) returnTo = document.querySelector(sel) || trigger;
       import(urls.game)
         .then(function (game) {
-          return game.openPollenDream({ gardenUrl: urls.garden, cssUrl: urls.css, returnFocus: returnTo });
+          return game.openPollenDream({
+            gardenUrl: urls.garden,
+            cssUrl: urls.css,
+            returnFocus: returnTo,
+            title: h ? h.dataset.gameName : '',
+            source: garden || formedGarden(),
+          });
         })
         .catch(function (e) {
           console.error('pollen-dream:', e);
@@ -52,6 +75,9 @@
       history.replaceState(null, '', location.pathname + location.search);
       launch(null);
     }
+    window.addEventListener('duet:egg', function (e) {
+      launch(null, e.detail && e.detail.garden);
+    });
     window.addEventListener('hashchange', fromHash);
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fromHash, { once: true });
     else fromHash();

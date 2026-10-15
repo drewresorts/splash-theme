@@ -450,6 +450,7 @@ class GardenSplash extends HTMLElement {
 
     this.setupScene();
     this.bindEvents();
+    this.bindEgg();
     if (this.backdrop) {
       // The bed sits behind the page, so the eyes follow the pointer across it.
       this.onWindowPointer = (e) => {
@@ -547,6 +548,7 @@ class GardenSplash extends HTMLElement {
     if (this.onVisibility) document.removeEventListener('visibilitychange', this.onVisibility);
     if (this.onWorldPause) window.removeEventListener('duet:world-pause', this.onWorldPause);
     if (this.onWorldResume) window.removeEventListener('duet:world-resume', this.onWorldResume);
+    if (this.onEggClick) document.removeEventListener('click', this.onEggClick);
     if (this.renderer) {
       this.clearMeshes();
       this.renderer.dispose();
@@ -942,6 +944,89 @@ class GardenSplash extends HTMLElement {
     this.unbind = () => {
       if (this.motionQuery.removeEventListener) this.motionQuery.removeEventListener('change', onMotion);
     };
+  }
+
+  /*
+   * The hidden way into the Pollen Dream game: tapping the flowers of the
+   * logo's asterisk. Each tap makes them jump and spin a little more; the
+   * fifth (within a second and a half of the last) opens the game, which
+   * dives into this very arrangement. On the splash the taps land on the
+   * logo button; behind other pages, on any empty part of the page.
+   */
+  bindEgg() {
+    if (this.logoTrigger) {
+      this.logoTrigger.addEventListener(
+        'click',
+        (e) => {
+          if (!e.detail || !this.eggHit(e.clientX, e.clientY)) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          this.eggTap(e.clientX, e.clientY);
+        },
+        true
+      );
+    }
+    if (this.world) {
+      this.onEggClick = (e) => {
+        const t = e.target;
+        if (!(t instanceof Element) || t.closest('a, button, input, select, textarea, label, summary, [role="button"], [tabindex], dialog')) return;
+        if (this.eggHit(e.clientX, e.clientY)) this.eggTap(e.clientX, e.clientY);
+      };
+      document.addEventListener('click', this.onEggClick);
+    }
+  }
+
+  eggEnabled() {
+    const header = document.querySelector('[data-duet-header]');
+    const access = header ? header.dataset.gameAccess : 'menu';
+    return access !== 'off' && typeof window.pollenDream === 'function';
+  }
+
+  /* Whether a point on screen is on one of the asterisk's flowers. */
+  eggHit(cx, cy) {
+    if (!this.arranged || !this.hasTargets || this.failed || !this.eggEnabled()) return false;
+    const r = this.getBoundingClientRect();
+    const x = cx - r.left;
+    const y = cy - r.top;
+    this.project();
+    for (const f of this.flowers) {
+      if (f.star && Math.hypot(f.sx - x, f.sy - y) < Math.max(this.base * 1.3, f.sr)) return true;
+    }
+    return false;
+  }
+
+  eggTap(cx, cy) {
+    const now = performance.now();
+    const egg = this.egg || (this.egg = { taps: 0, last: 0, pulse: 0 });
+    if (now - egg.last > 1500) egg.taps = 0;
+    egg.last = now;
+    egg.taps++;
+    egg.pulse = 1;
+    const r = this.getBoundingClientRect();
+    if (!this.backdrop) this.pings.push({ x: cx - r.left, y: cy - r.top, t: 0 });
+    for (const f of this.flowers) if (f.star && f.eye) f.eye.blinkAt = this.elapsed + Math.random() * 0.15;
+    if (egg.taps >= 5) {
+      egg.taps = 0;
+      egg.pulse = 1.6;
+      window.dispatchEvent(new CustomEvent('duet:egg', { detail: { garden: this } }));
+    }
+    this.start();
+  }
+
+  /* The asterisk's flowers jump and spin, more with every tap. */
+  eggReact(dt) {
+    const egg = this.egg;
+    egg.pulse = Math.max(0, egg.pulse - dt * 1.2);
+    const level = (egg.taps || 5) / 5;
+    const k = this.reduced ? 0 : smooth(Math.min(1, egg.pulse));
+    const t = this.elapsed;
+    for (const f of this.flowers) {
+      if (!f.star) continue;
+      if (f.rot0 === undefined) f.rot0 = f.rot;
+      f.lift = k * (14 + 46 * level) * (0.6 + 0.4 * Math.sin(f.id * 1.7 + t * 12));
+      f.rot = f.rot0 + k * Math.sin(t * (10 + 10 * level) + f.id) * (0.15 + 0.3 * level);
+      f.shown = -1;
+    }
   }
 
   markInteracted() {
@@ -1579,6 +1664,7 @@ class GardenSplash extends HTMLElement {
 
     if (this.background && !this.reduced) this.wave(t);
     if (this.arranged && !this.background) this.drift(t, dt);
+    if (this.egg && this.egg.pulse > 0) this.eggReact(dt);
 
     for (const f of this.flowers) {
       // Press and drag to accelerate growth under the pointer.
@@ -1806,13 +1892,15 @@ if (!customElements.get('garden-splash')) customElements.define('garden-splash',
  */
 export function createBed(config) {
   const bed = Object.create(GardenSplash.prototype);
-  const palette = (config.palette || []).map(parseColor).filter(Boolean);
+  // Colors as '#hex' strings or [r, g, b] arrays (a page garden's own, scheme applied).
+  const col = (c) => (Array.isArray(c) ? c : parseColor(c));
+  const palette = (config.palette || []).map(col).filter(Boolean);
   Object.assign(bed, {
     palette: palette.length ? palette : [[166, 39, 73], [102, 164, 200], [185, 229, 251], [240, 78, 98]],
-    foliage: parseColor(config.foliage) || [102, 164, 200],
-    heroColor: parseColor(config.center) || [240, 78, 98],
-    heroAccent: parseColor(config.accent) || [166, 39, 73],
-    soil: parseColor(config.soil) || OCEAN,
+    foliage: col(config.foliage) || [102, 164, 200],
+    heroColor: col(config.center) || [240, 78, 98],
+    heroAccent: col(config.accent) || [166, 39, 73],
+    soil: col(config.soil) || OCEAN,
     flowers: [],
     elapsed: 0,
     reduced: !!config.reduced,

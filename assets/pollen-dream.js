@@ -11,6 +11,10 @@
  * ripple. Gather from all of them and the heart of the garden grows from a
  * seed falling out of the sky.
  *
+ * When the page shows the flowers formed into the logo (opts.source), the
+ * game is that very arrangement at insect scale: it opens on the same
+ * overhead view as the page, dives down into the asterisk and begins there.
+ *
  * Loaded only when a visitor opens it (snippets/pollen-dream-launcher.liquid).
  * While it runs, the page's own garden pauses ("duet:world-pause"), so only
  * one garden renders at a time. Closing it removes every listener, frees the
@@ -22,6 +26,7 @@ const WORLD_R = 1700; // flowers grow inside this radius
 const BOUND = 2150; // the dream gently pushes back beyond this
 const CEILING = 1150;
 const HEART_CLEAR = 260; // the center is kept free for the heart of the garden
+const DIVE = 3.6; // seconds from the overhead view of the logo down into its flowers
 const CHAIN_R = 680; // buds this close to a pollinated flower wake up
 const HARVEST_TIME = 0.9; // seconds in a flower's light to gather its pollen
 const PLAYER_R = 10;
@@ -88,6 +93,7 @@ class PollenDream {
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.touch = window.matchMedia('(pointer: coarse)').matches;
     this.returnFocus = opts.returnFocus || document.activeElement;
+    this.title = String(opts.title || STRINGS.title).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
     this.disposables = [];
   }
 
@@ -98,19 +104,110 @@ class PollenDream {
     window.dispatchEvent(new CustomEvent('duet:world-pause'));
     document.documentElement.classList.add('pollen-dream-open');
     this.bindUi();
+    // Arriving from the logo, the page stays in view until the garden is ready to take over.
+    const src = this.opts.source;
+    if (src) this.root.classList.add('is-arriving');
     this.show('loading');
 
     const [garden] = await Promise.all([import(this.opts.gardenUrl), this.loadCss()]);
     if (this.closed) return;
     this.G = garden;
     this.THREE = garden.THREE;
+    this.logo = src ? this.measureLogo(src) : null;
+    this.bound = this.logo ? this.logo.bound : BOUND;
     this.setupRenderer();
     this.setupWorld();
     this.generate((Math.random() * 2 ** 31) | 0);
     this.bindInput();
     this.resize();
-    this.show('title');
+    if (this.logo) this.startDive();
+    else this.show('title');
     this.loop();
+  }
+
+  /*
+   * Where the page's logo arrangement sits and how big it becomes: its
+   * flowers are scaled up so a typical one is about the size of the
+   * insect-scale garden's flowers, centered on the world's origin.
+   */
+  measureLogo(src) {
+    const rs = src.flowers.map((f) => f.r).sort((a, b) => a - b);
+    const S = 72 / Math.max(1, rs[rs.length >> 1]);
+    const box = src.logoBox || { x: 0, y: 0, w: src.w, h: src.h };
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    const stars = src.flowers.filter((f) => f.star);
+    const star = stars.length ? stars.reduce((a, f) => [a[0] + f.dest[0] / stars.length, a[1] + f.dest[1] / stars.length], [0, 0]) : [cx, cy];
+    return {
+      src,
+      S,
+      cx,
+      cy,
+      // The heart grows in the asterisk; the player arrives there too (bed coordinates: y down).
+      star: [(star[0] - cx) * S, (star[1] - cy) * S],
+      bound: (Math.max(box.w, box.h) / 2) * S + 900,
+      view: { w: src.w, h: src.h, dist: src.camDist },
+    };
+  }
+
+  /* The camera starts exactly where the page's camera looks down on the logo. */
+  startDive() {
+    const THREE = this.THREE;
+    const L = this.logo;
+    const S = L.S;
+    const v = L.view;
+    const p0 = new THREE.Vector3((v.w / 2 - L.cx) * S, (L.cy - v.h / 2) * S, v.dist * S + 200);
+    const cam = new THREE.PerspectiveCamera();
+    cam.up.set(0, 1, 0);
+    cam.position.copy(p0);
+    cam.lookAt(p0.x, p0.y, 0);
+    const q0 = cam.quaternion.clone();
+    this.placePlayer();
+    const p1 = this.pos.clone();
+    cam.up.set(0, 0, 1);
+    cam.position.copy(p1);
+    const cp = Math.cos(this.pitch);
+    cam.lookAt(p1.x + cp * Math.cos(this.yaw), p1.y + cp * Math.sin(this.yaw), p1.z + Math.sin(this.pitch));
+    this.dive = { t: this.reduced ? 1 : 0, p0, p1, q0, q1: cam.quaternion.clone() };
+    this.root.classList.add('is-diving');
+    this.show('dive');
+  }
+
+  /* Down from the overhead view into the asterisk, leveling out among the flowers. */
+  updateDive(dt) {
+    const THREE = this.THREE;
+    const d = this.dive;
+    d.t = Math.min(1, d.t + dt / DIVE);
+    const t = d.t;
+    const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const level = this.G.smooth(this.G.range(t, 0.45, 1));
+    const c = this.camera;
+    c.position.lerpVectors(d.p0, d.p1, e);
+    c.quaternion.slerpQuaternions(d.q0, d.q1, level);
+    c.fov = this.G.lerp(50, 72, level);
+    // The fog and the depth range follow the altitude, so the logo is clear from high up.
+    const alt = Math.max(0, c.position.z);
+    c.near = Math.max(1, alt * 0.004);
+    c.far = Math.max(7000, alt * 3);
+    c.updateProjectionMatrix();
+    this.scene.fog.far = Math.max(2500, alt * 2.4);
+    this.scene.fog.near = Math.min(320, this.scene.fog.far * 0.3);
+    if (t >= 1) this.endDive();
+  }
+
+  endDive() {
+    const c = this.camera;
+    c.fov = 72;
+    c.near = 1;
+    c.far = 7000;
+    c.updateProjectionMatrix();
+    this.scene.fog.near = 320;
+    this.scene.fog.far = 2500;
+    this.dive = null;
+    this.root.classList.remove('is-arriving', 'is-diving');
+    // The garden falls asleep as the visitor arrives: the buds close.
+    for (const f of this.bed.flowers) if (f.asleep) f.folding = true;
+    this.show('title');
   }
 
   loadCss() {
@@ -206,7 +303,7 @@ class PollenDream {
       </section>
       <section class="pollen-dream__screen" data-screen="title" hidden>
         <p class="pollen-dream__eyebrow">${S.eyebrow}</p>
-        <h2 class="pollen-dream__title" id="PollenDreamTitle">${S.title}</h2>
+        <h2 class="pollen-dream__title" id="PollenDreamTitle">${this.title}</h2>
         <p>${S.intro}</p>
         <p class="pollen-dream__goal" data-goal></p>
         <ul class="pollen-dream__controls">${controls}</ul>
@@ -225,7 +322,7 @@ class PollenDream {
         </div>
       </section>
       <section class="pollen-dream__screen" data-screen="done" hidden>
-        <p class="pollen-dream__eyebrow">${S.title}</p>
+        <p class="pollen-dream__eyebrow">${this.title}</p>
         <h2 class="pollen-dream__title">${S.doneTitle}</h2>
         <p data-result></p>
         <div class="pollen-dream__actions">
@@ -338,6 +435,11 @@ class PollenDream {
     window.addEventListener(
       'keydown',
       (e) => {
+        if (e.key === 'Escape' && this.dive) {
+          e.stopPropagation();
+          this.dive.t = 1;
+          return;
+        }
         if (e.key === 'Escape') {
           e.stopPropagation();
           if (this.state === 'play') this.pause();
@@ -503,7 +605,7 @@ class PollenDream {
 
   play() {
     if (this.state === 'title') {
-      this.placePlayer();
+      if (!this.logo) this.placePlayer();
       this.startedAt = this.time;
     }
     this.ensureAudio();
@@ -525,6 +627,7 @@ class PollenDream {
   restart() {
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     this.generate((Math.random() * 2 ** 31) | 0);
+    this.placePlayer();
     this.state = 'title';
     this.play();
   }
@@ -561,18 +664,20 @@ class PollenDream {
   setupWorld() {
     const THREE = this.THREE;
     const G = this.G;
-    const src = document.querySelector('garden-splash') || { dataset: {} };
+    // The colors of the garden the visitor came from, with any color scheme they picked.
+    const live = this.logo && this.logo.src;
+    const src = live || document.querySelector('garden-splash') || { dataset: {} };
     let palette = [];
     try {
-      palette = JSON.parse(src.dataset.palette || '[]');
+      palette = live ? src.palette : JSON.parse(src.dataset.palette || '[]');
     } catch (e) {
       palette = [];
     }
     const bed = G.createBed({
       palette,
-      foliage: src.dataset.foliageColor,
-      center: src.dataset.centerColor,
-      accent: src.dataset.centerAccent,
+      foliage: live ? src.foliage : src.dataset.foliageColor,
+      center: live ? src.heroColor : src.dataset.centerColor,
+      accent: live ? src.heroAccent : src.dataset.centerAccent,
       soil: '#191F6B',
       reduced: this.reduced,
       camDist: 1500,
@@ -612,7 +717,7 @@ class PollenDream {
 
     // Ground: low, faceted hills in the leaf color, snapped like the flowers.
     const rng = G.mulberry32(7);
-    const size = BOUND * 3;
+    const size = this.bound * 3;
     const groundGeo = new THREE.PlaneGeometry(size, size, 28, 28);
     const gp = groundGeo.attributes.position;
     const gc = [];
@@ -631,14 +736,14 @@ class PollenDream {
     this.disposables.push(groundGeo, groundMat);
 
     // Grass: the bed's own leaf petal, standing up, giant at this scale.
-    const blades = this.touch ? 170 : 300;
+    const blades = Math.round((this.touch ? 170 : 300) * Math.min(2, this.bound / BOUND));
     const grass = new THREE.InstancedMesh(bed.geometries.leaf, bed.materials.foliage, blades);
     const d = new THREE.Object3D();
     d.rotation.order = 'ZYX';
     const col = new THREE.Color();
     for (let i = 0; i < blades; i++) {
       const a = rng() * TAU;
-      const rad = Math.sqrt(rng()) * BOUND * 1.1;
+      const rad = Math.sqrt(rng()) * this.bound * 1.1;
       d.position.set(Math.cos(a) * rad, Math.sin(a) * rad, G.FLOOR_Z - 4);
       d.rotation.set(0, -G.lerp(1.05, 1.45, rng()), rng() * TAU);
       const len = G.lerp(50, 150, rng());
@@ -668,7 +773,7 @@ class PollenDream {
     const mp = new Float32Array(motes * 3);
     for (let i = 0; i < motes; i++) {
       const a = rng() * TAU;
-      const rad = Math.sqrt(rng()) * BOUND;
+      const rad = Math.sqrt(rng()) * this.bound;
       mp.set([Math.cos(a) * rad, Math.sin(a) * rad, G.lerp(G.FLOOR_Z, 700, rng())], i * 3);
     }
     const dustGeo = new THREE.BufferGeometry();
@@ -711,33 +816,14 @@ class PollenDream {
     this.clearPollen();
     if (this.heart) this.heart = null;
 
-    const want = this.touch ? 46 : 68;
-    let pts = G.poissonDisc(-WORLD_R, -WORLD_R, WORLD_R, WORLD_R, 245, rng, [rng() * 200, WORLD_R * 0.6]).filter(
-      ([x, y]) => Math.hypot(x, y) < WORLD_R && Math.hypot(x, y) > HEART_CLEAR
-    );
-    for (let i = pts.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [pts[i], pts[j]] = [pts[j], pts[i]];
-    }
-    pts = pts.slice(0, want);
-
     bed.elapsed = 0;
-    bed.flowers = pts.map(([x, y], i) => {
-      const r = G.lerp(48, 124, rng());
-      const z = G.lerp(60, 400, Math.pow(rng(), 1.4));
-      const f = bed.makeFlower(x, -y, z, r, rng, { id: i + 1, startAt: 0, dur: 1, grow: 1 });
-      f.home = [x, -y];
-      f.dest = [x, -y];
-      f.lift = 0;
-      f.rot0 = f.rot;
-      f.phase = rng() * TAU;
-      f.p = 1;
-      return f;
-    });
+    if (this.logo) this.plantLogo(rng);
+    else this.plantField(rng);
+    this.heartAt = this.logo ? this.logo.star : [0, 0];
 
     // The glowing flowers are spread far apart (farthest-point picking).
     const total = Math.min(this.touch ? 7 : 9, bed.flowers.length);
-    const chosen = [bed.flowers[0]];
+    const chosen = [bed.flowers[Math.floor(rng() * bed.flowers.length)]];
     while (chosen.length < total) {
       let best = null;
       let bestD = -1;
@@ -754,13 +840,16 @@ class PollenDream {
     for (const f of bed.flowers) {
       f.pollen = chosen.includes(f);
       f.harvest = 0;
-      // Glowing flowers and about a third of the rest are open; the others sleep as buds.
+      // Glowing flowers and about a third of the rest stay open; the others sleep as buds.
+      // In the logo they close once the visitor has arrived (endDive).
       if (!f.pollen && rng() > 0.34) {
-        f.p = 0.57;
         f.asleep = true;
+        if (!this.logo) f.p = 0.57;
+        else if (this.state !== 'loading') f.folding = true;
       }
     }
-    bed.assignEyes(rng);
+    // The logo's flowers keep the eyes they had on the page.
+    if (!this.logo) bed.assignEyes(rng);
     bed.buildMeshes();
     this.buildPollen(chosen);
 
@@ -770,6 +859,60 @@ class PollenDream {
     this.complete = false;
     this.ui.goal.textContent = `Gather pollen from all ${total} glowing flowers.`;
     this.updateMeter();
+  }
+
+  /* The page's logo arrangement, flower for flower, at insect scale. */
+  plantLogo(rng) {
+    const G = this.G;
+    const L = this.logo;
+    const bed = this.bed;
+    bed.flowers = L.src.flowers.map((s, i) => {
+      const x = (s.dest[0] - L.cx) * L.S;
+      const y = (s.dest[1] - L.cy) * L.S;
+      const z = 60 + G.clamp((s.z + 25) / 55, 0, 1) * 300;
+      const f = bed.makeFlower(x, y, z, s.r * L.S, rng, { id: i + 1, startAt: 0, dur: 1, grow: 1, star: s.star });
+      f.species = s.species;
+      f.colorIndex = s.colorIndex;
+      f.rot = s.rot0 === undefined ? s.rot : s.rot0;
+      f.partSeed = s.partSeed;
+      if (s.eye) f.eye = { iris: s.eye.iris, roll: s.eye.roll, look: new this.THREE.Vector3(), nextBlink: 2 + rng() * 8, blinkAt: -1, delay: s.eye.delay };
+      bed.sequence(f);
+      f.home = [x, y];
+      f.dest = [x, y];
+      f.lift = 0;
+      f.rot0 = f.rot;
+      f.phase = rng() * TAU;
+      f.p = 1;
+      return f;
+    });
+  }
+
+  /* Without a logo on the page: flowers spread evenly over a wide disc. */
+  plantField(rng) {
+    const G = this.G;
+    const bed = this.bed;
+    const want = this.touch ? 46 : 68;
+    let pts = G.poissonDisc(-WORLD_R, -WORLD_R, WORLD_R, WORLD_R, 245, rng, [rng() * 200, WORLD_R * 0.6]).filter(
+      ([x, y]) => Math.hypot(x, y) < WORLD_R && Math.hypot(x, y) > HEART_CLEAR
+    );
+    for (let i = pts.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pts[i], pts[j]] = [pts[j], pts[i]];
+    }
+    pts = pts.slice(0, want);
+
+    bed.flowers = pts.map(([x, y], i) => {
+      const r = G.lerp(48, 124, rng());
+      const z = G.lerp(60, 400, Math.pow(rng(), 1.4));
+      const f = bed.makeFlower(x, -y, z, r, rng, { id: i + 1, startAt: 0, dur: 1, grow: 1 });
+      f.home = [x, -y];
+      f.dest = [x, -y];
+      f.lift = 0;
+      f.rot0 = f.rot;
+      f.phase = rng() * TAU;
+      f.p = 1;
+      return f;
+    });
   }
 
   /* Each glowing flower: a halo you can see from far away, and a swirl of pollen grains over it. */
@@ -804,8 +947,17 @@ class PollenDream {
   }
 
   placePlayer() {
-    this.pos.set(0, -WORLD_R - 120, 150);
     this.vel.set(0, 0, 0);
+    if (this.logo) {
+      // Over the asterisk, facing along the logo.
+      const [sx, sy] = this.logo.star;
+      const toward = Math.atan2(sy, -sx);
+      this.pos.set(sx - Math.cos(toward) * 90, -sy - Math.sin(toward) * 90, 440);
+      this.yaw = toward;
+      this.pitch = -0.38;
+      return;
+    }
+    this.pos.set(0, -WORLD_R - 120, 150);
     this.yaw = Math.PI / 2;
     this.pitch = -0.08;
   }
@@ -859,7 +1011,7 @@ class PollenDream {
     if (this.state === 'play') {
       this.playTime += dt;
       this.fly(dt);
-    } else if (this.state === 'title' || this.state === 'loading') {
+    } else if ((this.state === 'title' || this.state === 'loading') && !this.logo) {
       // A slow drift around the garden behind the title.
       const a = t * 0.05 - Math.PI / 2;
       this.pos.set(Math.cos(a) * 1250, Math.sin(a) * 1250, 260);
@@ -870,19 +1022,37 @@ class PollenDream {
     // Look direction (z is up).
     const cp = Math.cos(this.pitch);
     this.fwd.set(cp * Math.cos(this.yaw), cp * Math.sin(this.yaw), Math.sin(this.pitch));
-    const bob = this.state === 'play' && !this.reduced ? Math.sin(t * 9) * 0.8 : 0;
-    this.camera.position.set(this.pos.x, this.pos.y, this.pos.z + bob);
-    this.camera.lookAt(this.tmp.copy(this.camera.position).add(this.fwd));
+    if (this.dive) {
+      this.updateDive(dt);
+    } else {
+      const bob = this.state === 'play' && !this.reduced ? Math.sin(t * 9) * 0.8 : 0;
+      this.camera.position.set(this.pos.x, this.pos.y, this.pos.z + bob);
+      this.camera.lookAt(this.tmp.copy(this.camera.position).add(this.fwd));
+    }
     this.sky.position.copy(this.camera.position);
 
-    // Flowers sway a little; woken buds bloom with the garden's own growth animation.
-    const sway = this.reduced ? 0 : 1;
+    // Flowers near the player sway a little; buds close as the visitor arrives
+    // and bloom again when woken, with the garden's own growth animation.
+    // Only flowers that move are re-placed, so a logo of hundreds stays cheap.
+    const sway = this.reduced || this.dive ? 0 : 1;
+    const px = this.camera.position.x;
+    const py = this.camera.position.y;
     for (const f of bed.flowers) {
-      if (f.bloomAt !== undefined && t >= f.bloomAt && f.p < 1) f.p = Math.min(1, f.p + dt / (f.heart ? 7 : 1.8));
-      f.rot = f.rot0 + Math.sin(t * 0.7 + f.phase) * 0.06 * sway;
-      f.lift = Math.sin(t * 0.9 + f.phase) * 5 * sway;
-      bed.shape(f);
-      f.shown = f.p;
+      if (f.bloomAt !== undefined && t >= f.bloomAt && f.p < 1) {
+        f.folding = false;
+        f.p = Math.min(1, f.p + dt / (f.heart ? 7 : 1.8));
+      } else if (f.folding && f.p > 0.57) {
+        f.p = Math.max(0.57, f.p - dt / 1.4);
+      }
+      const near = sway && (f.x - px) ** 2 + (-f.y - py) ** 2 < 900 * 900;
+      if (near) {
+        f.rot = f.rot0 + Math.sin(t * 0.7 + f.phase) * 0.06;
+        f.lift = Math.sin(t * 0.9 + f.phase) * 5;
+      }
+      if (near || f.p !== f.shown) {
+        bed.shape(f);
+        f.shown = f.p;
+      }
     }
     bed.updateEyes(dt);
 
@@ -933,7 +1103,7 @@ class PollenDream {
       this.pos.z = CEILING;
       this.vel.z = Math.min(0, this.vel.z);
     }
-    const out = Math.hypot(this.pos.x, this.pos.y) - BOUND;
+    const out = Math.hypot(this.pos.x, this.pos.y) - this.bound;
     if (out > 0) {
       const a = Math.atan2(this.pos.y, this.pos.x);
       this.vel.x -= Math.cos(a) * out * 6 * dt;
@@ -1040,10 +1210,11 @@ class PollenDream {
     const bed = this.bed;
     const G = this.G;
     const rng = G.mulberry32(99);
-    const f = bed.makeFlower(0, 0, 300, 210, rng, { id: 999, startAt: 0, dur: 1, grow: 1, star: true });
+    const [hx, hy] = this.heartAt;
+    const f = bed.makeFlower(hx, hy, this.logo ? 560 : 300, this.logo ? 240 : 210, rng, { id: 999, startAt: 0, dur: 1, grow: 1, star: true });
     f.species = 'daisy';
-    f.home = [0, 0];
-    f.dest = [0, 0];
+    f.home = [hx, hy];
+    f.dest = [hx, hy];
     f.lift = 0;
     f.rot0 = f.rot;
     f.phase = 0;
@@ -1059,7 +1230,7 @@ class PollenDream {
     for (const o of bed.flowers) {
       if (!o.asleep) continue;
       o.asleep = false;
-      o.bloomAt = this.time + 1 + Math.hypot(o.x, o.y) / 600;
+      o.bloomAt = this.time + 1 + Math.hypot(o.x - hx, o.y - hy) / 600;
     }
     this.announce(STRINGS.heart);
   }

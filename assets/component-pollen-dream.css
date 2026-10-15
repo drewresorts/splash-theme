@@ -34,6 +34,33 @@ html.pollen-dream-open body {
   outline: none;
 }
 
+/* Arriving from the logo: the page stays visible while the garden loads, then the
+   garden fades in on the very same view and dives into the flowers. */
+.pollen-dream.is-arriving {
+  background: transparent;
+}
+
+.pollen-dream.is-arriving [data-screen='loading'] {
+  display: none;
+}
+
+.pollen-dream.is-arriving .pollen-dream__canvas {
+  opacity: 0;
+}
+
+.pollen-dream.is-diving .pollen-dream__canvas {
+  animation: pollen-dream-arrive 0.9s ease-out forwards;
+}
+
+@keyframes pollen-dream-arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .pollen-dream [hidden] {
   display: none !important;
 }
@@ -390,5 +417,9 @@ html.pollen-dream-open body {
 
   .pollen-dream__bar span {
     transition: none;
+  }
+
+  .pollen-dream.is-diving .pollen-dream__canvas {
+    animation-duration: 0.01s;
   }
 }

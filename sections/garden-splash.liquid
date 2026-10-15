@@ -246,6 +246,12 @@
       root.toggleNav = toggle;
       for (var i = 0; i < toggles.length; i++) {
         toggles[i].addEventListener('click', function () {
+          // With the site header on the page, the flower logo opens that same menu, out of the logo.
+          var header = document.querySelector('duet-header');
+          if (this.hasAttribute('data-garden-logo-trigger') && header && header.openMenu) {
+            header.openMenu(this);
+            return;
+          }
           toggle();
         });
       }
