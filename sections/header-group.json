@@ -44,6 +44,7 @@
         },
         "cart": {
           "type": "cart",
+          "disabled": true,
           "settings": {
             "position": "left"
           }

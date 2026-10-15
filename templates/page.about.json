@@ -84,19 +84,25 @@
         "authenticator_1": {
           "type": "authenticator",
           "settings": {
-            "name": ""
+            "name": "",
+            "text": "",
+            "url": ""
           }
         },
         "authenticator_2": {
           "type": "authenticator",
           "settings": {
-            "name": ""
+            "name": "",
+            "text": "",
+            "url": ""
           }
         },
         "authenticator_3": {
           "type": "authenticator",
           "settings": {
-            "name": ""
+            "name": "",
+            "text": "",
+            "url": ""
           }
         }
       },
@@ -110,6 +116,15 @@
         "authenticator_3"
       ],
       "settings": {
+        "eyebrow": "Authenticity",
+        "heading": "Every item, reviewed",
+        "text": "<p>Every piece we offer is reviewed for authenticity before it is listed. We don't ask you to take our word for it: you are welcome to have any purchase checked by an independent authenticator we endorse.</p>",
+        "promise_title": "Your money back, plus the price of the item again",
+        "promise_text": "<p>If an authenticator Duet endorses finds that an item you bought from us is not authentic, we refund the full price you paid, and pay you the item's price again on top, for your inconvenience and the cost of having it verified.</p>",
+        "steps_heading": "How it works",
+        "authenticators_heading": "Authenticators we endorse",
+        "authenticators_text": "<p>These independent services are recognized authorities on luxury goods. A written report from any of them is all you need to make a claim.</p>",
+        "fine_print": "<p>To make a claim, contact us with your order number and the authenticator's written report.</p>",
         "button_label": "Make a claim",
         "button_link": "/pages/contact",
         "padding_top": 40,
@@ -119,6 +134,18 @@
     "location": {
       "type": "duet-location",
       "settings": {
+        "eyebrow": "Visit us",
+        "heading": "Our store",
+        "text": "<p>See and try pieces in person. Our team is happy to walk you through any item and its authenticity review.</p>",
+        "store_name": "Duet",
+        "address": "",
+        "hours": "<p>Monday-Saturday 11-7</p><p>Sunday 12-6</p>",
+        "phone": "",
+        "email": "",
+        "notes": "",
+        "show_map": true,
+        "map_query": "3415 W Cary",
+        "zoom": 16,
         "padding_top": 40,
         "padding_bottom": 72
       }
