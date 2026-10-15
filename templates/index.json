@@ -14,6 +14,7 @@
       "settings": {
         "logo_position": "none",
         "flower_logo": "shopify://shop_images/spellout-black.png",
+        "flower_logo_mobile": "shopify://shop_images/duet_web_menu_star.png",
         "logo_width": 120,
         "menu": "main-menu",
         "logo_link": "",
