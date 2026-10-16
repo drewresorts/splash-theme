@@ -1939,8 +1939,16 @@ class GardenSplash extends HTMLElement {
     const look = this.logoBox ? [this.logoBox.x + this.logoBox.w / 2, this.h - (this.logoBox.y + this.logoBox.h / 2)] : [this.w / 2, this.h / 2];
     c.lookAt(lerp(cx, look[0], this.navLean), lerp(cy, look[1], this.navLean), 0);
     if (this.keyLight) {
-      const a = k * 0.6 * motion;
-      this.keyLight.position.set(-0.7 * Math.cos(a) - 0.5 * Math.sin(a), 0.9 * Math.cos(a * 0.8), 1.2);
+      // The light circles slowly. Motion eases between its resting place and
+      // where the circle has got to, never scaling the angle itself: that
+      // would sweep it round many times whenever the logo re-forms late in a
+      // visit (a resize, or a phone's address bar showing).
+      // Once circling, it keeps circling through a re-form instead of jumping back.
+      const m = this.reduced ? 0 : (this.lightMotion = Math.max(this.lightMotion || 0, motion));
+      const a = k * 0.6;
+      const ox = -0.7 * Math.cos(a) - 0.5 * Math.sin(a);
+      const oy = 0.9 * Math.cos(a * 0.8);
+      this.keyLight.position.set(lerp(-0.7, ox, m), lerp(0.9, oy, m), 1.2);
     }
   }
 
@@ -2941,7 +2949,7 @@ class GardenSplash extends HTMLElement {
   /*
    * Now and then, once the logo has formed, a gust of wind runs through it:
    * a front sweeps across the screen, and the flowers it passes lean with
-   * it, lift and spin a little, then settle back exactly where they were.
+   * it, lift and turn a little, then settle back exactly where they were.
    * Between gusts nothing moves, so the composition stays put.
    */
   blow(t) {
@@ -2965,7 +2973,9 @@ class GardenSplash extends HTMLElement {
       const push = k * g.strength;
       f.x = f.dest[0] + g.dir * push * this.base * 0.7;
       f.lift = push * 26;
-      f.rot = f.rot0 + g.dir * push * 0.45 * Math.sin(f.id + t * 6);
+      // One slow turn with the wind, the same way for every flower: a fast
+      // flutter makes the flat facets flash in the light.
+      f.rot = f.rot0 + g.dir * push * 0.18;
       f.shown = -1;
     }
     if (done) {
