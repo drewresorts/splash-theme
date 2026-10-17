@@ -99,7 +99,7 @@
         "foliage_color": "#66a4c8",
         "soil_color": "#ffffff",
         "bloom_duration": 4,
-        "density": "overgrown",
+        "density": "packed",
         "graphics_style": "ps1",
         "weather": true,
         "season": "auto",
