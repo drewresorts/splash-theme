@@ -56,10 +56,29 @@
         "padding_top": 52,
         "padding_bottom": 72
       }
+    },
+    "garden_background_kdEWNR": {
+      "type": "garden-background",
+      "name": "Garden background",
+      "settings": {
+        "arrangement": "logo",
+        "density": "lush",
+        "wave_speed": 10,
+        "grow_in": false,
+        "veil": 80,
+        "page_color": "#FFFFFF",
+        "color_1": "#A62749",
+        "color_2": "#66A4C8",
+        "color_3": "#191F6B",
+        "color_4": "#B9E5FB",
+        "color_5": "#F04E62",
+        "foliage_color": "#66A4C8"
+      }
     }
   },
   "order": [
     "main",
-    "duet_location_K33gxP"
+    "duet_location_K33gxP",
+    "garden_background_kdEWNR"
   ]
 }
