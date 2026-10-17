@@ -1533,6 +1533,7 @@ class GardenSplash extends HTMLElement {
 
     for (const f of this.flowers) {
       want('stem');
+      want('stem');
       want('ball');
       f.leaves.forEach(() => want('leaf'));
       f.parts.forEach((part) => want(part.kind));
@@ -1561,6 +1562,7 @@ class GardenSplash extends HTMLElement {
     for (const f of this.flowers) {
       f.slots = {
         stem: take('stem', tone(this.foliage, -0.35)),
+        neck: take('stem', tone(this.foliage, -0.35)),
         seed: take('ball', this.heroAccent),
         leaves: f.leaves.map(() => take('leaf', this.foliage)),
         parts: f.parts.map((part) => take(part.kind, part.color)),
@@ -1608,6 +1610,30 @@ class GardenSplash extends HTMLElement {
     }
   }
 
+  /* Where the stem bends: a little way below the head, at most halfway down. */
+  knee(f, Z) {
+    return Z - Math.min((Z - FLOOR_Z) * 0.5, f.r * 2.2);
+  }
+
+  /*
+   * The swing of the head about the bend, from the flower's tilt (bx: toward
+   * +x, by: toward +y, in radians), or null when it stands straight. Kept on
+   * the flower so the eye can follow the head.
+   */
+  bendMatrix(f, X, Y, knee) {
+    if (Math.abs(f.bx || 0) < 1e-4 && Math.abs(f.by || 0) < 1e-4) {
+      f.bent = null;
+      return null;
+    }
+    const m = f.bent || (f.bent = new THREE.Matrix4());
+    const rot = (this.bendRot || (this.bendRot = new THREE.Matrix4())).makeRotationFromEuler(
+      (this.bendEuler || (this.bendEuler = new THREE.Euler())).set(-(f.by || 0), f.bx || 0, 0)
+    );
+    m.makeTranslation(X, Y, knee).multiply(rot);
+    const back = (this.bendBack || (this.bendBack = new THREE.Matrix4())).makeTranslation(-X, -Y, -knee);
+    return m.multiply(back);
+  }
+
   /* Places every part of a specimen for its current growth. */
   shape(f) {
     const p = f.p;
@@ -1620,12 +1646,17 @@ class GardenSplash extends HTMLElement {
     const g = f.g;
     const zero = 1e-4;
     d.rotation.order = 'ZYX';
+    // The stem bends at a point below the head: everything above it (the
+    // neck and the head) swings about that point as one.
+    const knee = this.knee(f, Z);
+    const bend = this.bendMatrix(f, X, Y, knee);
     // Every part is placed at the flower's own size, then scaled about its center by g.
-    const put = (slot, x, y, z, yaw, pitch, sx, sy, sz, keepZ) => {
+    const put = (slot, x, y, z, yaw, pitch, sx, sy, sz, keepZ, bent) => {
       d.position.set(X + (x - X) * g, Y + (y - Y) * g, keepZ ? z : Z + (z - Z) * g);
       d.rotation.set(0, -pitch, yaw);
       d.scale.set(sx * g || zero, sy * g || zero, keepZ ? sz || zero : sz * g || zero);
       d.updateMatrix();
+      if (bent && bend) d.matrix.premultiply(bend);
       slot.mesh.setMatrixAt(slot.i, d.matrix);
       slot.mesh.instanceMatrix.needsUpdate = true;
     };
@@ -1644,7 +1675,9 @@ class GardenSplash extends HTMLElement {
     // The stem rises from the soil to where the head will be.
     const stemH = (Z - FLOOR_Z) * smooth(Math.max(sprout * 0.25, leaves));
     const stemR = sprout > 0 ? Math.max(1.5, r * 0.05) : 0;
-    put(S.stem, X, Y, FLOOR_Z, 0, 0, stemR, stemR, Math.max(zero, stemH), true);
+    const lowH = Math.min(stemH, knee - FLOOR_Z);
+    put(S.stem, X, Y, FLOOR_Z, 0, 0, stemR, stemR, Math.max(zero, lowH), true);
+    put(S.neck, X, Y, knee, 0, 0, stemR, stemR, Math.max(zero, stemH - lowH), true, true);
 
     f.leaves.forEach((leaf, i) => {
       const lp = smooth(range(leaves, leaf.delay, leaf.delay + 0.65));
@@ -1683,7 +1716,9 @@ class GardenSplash extends HTMLElement {
         pitch,
         part.sx * s,
         part.sy * s,
-        part.sz * s
+        part.sz * s,
+        false,
+        true
       );
     });
 
@@ -1848,7 +1883,11 @@ class GardenSplash extends HTMLElement {
     if (this.background && !this.reduced) this.wave(t);
     if (!this.background) this.drift(t, dt);
     if (this.weatherOn) this.updateWeather(t, dt);
-    if (this.arranged && !this.background && !this.reduced && !this.night) this.blow(t);
+    if (this.arranged && !this.background && !this.reduced) {
+      // At night no gusts come, but heads still swinging come to rest.
+      if (!this.night) this.blow(t);
+      else this.sway(dt, () => 0);
+    }
     if (this.arranged && !this.backdrop && !this.reduced) {
       if (!this.night) this.flyBee(t, dt);
       else if (this.bee) this.bee.group.visible = false;
@@ -2953,35 +2992,73 @@ class GardenSplash extends HTMLElement {
    * Between gusts nothing moves, so the composition stays put.
    */
   blow(t) {
+    const dt = Math.min(0.1, Math.max(0, t - (this.blownAt === undefined ? t : this.blownAt)));
+    this.blownAt = t;
     if (!this.gust) {
       if (this.nextGust === undefined) this.nextGust = t + 2.5 + Math.random() * 3;
-      if (t < this.nextGust) return;
-      const dir = Math.random() < 0.5 ? -1 : 1;
-      const width = Math.max(120, this.w * 0.22);
-      this.gust = { t0: t, dir, width, strength: 0.7 + Math.random() * 0.5, speed: this.w / (2.2 + Math.random()) };
+      if (t >= this.nextGust) {
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        const width = Math.max(120, this.w * 0.22);
+        this.gust = { t0: t, dir, width, strength: 0.7 + Math.random() * 0.5, speed: this.w / (2.2 + Math.random()) };
+      }
     }
     const g = this.gust;
-    const start = g.dir > 0 ? -g.width : this.w + g.width;
-    const front = start + g.dir * g.speed * (t - g.t0);
-    const done = g.dir > 0 ? front > this.w + g.width * 2.5 : front < -g.width * 2.5;
-    for (const f of this.flowers) {
-      if (f.rot0 === undefined) f.rot0 = f.rot;
+    let front = 0;
+    let done = true;
+    if (g) {
+      const start = g.dir > 0 ? -g.width : this.w + g.width;
+      front = start + g.dir * g.speed * (t - g.t0);
+      done = g.dir > 0 ? front > this.w + g.width * 2.5 : front < -g.width * 2.5;
+    }
+    this.sway(dt, (f) => {
+      if (!g || done) return 0;
       // How far behind the front this flower is (positive: the front has passed it).
       const behind = (front - f.dest[0]) * g.dir;
-      // A quick lean as the front reaches it, easing out over a longer tail.
-      const k = done ? 0 : behind < 0 ? Math.exp(-((behind / (g.width * 0.35)) ** 2)) : Math.exp(-behind / g.width) * (1 + 0.25 * Math.sin(behind * 0.05));
-      const push = k * g.strength;
-      f.x = f.dest[0] + g.dir * push * this.base * 0.7;
-      f.lift = push * 26;
-      // One slow turn with the wind, the same way for every flower: a fast
-      // flutter makes the flat facets flash in the light.
-      f.rot = f.rot0 + g.dir * push * 0.18;
-      f.shown = -1;
-    }
-    if (done) {
+      // A quick push as the front reaches it, easing out over a longer tail.
+      const k = behind < 0 ? Math.exp(-((behind / (g.width * 0.35)) ** 2)) : Math.exp(-behind / g.width) * (1 + 0.25 * Math.sin(behind * 0.05));
+      return g.dir * k * g.strength;
+    });
+    if (g && done) {
       this.gust = null;
       const gap = this.seasonNow ? SEASON_LOOK[this.seasonNow.name].gusts : [7, 15];
       this.nextGust = t + lerp(gap[0], gap[1], Math.random());
+    }
+  }
+
+  /*
+   * Each head on its stem is a damped spring: the wind pushes it over, it
+   * swings back past upright and rocks to rest. Lighter (smaller) flowers
+   * rock faster. push(f) is the wind on the flower, -1..1 along x.
+   */
+  sway(dt, push) {
+    if (!dt) return;
+    const LEAN = 0.42;
+    for (const f of this.flowers) {
+      const wind = push(f);
+      if (!wind && !f.bx && !f.bvx && !f.by && !f.bvy) continue;
+      if (f.spring === undefined) {
+        const r = (((Math.sin(f.id * 12.9898) * 43758.5453) % 1) + 1) % 1;
+        f.spring = 26 + 30 * r;
+      }
+      const K = f.spring * clamp(this.base / Math.max(1, f.r), 0.7, 1.4);
+      const C = 2 * 0.22 * Math.sqrt(K);
+      // A little sideways give, different for every flower.
+      const side = 0.22 * Math.sin(f.id * 2.3);
+      const tx = wind * LEAN;
+      const ty = wind * LEAN * side;
+      // Small steps keep the spring steady at low frame rates.
+      const n = Math.ceil(dt / 0.02);
+      const h = dt / n;
+      for (let i = 0; i < n; i++) {
+        f.bvx = (f.bvx || 0) + (K * (tx - (f.bx || 0)) - C * (f.bvx || 0)) * h;
+        f.bvy = (f.bvy || 0) + (K * (ty - (f.by || 0)) - C * (f.bvy || 0)) * h;
+        f.bx = (f.bx || 0) + f.bvx * h;
+        f.by = (f.by || 0) + f.bvy * h;
+      }
+      if (!wind && Math.abs(f.bx) < 2e-4 && Math.abs(f.by) < 2e-4 && Math.abs(f.bvx) < 2e-3 && Math.abs(f.bvy) < 2e-3) {
+        f.bx = f.by = f.bvx = f.bvy = 0;
+      }
+      f.shown = -1;
     }
   }
 
@@ -3013,6 +3090,7 @@ class GardenSplash extends HTMLElement {
       e.group.visible = f.p > 0.86;
       if (!e.group.visible) continue;
       e.group.position.set(f.x, this.h - f.y, f.z + f.lift + (f.r * 0.14 + e.R * 0.4) * f.g);
+      if (f.bent) e.group.position.applyMatrix4(f.bent);
       e.group.scale.setScalar(f.g);
       if (t > e.nextBlink) {
         e.blinkAt = t;
