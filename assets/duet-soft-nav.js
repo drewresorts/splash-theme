@@ -184,12 +184,7 @@
     Array.from(main.children).forEach((n) => {
       if (n !== keptSection || (!behind && !reuse)) n.remove();
     });
-    if (keptSection && (behind || reuse)) {
-      keptSection.toggleAttribute('data-soft-keep', behind);
-      const veil = doc.querySelector('garden-splash.garden-world');
-      const v = veil && veil.style.getPropertyValue('--gw-veil');
-      if (v) keptSection.style.setProperty('--gw-veil', v);
-    }
+    if (keptSection && (behind || reuse)) keptSection.toggleAttribute('data-soft-keep', behind);
     // The new sections go round the splash that carries on, never moving it (that would restart it).
     // Moved in rather than copied: custom elements then start up already in the page.
     let pastReuse = !reuse;

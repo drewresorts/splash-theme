@@ -1587,7 +1587,7 @@
         "step": 5,
         "unit": "%",
         "default": 30,
-        "info": "Washes the page color over the flowers, on top of the frosted glass of each section."
+        "info": "How milky the fogged glass over the flowers is."
       },
       {
         "type": "select",
@@ -1601,14 +1601,14 @@
           },
           {
             "value": "translucent",
-            "label": "Frosted glass — flowers show softly through"
+            "label": "Glass — one fogged pane over the flowers"
           },
           {
             "value": "clear",
-            "label": "Clear — flowers show fully"
+            "label": "Clear — no glass, flowers show fully"
           }
         ],
-        "info": "For the sections on each page. The store header and footer stay solid."
+        "info": "Glass: the whole page sits on one pane of fogged glass. Solid: each section keeps its own background on top of the glass."
       },
       {
         "type": "header",

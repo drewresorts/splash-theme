@@ -32,7 +32,6 @@
   {% if settings.garden_follow_scheme != false %}data-follow-scheme="true"{% endif %}
   {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
   {% if flower_logo_mobile_url != blank %}data-flower-logo-mobile="{{ flower_logo_mobile_url }}"{% endif %}
-  style="--gw-veil: {{ settings.garden_world_veil | default: 30 | divided_by: 100.0 }};"
   aria-hidden="true"
 >
   <canvas class="garden-world__canvas" data-garden-canvas></canvas>
