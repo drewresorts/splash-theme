@@ -18,6 +18,7 @@
           "type": "search",
           "disabled": true,
           "settings": {
+            "show": true,
             "position": "left_3"
           }
         },
@@ -26,6 +27,7 @@
           "settings": {
             "style": "text",
             "label": "Menu",
+            "show": true,
             "position": "right"
           }
         },
@@ -33,18 +35,21 @@
           "type": "logo",
           "settings": {
             "logo": "shopify://shop_images/spellout-black.png",
+            "show": true,
             "position": "center"
           }
         },
         "account": {
           "type": "account",
           "settings": {
+            "show": true,
             "position": "left"
           }
         },
         "cart": {
           "type": "cart",
           "settings": {
+            "show": true,
             "position": "left_2"
           }
         }
@@ -57,6 +62,7 @@
         "cart"
       ],
       "settings": {
+        "home_own_header": true,
         "menu": "main-menu",
         "background": "transparent",
         "ink_color": "#191f6b",
@@ -65,8 +71,7 @@
         "logo_width": 140,
         "logo_width_mobile": 140,
         "game_name": "Pollen Dream",
-        "game_access": "secret",
-        "home_own_header": true
+        "game_access": "secret"
       }
     },
     "header": {

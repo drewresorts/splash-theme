@@ -16,33 +16,41 @@
           "type": "search",
           "disabled": true,
           "settings": {
+            "show": true,
             "position": "left_3"
           }
         },
         "menu": {
           "type": "menu",
           "settings": {
-            "style": "text",
+            "style": "icon_text",
             "label": "Menu",
+            "show": true,
             "position": "right"
           }
         },
         "logo": {
           "type": "logo",
+          "disabled": true,
           "settings": {
             "logo": "shopify://shop_images/spellout-black.png",
+            "show": true,
             "position": "center"
           }
         },
         "account": {
           "type": "account",
+          "disabled": true,
           "settings": {
+            "show": true,
             "position": "left"
           }
         },
         "cart": {
           "type": "cart",
+          "disabled": true,
           "settings": {
+            "show": true,
             "position": "left_2"
           }
         }
@@ -55,6 +63,7 @@
         "cart"
       ],
       "settings": {
+        "home_own_header": false,
         "menu": "main-menu",
         "background": "transparent",
         "ink_color": "#191f6b",
