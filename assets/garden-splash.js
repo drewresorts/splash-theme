@@ -2389,45 +2389,152 @@ class GardenSplash extends HTMLElement {
   }
 
   /*
-   * A soft, lumpy puff of cloud: a few overlapping round blobs. In the PS1
-   * style it is chunky, its edge a white ordered dither.
+   * Four puffs of cumulus, side by side in one texture (2 x 2): each a heap
+   * of round bumps over a flat base, never the same twice. Shaded for body:
+   * the heap's height is its density, lit from the upper left, so the slopes
+   * toward the sun are bright and the far slopes, the base and the folds
+   * between bumps fall into blue-grey. In the PS1 style the texels are
+   * chunky and the shading stepped with the ordered dither.
    */
-  cloudTexture() {
-    const blobs = [
-      [0.5, 0.56, 0.41, 0.9],
-      [0.31, 0.59, 0.25, 0.8],
-      [0.69, 0.58, 0.27, 0.8],
-      [0.47, 0.38, 0.23, 0.85],
-    ];
-    const alpha = (u, v) => {
-      let clear = 1;
-      for (const [x, y, r, peak] of blobs) {
-        const t = Math.hypot(u - x, v - y) / r;
-        if (t < 1) clear *= 1 - peak * (t < 0.6 ? 1 - (t / 0.6) * 0.25 : 0.75 * (1 - (t - 0.6) / 0.4));
+  cloudAtlas() {
+    const rng = mulberry32(7919);
+    const shapes = [0, 1, 2, 3].map(() => {
+      const blobs = [[0.5, 0.42, 0.25 + rng() * 0.04]];
+      const bumps = 4 + Math.floor(rng() * 3);
+      for (let i = 0; i < bumps; i++) {
+        const a = Math.PI * (0.08 + (0.84 * (i + rng() * 0.6)) / bumps);
+        const d = 0.17 + rng() * 0.08;
+        blobs.push([0.5 + Math.cos(a) * d * 1.15, 0.42 + Math.sin(a) * d, 0.11 + rng() * 0.09]);
       }
-      return 1 - clear;
+      // A couple of small turrets on top.
+      for (let i = 0; i < 2; i++) blobs.push([0.38 + rng() * 0.24, 0.66 + rng() * 0.08, 0.07 + rng() * 0.05]);
+      return blobs;
+    });
+    const alphaOf = (blobs) => (u, v) => {
+      let clear = 1;
+      for (const [x, y, r] of blobs) {
+        const t = Math.hypot(u - x, v - y) / r;
+        if (t < 1) clear *= 1 - (t < 0.55 ? 0.95 : 0.95 * (1 - (t - 0.55) / 0.45));
+      }
+      // The base is flatter, as cumulus sit on a level.
+      return (1 - clear) * smooth(clamp((v - 0.16) / 0.14, 0, 1));
     };
-    // Shading for some body, seen from below with the sun to one side: the
-    // puff is treated as a heap whose height is its density; slopes facing
-    // the light are bright, the far slopes, the underside and the folds
-    // between bumps fall into a blue-grey shadow. (v runs up the sprite.)
-    const light = [-0.5, 0.55, 0.67];
-    const lit = [1, 1, 1];
-    const dark = [0.5, 0.56, 0.74];
-    const e = 1 / 64;
-    const height = (u, v) => smooth(clamp(alpha(u, v) * 1.25, 0, 1));
-    const shade = (u, v) => {
-      const dx = (height(u + e, v) - height(u - e, v)) / (2 * e);
-      const dy = (height(u, v + e) - height(u, v - e)) / (2 * e);
-      const nx = -dx * 0.35;
-      const ny = -dy * 0.35;
-      const len = Math.hypot(nx, ny, 1);
-      const diffuse = Math.max(0, (nx * light[0] + ny * light[1] + light[2]) / len);
-      // Lower and thinner parts sit in more shadow.
-      const k = clamp(-0.05 + diffuse * 0.85 + (v - 0.5) * 0.5 + (height(u, v) - 0.5) * 0.3, 0, 1);
-      return mix(dark, lit, k);
+    const light = [-0.5, 0.6, 0.62];
+    const dark = [0.42, 0.47, 0.66];
+    const e = 1 / 80;
+    const shadeOf = (alpha) => {
+      const height = (u, v) => smooth(clamp(alpha(u, v) * 1.3, 0, 1));
+      return (u, v) => {
+        const dx = (height(u + e, v) - height(u - e, v)) / (2 * e);
+        const dy = (height(u, v + e) - height(u, v - e)) / (2 * e);
+        const nx = -dx * 0.4;
+        const ny = -dy * 0.4;
+        const diffuse = Math.max(0, (nx * light[0] + ny * light[1] + light[2]) / Math.hypot(nx, ny, 1));
+        const k = clamp(-0.1 + diffuse * 0.9 + (v - 0.45) * 0.7 + (height(u, v) - 0.5) * 0.25, 0, 1);
+        return mix(dark, [1, 1, 1], k);
+      };
     };
-    return this.ps1 ? alphaTexture(48, alpha, 8, shade) : alphaTexture(96, alpha, 0, shade);
+    const n = this.ps1 ? 48 : 96;
+    const cells = shapes.map((blobs) => {
+      const alpha = alphaOf(blobs);
+      return { alpha, shade: shadeOf(alpha) };
+    });
+    // One texture, 2n square: cell k at column k % 2, row k / 2.
+    return alphaTexture(n * 2, (u, v) => {
+      const cx = Math.min(1, Math.floor(u * 2));
+      const cy = Math.min(1, Math.floor(v * 2));
+      return cells[cy * 2 + cx].alpha(u * 2 - cx, v * 2 - cy);
+    }, this.ps1 ? 8 : 0, (u, v) => {
+      const cx = Math.min(1, Math.floor(u * 2));
+      const cy = Math.min(1, Math.floor(v * 2));
+      return cells[cy * 2 + cx].shade(u * 2 - cx, v * 2 - cy);
+    });
+  }
+
+  /*
+   * Points drawn as puffs from the atlas, each with its own size (CSS
+   * pixels), shape (0-3), turn, color and transparency: clouds and contrails.
+   */
+  puffPoints(n, map, group, disposables) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    geo.setAttribute('size', new THREE.BufferAttribute(new Float32Array(n), 1));
+    geo.setAttribute('alpha', new THREE.BufferAttribute(new Float32Array(n), 1));
+    geo.setAttribute('variant', new THREE.BufferAttribute(new Float32Array(n), 1));
+    geo.setAttribute('rot', new THREE.BufferAttribute(new Float32Array(n), 1));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: map }, uZoom: { value: 1 }, uScale: { value: 1 }, uOpacity: { value: 1 }, uDither: this.dither },
+      vertexShader: `
+        attribute vec3 color;
+        attribute float size;
+        attribute float alpha;
+        attribute float variant;
+        attribute float rot;
+        uniform float uZoom;
+        uniform float uScale;
+        varying vec3 vColor;
+        varying float vAlpha;
+        varying float vVariant;
+        varying float vRot;
+        void main() {
+          vColor = color;
+          vAlpha = alpha;
+          vVariant = variant;
+          vRot = rot;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * uZoom * uScale;
+        }`,
+      fragmentShader: `
+        uniform sampler2D map;
+        uniform float uOpacity;
+        varying vec3 vColor;
+        varying float vAlpha;
+        varying float vVariant;
+        varying float vRot;
+        ${DITHER_GLSL}
+        void main() {
+          vec2 p = gl_PointCoord - 0.5;
+          float c = cos(vRot);
+          float s = sin(vRot);
+          p = vec2(c * p.x - s * p.y, s * p.x + c * p.y) + 0.5;
+          if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) discard;
+          vec2 cell = vec2(mod(vVariant, 2.0), floor(vVariant / 2.0));
+          vec4 t = texture2D(map, (clamp(vec2(p.x, 1.0 - p.y), 0.02, 0.98) + cell) * 0.5);
+          float a = t.a * vAlpha * uOpacity;
+          // PS1 style: the fade is an ordered dither, in white.
+          if (uDither > 0.5) {
+            ivec2 q = ivec2(mod(gl_FragCoord.xy, 4.0));
+            a = floor(a * 6.0 + BAYER[q.y * 4 + q.x] / 16.0) / 6.0;
+          }
+          if (a < 0.01) discard;
+          gl_FragColor = vec4(t.rgb * vColor, a);
+          #include <colorspace_fragment>
+        }`,
+      transparent: true,
+      depthWrite: false,
+      fog: false,
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.frustumCulled = false;
+    pts.renderOrder = -1;
+    pts.count = n;
+    group.add(pts);
+    disposables.push(geo, mat);
+    return pts;
+  }
+
+  /* Writes one puff's look (its position is set each frame). */
+  setPuff(pts, i, size, alpha, variant, rot, col) {
+    const g = pts.geometry.attributes;
+    g.size.setX(i, size);
+    g.alpha.setX(i, alpha);
+    g.variant.setX(i, variant);
+    g.rot.setX(i, rot);
+    if (col) {
+      const lin = toColor(col);
+      g.color.setXYZ(i, lin.r, lin.g, lin.b);
+    }
   }
 
   /* A round glow: bright in the middle, fading to nothing at the edge. */
@@ -2447,8 +2554,8 @@ class GardenSplash extends HTMLElement {
     const group = new THREE.Group();
     const disposables = [];
     const tex = this.glowTexture();
-    const cloudTex = this.cloudTexture();
-    disposables.push(tex, cloudTex);
+    const atlas = this.cloudAtlas();
+    disposables.push(tex, atlas);
     const time = this.skyTime || this.skyNow();
     // Sunlit clouds by day; at sunrise and sunset they take the sky's glow.
     const cloudLit = mix(WHITE, time.evening ? [255, 168, 150] : [255, 196, 160], time.warm * 0.75);
@@ -2468,68 +2575,92 @@ class GardenSplash extends HTMLElement {
     // Looking up with the view turned over, screen right is +x and screen up is -y.
     const skyPoint = (sx, sy, z) => new THREE.Vector3(eye.x + (sx - lcx) * S, eye.y + (sy - lcy) * S, eye.z + z);
 
-    const points = (n, size, cloud) => {
+    const points = (n, size) => {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
       geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
       // Sizes in screen pixels (three scales them by the pixel ratio).
       // PS1 style: hard square pixels; smooth style: soft round glows.
-      // Clouds are soft puffs either way (chunky ones in PS1 style), laid over the sky rather than added to it.
-      const mat = cloud
-        ? new THREE.PointsMaterial({ size: size / (this.rs || 1), sizeAttenuation: false, map: cloudTex, vertexColors: true, transparent: true, depthWrite: false, fog: false })
-        : new THREE.PointsMaterial({ size: this.ps1 ? Math.max(1, Math.round(size * 0.25)) / (this.rs || 1) : size, sizeAttenuation: false, map: this.ps1 ? null : tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      const mat = new THREE.PointsMaterial({ size: this.ps1 ? Math.max(1, Math.round(size * 0.25)) / (this.rs || 1) : size, sizeAttenuation: false, map: this.ps1 ? null : tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
       const pts = new THREE.Points(geo, mat);
       pts.frustumCulled = false;
       pts.renderOrder = -1;
-      // Clouds are things in the sky, so they grow as it is zoomed into; stars stay points.
-      // (Point sizes are in CSS pixels: a change of render resolution leaves them be.)
-      pts.baseSize = cloud ? mat.size : 0;
       group.add(pts);
       disposables.push(geo, mat);
       return pts;
     };
 
-    // One white star for each flower (by day, a puff of cloud), starting scattered across the sky.
+    // One white star for each flower (by day, a little cumulus), starting scattered across the sky.
     const logo = this.flowers.map((f, i) => {
       const to = skyPoint(f.dest[0], f.dest[1], D);
       const from = new THREE.Vector3(eye.x + (Math.random() - 0.5) * viewW * 1.1, eye.y + (Math.random() - 0.5) * viewH * 1.1, eye.z + D);
-      // Puffs are lit from one side and shaded on the other, for some body.
-      const col = time.clouds ? mix(cloudShade, cloudLit, 0.55 + 0.45 * Math.random()) : WHITE;
-      return { from, to, col, delay: 0.3 + ((f.dest[0] - b.x) / b.w) * 1.2 + Math.random() * 0.4, tw: 1.5 + Math.random() * 3, ph: Math.random() * TAU, i };
+      return { from, to, col: WHITE, delay: 0.3 + ((f.dest[0] - b.x) / b.w) * 1.2 + Math.random() * 0.4, tw: 1.5 + Math.random() * 3, ph: Math.random() * TAU, i };
     });
-    // A puff a little wider than its flower, so neighbors run together into one cloud.
     const pxPerUnit = (S * this.w) / viewW;
-    const logoPts = time.clouds ? points(logo.length, clamp(this.base * 2.4 * pxPerUnit, 10, 120), true) : points(logo.length, 8);
+    const logoPts = time.clouds ? null : points(logo.length, 8);
+    // Each flower's cloud: a broad shaded base, the main puff, and a small
+    // bright crown toward the sun; drawn in that order, so the light sits on top.
+    const puffs = [];
+    let logoPuffs = null;
+    if (time.clouds) {
+      const P = clamp(this.base * 2.6 * pxPerUnit, 10, 130);
+      const R = this.base * S;
+      const layers = [
+        { off: [0.1, 0.45, 40], size: [1.15, 1.45], col: () => mix(cloudShade, cloudLit, 0.15 + Math.random() * 0.2), alpha: 0.9 },
+        { off: [0, 0, 0], size: [0.85, 1.15], col: () => mix(cloudShade, cloudLit, 0.6 + Math.random() * 0.25), alpha: 0.95 },
+        { off: [-0.3, -0.4, -30], size: [0.45, 0.7], col: () => mix(cloudLit, WHITE, 0.5), alpha: 0.9 },
+      ];
+      for (const L of layers) {
+        logo.forEach((s, i) => {
+          // Not every flower needs a crown.
+          if (L.alpha === 0.9 && L.off[0] < 0 && Math.random() < 0.35) return;
+          const j = (Math.random() - 0.5) * 0.3;
+          puffs.push({ flower: i, off: new THREE.Vector3((L.off[0] + j) * R, (L.off[1] + j) * R, L.off[2]), size: P * lerp(L.size[0], L.size[1], Math.random()), alpha: L.alpha, col: L.col(), variant: (Math.random() * 4) | 0, rot: (Math.random() - 0.5) * 0.7 });
+        });
+      }
+      logoPuffs = this.puffPoints(puffs.length, atlas, group, disposables);
+      puffs.forEach((q, i) => this.setPuff(logoPuffs, i, q.size, q.alpha, q.variant, q.rot, q.col));
+    }
 
-    // By day, clouds drifting across the rest of the sky.
+    // By day, cumulus drifting across the rest of the sky: each a heap,
+    // broad shaded puffs along a level base, smaller sunlit ones piled on top.
     const drift = [];
     if (time.light > 0.2) {
+      const unit = viewW / this.w; // world units per CSS pixel at the clouds' depth, near enough
       for (let k = 0; k < 9; k++) {
         const cx = eye.x + (Math.random() - 0.5) * viewW * 1.6;
         const cy = eye.y + (Math.random() - 0.5) * viewH * 1.6;
         // Away from the logo in the middle.
         if (Math.abs(cx - eye.x) < viewW * 0.36 && Math.abs(cy - eye.y) < viewH * 0.3) continue;
-        const n = 6 + Math.floor(Math.random() * 6);
-        const spread = viewW * (0.04 + Math.random() * 0.05);
-        for (let j = 0; j < n; j++) {
-          drift.push({
-            p: new THREE.Vector3(cx + (Math.random() - 0.5) * spread * 2.4, cy + (Math.random() - 0.5) * spread * 0.8, eye.z + D * 1.2),
-            col: mix(cloudShade, cloudLit, 0.5 + 0.5 * Math.random()),
-          });
+        const big = clamp(this.w * 0.075, 26, 110) * (0.7 + Math.random() * 0.6);
+        const wide = 3 + Math.floor(Math.random() * 3);
+        const z = eye.z + D * 1.2;
+        // The base row (screen down is +y here).
+        for (let j = 0; j < wide; j++) {
+          const x = cx + (j - (wide - 1) / 2) * big * 0.62 * unit;
+          drift.push({ p: new THREE.Vector3(x, cy + big * 0.18 * unit, z + 20), size: big * (1 + Math.random() * 0.25), col: mix(cloudShade, cloudLit, 0.2 + Math.random() * 0.2), alpha: 0.92 });
+        }
+        // The heap.
+        for (let j = 0; j < wide; j++) {
+          const x = cx + (j - (wide - 1) / 2) * big * 0.5 * unit + (Math.random() - 0.5) * big * 0.2 * unit;
+          drift.push({ p: new THREE.Vector3(x, cy - big * 0.12 * unit, z), size: big * (0.8 + Math.random() * 0.3), col: mix(cloudShade, cloudLit, 0.55 + Math.random() * 0.25), alpha: 0.95 });
+        }
+        // Sunlit tops.
+        const tops = 1 + Math.floor(Math.random() * 3);
+        for (let j = 0; j < tops; j++) {
+          const x = cx + (Math.random() - 0.5) * wide * big * 0.45 * unit;
+          drift.push({ p: new THREE.Vector3(x, cy - big * 0.42 * unit, z - 20), size: big * (0.5 + Math.random() * 0.25), col: mix(cloudLit, WHITE, 0.5), alpha: 0.92 });
         }
       }
     }
-    const driftPts = drift.length ? points(drift.length, clamp(this.w * 0.07, 24, 110), true) : null;
+    const driftPts = drift.length ? this.puffPoints(drift.length, atlas, group, disposables) : null;
     if (driftPts) {
       const dp = driftPts.geometry.attributes.position;
-      const dc = driftPts.geometry.attributes.color;
       drift.forEach((c, i) => {
         dp.setXYZ(i, c.p.x, c.p.y, c.p.z);
-        const lin = toColor(c.col);
-        dc.setXYZ(i, lin.r, lin.g, lin.b);
+        this.setPuff(driftPts, i, c.size, c.alpha, (Math.random() * 4) | 0, (Math.random() - 0.5) * 0.5, c.col);
       });
       dp.needsUpdate = true;
-      dc.needsUpdate = true;
     }
 
     // The far sky: many faint stars, and a few brighter ones grouped in constellations.
@@ -2636,7 +2767,7 @@ class GardenSplash extends HTMLElement {
 
     // By day, things live in the clouds: eyes that push out of a puff, look
     // about, and sink back in. Their lids are cloud, so closed they vanish into it.
-    const peekR = this.base * S * 0.85;
+    const peekR = this.base * S * 0.42;
     const peekers = time.clouds
       ? [0, 1, 2, 3].map(() => {
           const e = skyEye(peekR, mix(cloudShade, cloudLit, 0.75), mix(this.heroColor, [40, 40, 60], 0.2));
@@ -2670,8 +2801,9 @@ class GardenSplash extends HTMLElement {
     }
 
     this.sky = {
-      group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, field, fieldPts, drift, driftPts, glows, shoot,
-      peekers, nextPeek: 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: 6 + Math.random() * 6,
+      group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, puffs, logoPuffs, fpos: new Float32Array(logo.length * 3), field, fieldPts, drift, driftPts, glows, shoot,
+      planes: this.buildPlanes(group, disposables, atlas, tex, time, D), nextPlane: this.elapsed + 9 + Math.random() * 10,
+      peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 6 + Math.random() * 6,
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
     };
   }
@@ -2739,34 +2871,50 @@ class GardenSplash extends HTMLElement {
     if (n.dir > 0 && p >= 1) n.since += dt;
     const since = n.dir > 0 ? n.since : n.since * p;
     const show = smooth(range(p, 0.45, 1));
-    const lp = sky.logoPts.geometry.attributes.position;
-    const lc = sky.logoPts.geometry.attributes.color;
     const unit = (sky.viewW / this.w) * 2;
+    const fp = sky.fpos;
     for (const s of sky.logo) {
       const k = this.reduced ? 1 : smooth(range(since - s.delay, 0, 2.8));
       let x = lerp(s.from.x, s.to.x, k);
       let y = lerp(s.from.y, s.to.y, k);
       const lift = Math.sin(Math.PI * k) * 120;
-      if (time.clouds) {
-        // Formed, the puffs keep billowing a little.
-        if (!this.reduced) {
-          x += Math.sin(t * 0.35 + s.ph) * unit * k;
-          y += Math.cos(t * 0.27 + s.ph * 1.3) * unit * 0.6 * k;
-        }
-        lp.setXYZ(s.i, x, y, s.to.z - lift);
-        const lin = toColor(s.col);
-        lc.setXYZ(s.i, lin.r, lin.g, lin.b);
-      } else {
-        lp.setXYZ(s.i, x, y, s.to.z - lift);
+      // Formed, the clouds keep billowing a little.
+      if (time.clouds && !this.reduced) {
+        x += Math.sin(t * 0.35 + s.ph) * unit * k;
+        y += Math.cos(t * 0.27 + s.ph * 1.3) * unit * 0.6 * k;
+      }
+      fp[s.i * 3] = x;
+      fp[s.i * 3 + 1] = y;
+      fp[s.i * 3 + 2] = s.to.z - lift;
+    }
+    if (sky.logoPts) {
+      const lp = sky.logoPts.geometry.attributes.position;
+      const lc = sky.logoPts.geometry.attributes.color;
+      for (const s of sky.logo) {
+        lp.setXYZ(s.i, fp[s.i * 3], fp[s.i * 3 + 1], fp[s.i * 3 + 2]);
         const tw = (this.reduced ? 1 : 0.85 + 0.25 * Math.sin(t * s.tw + s.ph)) * show * 1.15;
         lc.setXYZ(s.i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
       }
+      lp.needsUpdate = true;
+      lc.needsUpdate = true;
     }
-    lp.needsUpdate = true;
-    lc.needsUpdate = true;
-    if (time.clouds) sky.logoPts.material.opacity = show;
     const zoom = this.skyView ? this.skyView.z : 1;
-    for (const pts of [sky.logoPts, sky.driftPts]) if (pts && pts.baseSize) pts.material.size = pts.baseSize * zoom;
+    if (sky.logoPuffs) {
+      const pp = sky.logoPuffs.geometry.attributes.position;
+      sky.puffs.forEach((q, i) => {
+        const f = q.flower * 3;
+        pp.setXYZ(i, fp[f] + q.off.x, fp[f + 1] + q.off.y, fp[f + 2] + q.off.z);
+      });
+      pp.needsUpdate = true;
+    }
+    // Puffs are sized in CSS pixels, grow with the zoom, and follow the render resolution.
+    for (const pts of [sky.logoPuffs, sky.driftPts, sky.planes && sky.planes.trail]) {
+      if (!pts) continue;
+      const u = pts.material.uniforms;
+      u.uZoom.value = zoom;
+      u.uScale.value = this.rsNow || this.rs || 1;
+      u.uOpacity.value = pts === sky.driftPts ? show * clamp(time.light * 1.4, 0, 1) : show;
+    }
     // A cloudy sky is drawn at a finer resolution than the PS1 flowers: soft
     // shapes suffer most from big pixels. Back to the bed's once the sky goes.
     if (sky.time.clouds && this.ps1 && !this.backdrop) {
@@ -2790,8 +2938,8 @@ class GardenSplash extends HTMLElement {
       const move = this.reduced ? 0 : t * sky.viewW * 0.006;
       sky.drift.forEach((c, i) => dp.setX(i, left + ((((c.p.x - left + move) % span) + span) % span)));
       dp.needsUpdate = true;
-      sky.driftPts.material.opacity = show * clamp(time.light * 1.4, 0, 1);
     }
+    this.flyPlanes(t, dt, show, p);
     sky.glows.forEach((g) => (g.material.opacity = dark));
 
     // Now and then a shooting star, like the bees by day.
@@ -2857,6 +3005,143 @@ class GardenSplash extends HTMLElement {
     e.bottom.rotation.x = 0.7 * ap;
   }
 
+  /*
+   * A plane now and then, high up and small, crossing in a straight line:
+   * by day (and at sunrise and sunset) its two contrails stream out behind
+   * it, widen and fade; at night only its lights show, red and green at the
+   * wingtips and a white strobe.
+   */
+  buildPlanes(group, disposables, atlas, tex, time, D) {
+    // Seen from below: a swept-wing silhouette, nose along +x.
+    const half = [
+      [0.5, 0], [0.43, 0.045], [0.12, 0.055], [-0.1, 0.5], [-0.2, 0.5], [-0.08, 0.06],
+      [-0.36, 0.05], [-0.44, 0.19], [-0.52, 0.19], [-0.49, 0.03], [-0.53, 0],
+    ];
+    const shape = new THREE.Shape();
+    const pts = [...half, ...half.slice(1, -1).reverse().map(([x, y]) => [x, -y])];
+    shape.moveTo(pts[0][0], pts[0][1]);
+    pts.slice(1).forEach(([x, y]) => shape.lineTo(x, y));
+    const geo = new THREE.ShapeGeometry(shape);
+    const body = time.dark ? [16, 18, 40] : mix([150, 158, 178], time.evening ? [190, 140, 150] : [200, 170, 160], time.warm * 0.5);
+    const mat = this.snapMaterial(new THREE.MeshBasicMaterial({ color: toColor(body), side: THREE.DoubleSide, fog: false }));
+    const plane = new THREE.Mesh(geo, mat);
+    plane.renderOrder = 0;
+    plane.visible = false;
+    group.add(plane);
+    disposables.push(geo, mat);
+    const light = (color) => {
+      const m = new THREE.SpriteMaterial({ map: tex, color: toColor(color), transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, opacity: 0 });
+      const sp = new THREE.Sprite(m);
+      sp.visible = false;
+      group.add(sp);
+      disposables.push(m);
+      return sp;
+    };
+    const lights = time.dark ? { red: light([255, 60, 60]), green: light([80, 255, 120]), strobe: light([255, 255, 255]) } : null;
+    // Contrails: puffs laid down behind each engine.
+    const trail = time.light > 0.2 ? this.puffPoints(320, atlas, group, disposables) : null;
+    if (trail) {
+      for (let i = 0; i < 320; i++) this.setPuff(trail, i, 0, 0, i % 4, Math.random() * TAU, mix(WHITE, [255, 200, 180], time.warm * 0.5));
+      trail.renderOrder = -1;
+    }
+    return { plane, lights, trail, puffs: Array.from({ length: 320 }, () => ({ age: -1 })), next: 0, active: null, depth: D * 1.1 };
+  }
+
+  flyPlanes(t, dt, show, p) {
+    const sky = this.sky;
+    const P = sky.planes;
+    const n = this.night;
+    if (!P) return;
+    const k = P.depth / sky.D;
+    const unit = (sky.viewW / this.w) * k;
+    const cx = sky.eye.x;
+    const cy = sky.eye.y;
+    if (!P.active && !this.reduced && n.dir > 0 && p >= 1 && t > sky.nextPlane) {
+      const a = Math.random() * TAU;
+      const R0 = sky.viewW * k * 0.75;
+      const side = (Math.random() - 0.5) * sky.viewH * k * 0.7;
+      const dir = new THREE.Vector2(Math.cos(a), Math.sin(a));
+      const from = new THREE.Vector2(cx - dir.x * R0 - dir.y * side, cy - dir.y * R0 + dir.x * side);
+      P.active = { pos: from, dir, speed: (R0 * 2) / (14 + Math.random() * 8), R0, len: (30 + Math.random() * 10) * unit, sinceTrail: 0, wing: 0 };
+    }
+    const A = P.active;
+    if (A) {
+      A.pos.addScaledVector(A.dir, A.speed * dt);
+      const heading = Math.atan2(A.dir.y, A.dir.x);
+      const z = sky.eye.z + P.depth;
+      P.plane.position.set(A.pos.x, A.pos.y, z);
+      P.plane.rotation.set(0, 0, heading);
+      P.plane.scale.setScalar(A.len);
+      P.plane.visible = !sky.time.dark && show > 0.05;
+      const across = (x, y) => new THREE.Vector3(A.pos.x + Math.cos(heading) * x * A.len - Math.sin(heading) * y * A.len, A.pos.y + Math.sin(heading) * x * A.len + Math.cos(heading) * y * A.len, z - 2);
+      if (P.lights) {
+        const L = P.lights;
+        const px = unit * 7;
+        L.red.position.copy(across(-0.18, -0.5));
+        L.green.position.copy(across(-0.18, 0.5));
+        L.strobe.position.copy(across(-0.5, 0));
+        [L.red, L.green].forEach((sp) => {
+          sp.visible = true;
+          sp.scale.setScalar(px);
+          sp.material.opacity = 0.9 * show * (0.75 + 0.25 * Math.sin(t * 3));
+        });
+        const flash = (t % 1.3) < 0.07 ? 1 : 0;
+        L.strobe.visible = flash > 0;
+        L.strobe.scale.setScalar(px * 1.8);
+        L.strobe.material.opacity = flash * show;
+      }
+      // Two engines, a little in from the wingtips, each leaving its trail.
+      if (P.trail) {
+        A.sinceTrail += dt;
+        while (A.sinceTrail > 0.07) {
+          A.sinceTrail -= 0.07;
+          for (const y of [-0.27, 0.27]) {
+            const q = P.puffs[P.next];
+            P.next = (P.next + 1) % P.puffs.length;
+            q.age = 0;
+            q.pos = across(-0.15, y);
+            q.pos.z += 6;
+            q.drift = new THREE.Vector2(-Math.sin(heading) * y, Math.cos(heading) * y).multiplyScalar(unit * 6);
+          }
+        }
+      }
+      if (A.pos.distanceTo(new THREE.Vector2(cx, cy)) > A.R0 * 1.15 && A.dir.dot(new THREE.Vector2(A.pos.x - cx, A.pos.y - cy)) > 0) {
+        P.active = null;
+        P.plane.visible = false;
+        if (P.lights) Object.values(P.lights).forEach((sp) => (sp.visible = false));
+        sky.nextPlane = t + 25 + Math.random() * 30;
+      }
+    }
+    if (n.dir < 0 && P.active) {
+      P.active = null;
+      P.plane.visible = false;
+      if (P.lights) Object.values(P.lights).forEach((sp) => (sp.visible = false));
+    }
+    // The trails: thin and bright where the plane just was, spreading and fading behind it.
+    if (P.trail) {
+      const g = P.trail.geometry.attributes;
+      const life = 9;
+      P.puffs.forEach((q, i) => {
+        if (q.age < 0) return;
+        q.age += dt;
+        if (q.age > life) {
+          q.age = -1;
+          g.alpha.setX(i, 0);
+          return;
+        }
+        const f = q.age / life;
+        q.pos.x += q.drift.x * dt;
+        q.pos.y += q.drift.y * dt;
+        g.position.setXYZ(i, q.pos.x, q.pos.y, q.pos.z);
+        g.size.setX(i, lerp(4, 30, Math.sqrt(f)));
+        g.alpha.setX(i, 0.85 * (1 - f) ** 1.6);
+      });
+      g.position.needsUpdate = true;
+      g.size.needsUpdate = true;
+      g.alpha.needsUpdate = true;
+    }
+  }
+
   /* By day, eyes in the clouds; at night, the lights. */
   skyEyes(t, dt, show, p) {
     if (this.reduced) return;
@@ -2871,8 +3156,8 @@ class GardenSplash extends HTMLElement {
       const dp = sky.driftPts.geometry.attributes.position;
       return out.set(dp.getX(host.i), dp.getY(host.i), dp.getZ(host.i));
     }
-    const lp = sky.logoPts.geometry.attributes.position;
-    return out.set(lp.getX(host.i), lp.getY(host.i), lp.getZ(host.i));
+    const fp = sky.fpos;
+    return out.set(fp[host.i * 3], fp[host.i * 3 + 1], fp[host.i * 3 + 2]);
   }
 
   /*
@@ -2903,7 +3188,7 @@ class GardenSplash extends HTMLElement {
         const t0 = t;
         const life = 4.5 + Math.random() * 2.5;
         // Drifting clouds are bigger: so are what live in them.
-        const size = inDrift ? 1.6 + Math.random() * 0.5 : 0.9 + Math.random() * 0.3;
+        const size = inDrift ? 1.1 + Math.random() * 0.3 : 0.9 + Math.random() * 0.25;
         free.slice(0, want).forEach((e, k) => {
           const a = Math.random() * TAU;
           const spread = k ? e.R * 2.6 * size : 0;
