@@ -3881,7 +3881,7 @@ class GardenSplash extends HTMLElement {
     }
     if (!this.weather) this.buildWeather();
     const W = this.weather;
-    const quiet = this.reduced || !!this.night;
+    const quiet = this.reduced;
     W.group.visible = !quiet;
     if (quiet) return;
     const w = this.seasonNow.weights;
@@ -3918,7 +3918,8 @@ class GardenSplash extends HTMLElement {
     const gust = this.gust ? this.gust.dir * 140 * this.gust.strength : 0;
     W.wind = lerp(W.wind, (this.seasonNow.name === 'autumn' ? 25 : 10) + gust, 1 - Math.exp(-dt * 2));
     const d = W.dummy;
-    const camZ = this.camera.position.z;
+    // In the sky view the bed's weather keeps falling (and building up) out of sight, from where it would above the bed.
+    const camZ = this.night ? this.camBase.z : this.camera.position.z;
     // Things come into view from well above the flowers, below the camera.
     const top = FLOOR_Z + (camZ - FLOOR_Z) * 0.62;
     const ground = this.weatherBox(FLOOR_Z);
@@ -4038,6 +4039,316 @@ class GardenSplash extends HTMLElement {
       }
     }
     this.updatePiles(t, dt, w, level);
+    for (const kind of Object.values(W.kinds)) kind.o.visible = !this.night;
+    if (this.night || W.sky) this.skyWeather(t, dt, level);
+  }
+
+  /*
+   * The same weather, seen lying on your back in the flowers (the sky view).
+   * It comes down out of the sky straight at you: specks far off that grow
+   * and spread outward as they near, rain as streaks bursting out from the
+   * middle. Now and then something lands right on you: a flake that melts,
+   * a raindrop that slides and dries, a leaf that sits a moment before the
+   * wind takes it.
+   */
+  buildSkyWeather() {
+    const W = this.weather;
+    const group = new THREE.Group();
+    const disposables = W.disposables;
+    const instanced = (n, geo, mat, colors) => {
+      const o = new THREE.InstancedMesh(geo, mat, n);
+      o.count = 0;
+      o.frustumCulled = false;
+      if (colors) {
+        const c = new THREE.Color();
+        for (let i = 0; i < n; i++) o.setColorAt(i, c.copy(toColor(colors[i % colors.length])));
+      }
+      group.add(o);
+      disposables.push(o);
+      return o;
+    };
+    const flake = new THREE.IcosahedronGeometry(1, 0);
+    const disc = new THREE.CircleGeometry(1, 12);
+    disposables.push(flake, disc);
+    const water = mix(POWDER, OCEAN, 0.25);
+    const snowMat = new THREE.MeshBasicMaterial({ color: toColor([232, 238, 250]), fog: false });
+    const rainMat = new THREE.LineBasicMaterial({ color: toColor(tone(water, 0.25)), transparent: true, opacity: 0.6, depthWrite: false, fog: false });
+    const pollenMat = new THREE.MeshBasicMaterial({ color: toColor([242, 178, 70]), fog: false });
+    // On the lens: always in front of everything.
+    const lens = { transparent: true, depthTest: false, depthWrite: false, fog: false };
+    const meltMat = new THREE.MeshBasicMaterial(Object.assign({ color: toColor([240, 245, 255]), opacity: 0.85 }, lens));
+    const dropMat = new THREE.MeshBasicMaterial(Object.assign({ color: toColor(tone(water, 0.5)), opacity: 0.28 }, lens));
+    const glintMat = new THREE.MeshBasicMaterial(Object.assign({ color: 0xffffff, opacity: 0.75 }, lens));
+    const leafMat = this.makeMaterial({ shininess: 10, specular: 0x1e1e1e, side: THREE.DoubleSide, depthTest: false });
+    const petalMat = this.makeMaterial({ shininess: 16, side: THREE.DoubleSide, depthTest: false });
+    disposables.push(snowMat, rainMat, pollenMat, meltMat, dropMat, glintMat, leafMat, petalMat);
+    const leafColors = [[166, 39, 73], [201, 104, 52], [222, 150, 60], [140, 70, 40], [240, 78, 98]];
+    const petalColors = [[255, 255, 255], [255, 210, 220], [240, 78, 98], [185, 229, 251]];
+
+    const rainGeo = new THREE.BufferGeometry();
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(300 * 6), 3));
+    rainGeo.setDrawRange(0, 0);
+    disposables.push(rainGeo);
+    const rain = new THREE.LineSegments(rainGeo, rainMat);
+    rain.frustumCulled = false;
+    group.add(rain);
+
+    // How far up each kind comes from, and how often one is aimed right at the viewer.
+    const kinds = {
+      snow: { n: 600, o: instanced(600, flake, snowMat), far: 1000, aim: 0.08 },
+      rain: { n: 300, o: rain, far: 1600, aim: 0.08 },
+      leaves: { n: 60, o: instanced(60, this.geometries.leaf, this.materials.foliage, leafColors), far: 700, aim: 0.2 },
+      petals: { n: 50, o: instanced(50, this.geometries.round, this.materials.petal, petalColors), far: 600, aim: 0.12 },
+      pollen: { n: 120, o: instanced(120, flake, pollenMat), far: 420, aim: 0 },
+    };
+    for (const k of Object.values(kinds)) k.p = Array.from({ length: k.n }, () => ({ live: false, s: Math.random(), ph: Math.random() * TAU, spin: Math.random() * TAU }));
+    const on = {
+      melt: { o: instanced(60, flake, meltMat), items: [] },
+      drops: { o: instanced(80, disc, dropMat), items: [] },
+      glints: { o: instanced(80, disc, glintMat), items: [] },
+      leaves: { o: instanced(6, this.geometries.leaf, leafMat, leafColors), items: [] },
+      petals: { o: instanced(6, this.geometries.round, petalMat, petalColors), items: [] },
+    };
+    for (const L of Object.values(on)) {
+      L.cap = L.o.instanceMatrix.count;
+      L.o.renderOrder = 60;
+    }
+    on.glints.o.renderOrder = 61;
+    group.renderOrder = 6;
+    group.visible = false;
+    this.scene.add(group);
+    W.sky = { group, kinds, on, mats: { snow: snowMat, rain: rainMat, drop: dropMat }, q: new THREE.Quaternion(), z: new THREE.Quaternion(), axis: new THREE.Vector3(0, 0, 1) };
+  }
+
+  skyWeather(t, dt, level) {
+    const W = this.weather;
+    const sky = this.sky;
+    const n = this.night;
+    if (!W.sky) this.buildSkyWeather();
+    const S = W.sky;
+    const live = !!(n && sky) && n.t > 0.35;
+    S.group.visible = live;
+    if (!live) {
+      for (const k of Object.values(S.kinds)) k.p.forEach((q) => (q.live = false));
+      for (const L of Object.values(S.on)) L.items.length = 0;
+      return;
+    }
+    const eye = sky.eye;
+    const aspect = this.w / this.h;
+    // Spread at each height: the whole sky view, unzoomed, a little wider.
+    const tan0 = Math.tan((sky.fov * Math.PI) / 360);
+    const lensAt = 16;
+    const appear = smooth(range(n.t, 0.5, 1)) * (n.dir > 0 ? 1 : n.t);
+    const d = W.dummy;
+    const r = W.r || 20;
+    // Against a bright sky, snow and rain seen from below are grey shapes; at night they catch the light, pale.
+    const light = sky.time ? sky.time.light : 0;
+    S.mats.snow.color.copy(toColor(mix([236, 240, 250], [128, 138, 162], light)));
+    S.mats.rain.color.copy(toColor(mix([200, 214, 236], [96, 116, 150], light)));
+    S.mats.rain.opacity = lerp(0.6, 0.7, light);
+    S.mats.drop.opacity = lerp(0.3, 0.4, light);
+
+    for (const [name, kind] of Object.entries(S.kinds)) {
+      const want = Math.round(kind.n * clamp(level[name], 0, 1) * appear);
+      const rising = name === 'pollen';
+      let shown = 0;
+      for (let i = 0; i < kind.n; i++) {
+        const q = kind.p[i];
+        if (!q.live) {
+          if (i >= want) continue;
+          q.live = true;
+          if (rising) {
+            // Pollen lifts off the flowers round the viewer and floats away up.
+            q.z = eye.z + lerp(lensAt, 140, Math.random());
+          } else {
+            // Out of the far sky (anywhere in the column at first).
+            q.z = eye.z + (q.seen ? kind.far : lerp(60, kind.far, Math.random()));
+          }
+          const depth = q.z - eye.z;
+          q.aimed = Math.random() < kind.aim;
+          q.x = eye.x + (Math.random() * 2 - 1) * tan0 * aspect * depth * 1.15;
+          q.y = eye.y + (Math.random() * 2 - 1) * tan0 * depth * 1.15;
+          // Where on the view an aimed one will come down.
+          q.tx = eye.x + (Math.random() * 2 - 1) * 0.85 * tan0 * aspect * lensAt;
+          q.ty = eye.y + (Math.random() * 2 - 1) * 0.85 * tan0 * lensAt;
+          q.ox = q.x - q.tx;
+          q.oy = q.y - q.ty;
+          q.d0 = depth;
+          q.seen = true;
+        }
+        const sway = Math.sin(t * (1.1 + q.s) + q.ph);
+        const sway2 = Math.cos(t * (0.9 + q.s) + q.ph * 1.7);
+        let vx = 0;
+        let vy = 0;
+        let vz = 0;
+        if (name === 'snow') {
+          vz = -(55 + 50 * q.s);
+          vx = W.wind * 0.6 + sway * 14;
+          vy = sway2 * 10;
+        } else if (name === 'rain') {
+          vz = -(1050 + 300 * q.s);
+          vx = W.wind * 1.5;
+        } else if (name === 'leaves' || name === 'petals') {
+          vz = -((name === 'leaves' ? 60 : 40) + 30 * q.s) * (0.75 + 0.45 * Math.abs(sway));
+          vx = W.wind * 1.4 + sway * 38;
+          vy = sway2 * 24;
+          q.spin += dt * (1.5 + q.s * 2);
+        } else {
+          vz = 14 + 12 * q.s;
+          vx = W.wind * 0.3 + sway * 6;
+          vy = sway2 * 6;
+        }
+        q.x += vx * dt;
+        q.y += vy * dt;
+        q.z += vz * dt;
+        if (q.aimed) {
+          // Straight down onto its spot on the viewer: seen from below, it hangs there and grows.
+          const k = clamp((q.z - eye.z - lensAt) / Math.max(1, q.d0 - lensAt), 0, 1);
+          q.x = q.tx + q.ox * k;
+          q.y = q.ty + q.oy * k;
+        }
+        const depth = q.z - eye.z;
+        // Where it is across the view at its height: -1 to 1 edge to edge.
+        const nx = (q.x - eye.x) / (tan0 * aspect * Math.max(1, depth));
+        const ny = (q.y - eye.y) / (tan0 * Math.max(1, depth));
+        if (depth < lensAt) {
+          // Reached the viewer: if it is in view, it lands on them.
+          if (Math.abs(nx) < 1 && Math.abs(ny) < 1) this.landOnViewer(name, nx, -ny, t);
+          q.live = false;
+          continue;
+        }
+        if (Math.abs(nx) > 1.6 || Math.abs(ny) > 1.6 || depth > kind.far * 1.05) {
+          q.live = false;
+          continue;
+        }
+        if (name === 'rain') {
+          // A streak along its fall: from below, longest as it rushes past.
+          const pos = kind.o.geometry.attributes.position;
+          pos.setXYZ(shown * 2, q.x, q.y, q.z);
+          pos.setXYZ(shown * 2 + 1, q.x - vx * 0.03, q.y, q.z + 34);
+        } else {
+          d.position.set(q.x, q.y, q.z);
+          if (name === 'snow' || name === 'pollen') {
+            d.rotation.set(q.ph, q.spin, 0);
+            // Never bigger than a soft fleck, however close it passes.
+            d.scale.setScalar(Math.min(name === 'snow' ? 2.2 + q.s * 1.8 : 0.8 + q.s * 0.6, depth * 0.05));
+          } else {
+            const size = Math.min(r * (name === 'leaves' ? 2.2 : 1.1), depth * 0.3);
+            d.rotation.set(Math.sin(q.spin) * 1.2, q.spin * 0.7, q.spin + q.ph);
+            d.scale.set(size, size * 0.6, size * 0.6);
+          }
+          d.updateMatrix();
+          kind.o.setMatrixAt(shown, d.matrix);
+        }
+        shown++;
+      }
+      if (kind.o.isInstancedMesh) {
+        kind.o.count = shown;
+        kind.o.instanceMatrix.needsUpdate = true;
+      } else {
+        kind.o.geometry.setDrawRange(0, shown * 2);
+        kind.o.geometry.attributes.position.needsUpdate = true;
+      }
+    }
+    this.updateLens(t, dt);
+  }
+
+  /* Something has come down right onto the viewer, at (x, y) across the view (-1 to 1, y up). */
+  landOnViewer(name, x, y, t) {
+    const S = this.weather.sky;
+    const put = (L, item) => {
+      if (L.items.length >= L.cap) L.items.shift();
+      L.items.push(Object.assign({ x, y, t0: t, yaw: Math.random() * TAU, ph: Math.random() }, item));
+    };
+    if (name === 'snow') put(S.on.melt, { s: 0.7 + Math.random() * 0.6, life: 1.6 + Math.random() * 1.8 });
+    else if (name === 'rain') put(S.on.drops, { s: 0.5 + Math.random() * 0.8, life: 3 + Math.random() * 4, vy: 0 });
+    else if (name === 'leaves' || name === 'petals') {
+      const colors = name === 'leaves' ? [[166, 39, 73], [201, 104, 52], [222, 150, 60], [140, 70, 40]] : [[255, 255, 255], [255, 210, 220], [240, 78, 98]];
+      put(S.on[name], { s: 1, life: 0.7 + Math.random() * 1.2, vx: 0, tip: (Math.random() - 0.5) * 0.6, color: pick(Math.random, colors) });
+    }
+  }
+
+  /* What has landed on the viewer, drawn just in front of the camera so it stays put as the view turns. */
+  updateLens(t, dt) {
+    const W = this.weather;
+    const S = W.sky;
+    const c = this.camera;
+    c.updateMatrixWorld();
+    const near = 14;
+    const hh = near * Math.tan((c.fov * Math.PI) / 360);
+    const hw = hh * (this.w / this.h);
+    const d = W.dummy;
+    const place = (it, lx, ly, spin, sx, sy, sz) => {
+      d.position.set(lx * hw, ly * hh, -near).applyMatrix4(c.matrixWorld);
+      d.quaternion.copy(c.quaternion).multiply(S.z.setFromAxisAngle(S.axis, spin));
+      d.scale.set(sx, sy, sz);
+      d.updateMatrix();
+    };
+    const run = (L, fn) => {
+      let i = 0;
+      for (const it of L.items) {
+        if (fn(it, t - it.t0) === false) continue;
+        L.o.setMatrixAt(i++, d.matrix);
+      }
+      L.items = L.items.filter((it) => !it.gone);
+      L.o.count = i;
+      L.o.instanceMatrix.needsUpdate = true;
+    };
+    // Flakes: a white star on the glass that shrinks to nothing.
+    run(S.on.melt, (it, age) => {
+      const k = 1 - age / it.life;
+      if (k <= 0) {
+        it.gone = true;
+        return false;
+      }
+      const s = hh * 0.022 * it.s * Math.sqrt(k);
+      place(it, it.x, it.y, it.yaw, s, s, s * 0.2);
+    });
+    // Raindrops: a bead of water that slowly runs down, with a glint, and dries.
+    let g = 0;
+    const glints = S.on.glints;
+    run(S.on.drops, (it, age) => {
+      const k = 1 - age / it.life;
+      if (k <= 0) {
+        it.gone = true;
+        return false;
+      }
+      it.vy = Math.min(0.05, it.vy + dt * 0.004 * it.s);
+      it.y -= it.vy * dt;
+      const s = hh * 0.045 * it.s * Math.min(1, k * 3);
+      place(it, it.x + s * 0.3 / hw, it.y + s * 0.3 / hh, 0, s * 0.28, s * 0.28, 1);
+      glints.o.setMatrixAt(g++, d.matrix);
+      place(it, it.x, it.y, it.yaw, s, s * 1.08, 1);
+    });
+    glints.o.count = g;
+    glints.o.instanceMatrix.needsUpdate = true;
+    // A leaf or petal: lands on the viewer, sits a moment, then the wind takes it off.
+    for (const name of ['leaves', 'petals']) {
+      const L = S.on[name];
+      const size = hh * (name === 'leaves' ? 0.34 : 0.18);
+      const dir = W.wind >= 0 ? 1 : -1;
+      let i = 0;
+      const keep = [];
+      L.items.forEach((it) => {
+        const age = t - it.t0;
+        if (age > it.life) {
+          it.vx += dir * dt * 3.2;
+          it.x += it.vx * dt;
+          it.y += it.vx * dt * it.tip;
+        }
+        if (Math.abs(it.x) > 1.8) return;
+        const land = smooth(Math.min(1, age / 0.18));
+        place(it, it.x, it.y, it.yaw + Math.sin(age * 3 + it.ph) * 0.05 + it.vx * 0.4, size * lerp(1.5, 1, land), size * 0.6 * lerp(1.5, 1, land), size * 0.12);
+        L.o.setMatrixAt(i, d.matrix);
+        L.o.setColorAt(i, toColor(it.color));
+        keep.push(it);
+        i++;
+      });
+      L.items = keep;
+      if (L.o.instanceColor) L.o.instanceColor.needsUpdate = true;
+      L.o.count = i;
+      L.o.instanceMatrix.needsUpdate = true;
+    }
   }
 
   /* A particle has come down: it joins what has built up there. */
