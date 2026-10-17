@@ -2,7 +2,10 @@
   The store header, the same on every page. Each part is a block (logo,
   menu, search, account, cart) placed left, center or right; blocks on the
   same side appear in their order in the theme editor, so dragging them
-  rearranges the header.
+  rearranges the header. A block switched off with its own Show setting
+  keeps its space (invisible), so the others stay exactly where they are;
+  so do a menu button with no menu chosen and the account link while
+  customer accounts are off.
 
   On the splash pages and the garden shop page it floats over the garden;
   everywhere else it is a sticky bar. It also holds the Pollen Dream game's
@@ -37,6 +40,17 @@
           {%- if position != zone -%}
             {%- continue -%}
           {%- endif -%}
+          {%- liquid
+            assign hidden = false
+            if block.settings.show == false
+              assign hidden = true
+            elsif block.type == 'menu' and header_menu == blank
+              assign hidden = true
+            elsif block.type == 'account' and shop.customer_accounts_enabled == false
+              assign hidden = true
+            endif
+          -%}
+          <div class="duet-header__slot{% if hidden %} is-hidden{% endif %}"{% if hidden %} aria-hidden="true" inert{% endif %}>
           {%- case block.type -%}
             {%- when 'logo' -%}
               <a href="{{ routes.root_url }}" class="duet-header__logo" {{ block.shopify_attributes }}>
@@ -65,25 +79,23 @@
                 {%- endif -%}
               </a>
             {%- when 'menu' -%}
-              {%- if header_menu != blank -%}
-                {%- assign menu_label = block.settings.label | default: 'Menu' -%}
-                <button
-                  type="button"
-                  class="duet-header__item duet-header__menu"
-                  data-dh-open="menu"
-                  aria-expanded="false"
-                  aria-controls="DuetHeaderMenu-{{ section.id }}"
-                  {% unless block.settings.style == 'text' %}aria-label="{{ menu_label | escape }}"{% endunless %}
-                  {{ block.shopify_attributes }}
-                >
-                  {%- unless block.settings.style == 'text' -%}
-                    <span class="svg-wrapper">{{ 'icon-hamburger.svg' | inline_asset_content }}</span>
-                  {%- endunless -%}
-                  {%- unless block.settings.style == 'icon' -%}
-                    <span class="duet-header__label">{{ menu_label | escape }}</span>
-                  {%- endunless -%}
-                </button>
-              {%- endif -%}
+              {%- assign menu_label = block.settings.label | default: 'Menu' -%}
+              <button
+                type="button"
+                class="duet-header__item duet-header__menu"
+                data-dh-open="menu"
+                aria-expanded="false"
+                aria-controls="DuetHeaderMenu-{{ section.id }}"
+                {% unless block.settings.style == 'text' %}aria-label="{{ menu_label | escape }}"{% endunless %}
+                {{ block.shopify_attributes }}
+              >
+                {%- unless block.settings.style == 'text' -%}
+                  <span class="svg-wrapper">{{ 'icon-hamburger.svg' | inline_asset_content }}</span>
+                {%- endunless -%}
+                {%- unless block.settings.style == 'icon' -%}
+                  <span class="duet-header__label">{{ menu_label | escape }}</span>
+                {%- endunless -%}
+              </button>
             {%- when 'search' -%}
               <a
                 href="{{ routes.search_url }}"
@@ -97,19 +109,17 @@
                 <span class="visually-hidden">{{ 'general.search.search' | t }}</span>
               </a>
             {%- when 'account' -%}
-              {%- if shop.customer_accounts_enabled -%}
-                <a
-                  href="{%- if customer -%}{{ routes.account_url }}{%- else -%}{{ routes.account_login_url }}{%- endif -%}"
-                  class="duet-header__item"
-                  rel="nofollow"
-                  {{ block.shopify_attributes }}
-                >
-                  <span class="svg-wrapper">{{ 'icon-account.svg' | inline_asset_content }}</span>
-                  <span class="visually-hidden">
-                    {%- if customer -%}{{ 'customer.account_fallback' | t }}{%- else -%}{{ 'customer.log_in' | t }}{%- endif -%}
-                  </span>
-                </a>
-              {%- endif -%}
+              <a
+                href="{%- if customer -%}{{ routes.account_url }}{%- else -%}{{ routes.account_login_url }}{%- endif -%}"
+                class="duet-header__item"
+                rel="nofollow"
+                {{ block.shopify_attributes }}
+              >
+                <span class="svg-wrapper">{{ 'icon-account.svg' | inline_asset_content }}</span>
+                <span class="visually-hidden">
+                  {%- if customer -%}{{ 'customer.account_fallback' | t }}{%- else -%}{{ 'customer.log_in' | t }}{%- endif -%}
+                </span>
+              </a>
             {%- when 'cart' -%}
               {%- comment -%}
                 Same markup as sections/cart-icon-bubble.liquid: after an add to cart,
@@ -132,6 +142,7 @@
                 {%- endif -%}
               </a>
           {%- endcase -%}
+          </div>
         {%- endfor -%}
       </div>
     {%- endfor -%}
@@ -351,6 +362,15 @@
     align-items: center;
     gap: 0.4rem;
     min-width: 0;
+  }
+
+  /* Each block keeps its place: a hidden one is invisible but still takes its space. */
+  .duet-header__slot {
+    display: contents;
+  }
+
+  .duet-header__slot.is-hidden > * {
+    visibility: hidden;
   }
 
   .duet-header__zone--center {
@@ -768,6 +788,7 @@
       "settings": [
         { "type": "image_picker", "id": "logo", "label": "Logo image", "info": "Leave blank to show the store name." },
         { "type": "image_picker", "id": "logo_mobile", "label": "Logo image on phones", "info": "Optional. Shown instead on screens narrower than 750px." },
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
         {
           "type": "select",
           "id": "position",
@@ -798,6 +819,7 @@
           ]
         },
         { "type": "text", "id": "label", "label": "Text", "default": "Menu" },
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
         {
           "type": "select",
           "id": "position",
@@ -816,6 +838,7 @@
       "name": "Search",
       "limit": 1,
       "settings": [
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
         {
           "type": "select",
           "id": "position",
@@ -838,6 +861,7 @@
           "type": "paragraph",
           "content": "Shown when customer accounts are turned on in Settings → Customer accounts."
         },
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
         {
           "type": "select",
           "id": "position",
@@ -856,6 +880,7 @@
       "name": "Cart",
       "limit": 1,
       "settings": [
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
         {
           "type": "select",
           "id": "position",
