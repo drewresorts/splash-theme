@@ -357,11 +357,12 @@ function alphaTexture(n, alpha, dither, shade) {
       let a = clamp(alpha(u, v), 0, 1);
       if (dither) a = Math.floor(a * dither + b) / dither;
       const i = (y * n + x) * 4;
-      // Shading, if any, is stepped with the same dither (in 6 steps per channel).
+      // Shading, if any, is stepped with the same dither, a little more finely.
       const c = shade ? shade(u, v) : null;
+      const steps = Math.max(6, Math.round(dither * 1.5));
       for (let k = 0; k < 3; k++) {
         const ch = c ? clamp(c[k], 0, 1) : 1;
-        data[i + k] = Math.round((dither ? Math.floor(ch * 6 + b) / 6 : ch) * 255);
+        data[i + k] = Math.round((dither ? Math.floor(ch * steps + b) / steps : ch) * 255);
       }
       data[i + 3] = Math.round(clamp(a, 0, 1) * 255);
     }
@@ -2327,6 +2328,7 @@ class GardenSplash extends HTMLElement {
   endNight() {
     this.night = null;
     this.skyView = null;
+    if (this.renderer && this.rsNow !== this.rs) this.applyScale(this.rs);
     this.classList.remove('is-night');
     document.documentElement.classList.remove('garden-night');
     if (this.sky) this.sky.group.visible = false;
@@ -2412,7 +2414,7 @@ class GardenSplash extends HTMLElement {
     const light = [-0.5, 0.55, 0.67];
     const lit = [1, 1, 1];
     const dark = [0.5, 0.56, 0.74];
-    const e = 1 / 48;
+    const e = 1 / 64;
     const height = (u, v) => smooth(clamp(alpha(u, v) * 1.25, 0, 1));
     const shade = (u, v) => {
       const dx = (height(u + e, v) - height(u - e, v)) / (2 * e);
@@ -2425,7 +2427,7 @@ class GardenSplash extends HTMLElement {
       const k = clamp(-0.05 + diffuse * 0.85 + (v - 0.5) * 0.5 + (height(u, v) - 0.5) * 0.3, 0, 1);
       return mix(dark, lit, k);
     };
-    return this.ps1 ? alphaTexture(24, alpha, 4, shade) : alphaTexture(64, alpha, 0, shade);
+    return this.ps1 ? alphaTexture(48, alpha, 8, shade) : alphaTexture(96, alpha, 0, shade);
   }
 
   /* A round glow: bright in the middle, fading to nothing at the edge. */
@@ -2480,6 +2482,7 @@ class GardenSplash extends HTMLElement {
       pts.frustumCulled = false;
       pts.renderOrder = -1;
       // Clouds are things in the sky, so they grow as it is zoomed into; stars stay points.
+      // (Point sizes are in CSS pixels: a change of render resolution leaves them be.)
       pts.baseSize = cloud ? mat.size : 0;
       group.add(pts);
       disposables.push(geo, mat);
@@ -2764,6 +2767,13 @@ class GardenSplash extends HTMLElement {
     if (time.clouds) sky.logoPts.material.opacity = show;
     const zoom = this.skyView ? this.skyView.z : 1;
     for (const pts of [sky.logoPts, sky.driftPts]) if (pts && pts.baseSize) pts.material.size = pts.baseSize * zoom;
+    // A cloudy sky is drawn at a finer resolution than the PS1 flowers: soft
+    // shapes suffer most from big pixels. Back to the bed's once the sky goes.
+    if (sky.time.clouds && this.ps1 && !this.backdrop) {
+      const fine = Math.min(Math.max(this.dpr || 1, 1), 2, this.rs * 1.6);
+      const want = dark > 0.5 ? fine : this.rs;
+      if (Math.abs(want - (this.rsNow || this.rs)) > 0.01) this.applyScale(Math.round(want * 8) / 8);
+    }
     // Stars fade out as the sky lightens; a few linger at dawn and dusk.
     const stars = clamp(1 - time.light * 1.6, 0, 1);
     const fc = sky.fieldPts.geometry.attributes.color;
