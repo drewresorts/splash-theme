@@ -2598,77 +2598,112 @@ class GardenSplash extends HTMLElement {
     });
     const pxPerUnit = (S * this.w) / viewW;
     const logoPts = time.clouds ? null : points(logo.length, 8);
-    // Clouds the way Super Mario 64 drew them: solid, chunky lobes, smooth
-    // (Gouraud) shaded from bright white on the sunlit side to a soft
-    // lavender-blue in shadow, clean edged. Each lobe is a low-poly ball
-    // with the shading baked into its vertex colors, so it looks the same
-    // whatever the scene's lights are doing. Seen from below with the sun
-    // to the upper left: screen up is -y, the viewer is toward -z.
-    const cloudMat = time.clouds ? new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }) : null;
-    const ball = (detail) => {
+    // Low-poly clouds: lumpy lobes of flat-shaded facets in blue-grey to
+    // periwinkle, flattened underneath. The light is baked into each
+    // facet's color (the sun at the upper left; screen up is -y, the viewer
+    // toward -z), so they look the same whatever the scene's lights do.
+    // Three lobe shapes, turned and stretched, so no two clouds match.
+    const cloudMat = time.light > 0.2 ? new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }) : null;
+    if (cloudMat) disposables.push(cloudMat);
+    const lobe = (seed, detail) => {
+      const rng = mulberry32(seed);
       const geo = new THREE.IcosahedronGeometry(1, detail);
       const pos = geo.attributes.position;
-      const sun = new THREE.Vector3(-0.45, -0.6, -0.66).normalize();
-      const shadow = mix([160, 170, 228], time.evening ? [168, 118, 170] : [176, 140, 176], time.warm * 0.6);
-      const nv = new THREE.Vector3();
-      const cols = [];
+      // Every corner moved a little, the same way wherever faces share it.
+      const moved = new Map();
+      const v = new THREE.Vector3();
       for (let i = 0; i < pos.count; i++) {
-        nv.fromBufferAttribute(pos, i).normalize();
-        let k = smooth(clamp((nv.dot(sun) + 0.15) / 0.95, 0, 1));
-        // The underside (screen down) a shade deeper still.
-        k *= 1 - 0.22 * Math.max(0, nv.y);
-        const c = toColor(mix(shadow, cloudLit, k));
-        cols.push(c.r, c.g, c.b);
+        v.fromBufferAttribute(pos, i);
+        const key = `${v.x.toFixed(3)},${v.y.toFixed(3)},${v.z.toFixed(3)}`;
+        if (!moved.has(key)) {
+          const k = 1 + (rng() - 0.5) * 0.36;
+          const w = v.clone().multiplyScalar(k);
+          // A flat base: nothing hangs below the level.
+          w.y = Math.min(w.y, 0.42);
+          moved.set(key, w);
+        }
+        const w = moved.get(key);
+        pos.setXYZ(i, w.x, w.y, w.z);
+      }
+      // Each facet one color, from how squarely it faces the sun.
+      const sun = new THREE.Vector3(-0.45, -0.62, -0.64).normalize();
+      const lit = mix([208, 218, 240], cloudLit, time.warm * 0.6);
+      const mid = mix([158, 173, 207], [205, 150, 170], time.warm * 0.55);
+      const dark = mix([112, 126, 166], [130, 96, 150], time.warm * 0.55);
+      const a = new THREE.Vector3();
+      const b2 = new THREE.Vector3();
+      const c = new THREE.Vector3();
+      const cols = [];
+      for (let i = 0; i < pos.count; i += 3) {
+        a.fromBufferAttribute(pos, i);
+        b2.fromBufferAttribute(pos, i + 1);
+        c.fromBufferAttribute(pos, i + 2);
+        const nrm = b2.clone().sub(a).cross(c.clone().sub(a)).normalize();
+        const k = clamp(nrm.dot(sun) * 0.8 + 0.35 - Math.max(0, nrm.y) * 0.25, 0, 1);
+        const col = toColor(k < 0.5 ? mix(dark, mid, k / 0.5) : mix(mid, lit, (k - 0.5) / 0.5));
+        for (let j = 0; j < 3; j++) cols.push(col.r, col.g, col.b);
       }
       geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      geo.computeVertexNormals();
       disposables.push(geo);
       return geo;
     };
-    if (cloudMat) disposables.push(cloudMat);
+    // A set of instanced meshes, one per lobe shape; each lobe goes in one of them.
+    const lobeSet = (detail, items, seedBase) => {
+      const counts = [0, 0, 0];
+      for (const q of items) {
+        q.v = (Math.random() * 3) | 0;
+        q.slot = counts[q.v]++;
+      }
+      return counts.map((n, k) => {
+        if (!n) return null;
+        const m = new THREE.InstancedMesh(lobe(seedBase + k * 101, detail), cloudMat, n);
+        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        m.frustumCulled = false;
+        group.add(m);
+        return m;
+      });
+    };
     const puffs = [];
     let logoPuffs = null;
     if (time.clouds) {
       const R = this.base * S;
       logo.forEach((s, i) => {
-        // A main lobe, often a smaller one riding on its sunny side, now and then one beside it.
-        puffs.push({ flower: i, off: new THREE.Vector3(0, 0, 0), r: R * (1.3 + Math.random() * 0.25) });
-        if (Math.random() < 0.65) puffs.push({ flower: i, off: new THREE.Vector3(-0.35 * R, -0.45 * R, -0.35 * R), r: R * (0.55 + Math.random() * 0.2) });
-        if (Math.random() < 0.35) {
-          const a = Math.random() * TAU;
-          puffs.push({ flower: i, off: new THREE.Vector3(Math.cos(a) * 0.7 * R, Math.sin(a) * 0.5 * R, 0.2 * R), r: R * (0.7 + Math.random() * 0.2) });
-        }
+        // One lumpy lobe per flower, and now and then a smaller one on its sunny side.
+        puffs.push({ flower: i, off: new THREE.Vector3(0, 0, 0), r: R * (1.3 + Math.random() * 0.25), sq: [1.15, 0.85, 1], rot: (Math.random() - 0.5) * 0.8 });
+        if (Math.random() < 0.45) puffs.push({ flower: i, off: new THREE.Vector3(-0.4 * R, -0.35 * R, -0.3 * R), r: R * (0.65 + Math.random() * 0.2), sq: [1, 0.9, 1], rot: (Math.random() - 0.5) * 0.8 });
       });
-      logoPuffs = new THREE.InstancedMesh(ball(1), cloudMat, puffs.length);
-      logoPuffs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      logoPuffs.frustumCulled = false;
-      group.add(logoPuffs);
+      logoPuffs = lobeSet(1, puffs, 11);
     }
 
-    // By day, cumulus drifting across the sky, each a heap of lobes: a row
-    // along the base, bigger ones on it, one or two on top. Two layers:
-    // nearer clouds, and smaller, bluer ones higher up that move slower.
-    // A few big ones sit around the logo at first: the logo's little clouds
-    // come out of them, and they drift on with the rest afterwards.
+    // By day, clouds drifting across the sky, each like the reference: a
+    // big squat lobe, a smaller one beside it, and a flat slab along the
+    // base. Two layers: nearer clouds, and smaller, bluer ones higher up
+    // that move slower. A few big ones sit around the logo at first: the
+    // logo's little clouds come out of them, and they drift on afterwards.
     const drift = [];
     const heaps = [];
     if (time.light > 0.2) {
       const unit = viewW / this.w; // world units per CSS pixel at the clouds' depth, near enough
-      const heap = (cx, cy, big, wide, depth, far, source) => {
+      const heap = (cx, cy, big, depth, far, source) => {
         const z = eye.z + D * depth;
-        const u = unit * depth;
-        const rb = big * 0.5 * u;
+        const rb = big * 0.5 * unit * depth;
         const first = drift.length;
-        const add = (x, y, dz, r) => drift.push({ p: new THREE.Vector3(x, y, z + dz), r, speed: far ? 0.55 : 1, far });
-        const jit = () => (Math.random() - 0.5) * rb * 0.25;
-        for (let j = 0; j < wide; j++) add(cx + (j - (wide - 1) / 2) * rb * 1.25 + jit(), cy + rb * 0.35, rb * 0.2, rb * (0.75 + Math.random() * 0.2));
-        for (let j = 0; j < wide - 1; j++) add(cx + (j - (wide - 2) / 2) * rb * 1.35 + jit(), cy - rb * 0.45 + jit(), -rb * 0.15, rb * (0.95 + Math.random() * 0.25));
-        const tops = 1 + (Math.random() < 0.5 ? 1 : 0) + (source ? 1 : 0);
-        for (let j = 0; j < tops; j++) add(cx + (j - (tops - 1) / 2) * rb * 1.1 + jit(), cy - rb * 1.15 + jit(), -rb * 0.3, rb * (0.8 + Math.random() * 0.25));
-        heaps.push({ cx, cy, z, rx: wide * rb * 0.55, ry: rb * 0.8, speed: far ? 0.55 : 1, first, last: drift.length });
+        const flip = Math.random() < 0.5 ? -1 : 1;
+        const add = (x, y, dz, r, sq) => drift.push({ p: new THREE.Vector3(x, y, z + dz), r, sq, rot: (Math.random() - 0.5) * 0.25, speed: far ? 0.55 : 1, far });
+        // The main lobe, wide and squat.
+        add(cx + flip * rb * 0.35, cy - rb * 0.1, -rb * 0.1, rb * (1.05 + Math.random() * 0.2), [1.45, 0.72, 1]);
+        // The smaller lobe beside it, a little lower.
+        add(cx - flip * rb * 0.95, cy + rb * 0.05, 0, rb * (0.6 + Math.random() * 0.15), [1.3, 0.8, 1]);
+        // Now and then a third, small, on the other side.
+        if (Math.random() < 0.45 || source) add(cx + flip * rb * 1.45, cy + rb * 0.1, rb * 0.05, rb * (0.45 + Math.random() * 0.15), [1.2, 0.8, 1]);
+        // The flat base the lobes sit on.
+        add(cx, cy + rb * 0.32, rb * 0.15, rb * 1.05, [2.1, 0.32, 0.9]);
+        heaps.push({ cx, cy, z, rx: rb * 1.3, ry: rb * 0.45, speed: far ? 0.55 : 1, first, last: drift.length });
       };
       // The big clouds the logo comes out of, around it.
       const sources = this.w < 750 ? [[-0.25, -0.36], [0.25, 0.36], [0.22, -0.34]] : [[-0.36, -0.3], [0.34, -0.32], [-0.3, 0.33], [0.35, 0.3]];
-      for (const [fx, fy] of sources) heap(eye.x + fx * viewW, eye.y + fy * viewH, clamp(this.w * 0.075, 34, 110), 4 + Math.floor(Math.random() * 2), 1.2, false, true);
+      for (const [fx, fy] of sources) heap(eye.x + fx * viewW, eye.y + fy * viewH, clamp(this.w * 0.12, 54, 170), 1.2, false, true);
       this.logoSources = heaps.length;
       // Near clouds, the rest of the sky over.
       for (let k = 0; k < 22; k++) {
@@ -2676,11 +2711,11 @@ class GardenSplash extends HTMLElement {
         const cy = eye.y + (Math.random() - 0.5) * viewH * 1.7;
         // Away from the logo in the middle.
         if (Math.abs(cx - eye.x) < viewW * 0.34 && Math.abs(cy - eye.y) < viewH * 0.28) continue;
-        heap(cx, cy, clamp(this.w * 0.055, 22, 80) * (0.6 + Math.random() * 0.7), 2 + Math.floor(Math.random() * 3), 1.2, false, false);
+        heap(cx, cy, clamp(this.w * 0.085, 34, 120) * (0.6 + Math.random() * 0.7), 1.2, false, false);
       }
       // Far clouds, higher up.
       for (let k = 0; k < 16; k++) {
-        heap(eye.x + (Math.random() - 0.5) * viewW * 2.6, eye.y + (Math.random() - 0.5) * viewH * 2.4, clamp(this.w * 0.045, 22, 60) * (0.7 + Math.random() * 0.5), 2 + Math.floor(Math.random() * 2), 1.4, true, false);
+        heap(eye.x + (Math.random() - 0.5) * viewW * 2.6, eye.y + (Math.random() - 0.5) * viewH * 2.4, clamp(this.w * 0.065, 30, 90) * (0.7 + Math.random() * 0.5), 1.4, true, false);
       }
     }
     // By day each flower's little cloud waits inside one of the big clouds
@@ -2700,13 +2735,10 @@ class GardenSplash extends HTMLElement {
     // Far clouds take on a little of the sky's blue.
     let driftPts = null;
     if (drift.length) {
-      driftPts = new THREE.InstancedMesh(ball(2), cloudMat || new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }), drift.length);
-      driftPts.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      driftPts.frustumCulled = false;
+      driftPts = lobeSet(1, drift, 23);
       const haze = new THREE.Color();
-      drift.forEach((c, i) => driftPts.setColorAt(i, c.far ? haze.copy(toColor([214, 226, 248])) : haze.setRGB(1, 1, 1)));
-      driftPts.instanceColor.needsUpdate = true;
-      group.add(driftPts);
+      drift.forEach((c) => driftPts[c.v].setColorAt(c.slot, c.far ? haze.copy(toColor([222, 230, 250])) : haze.setRGB(1, 1, 1)));
+      driftPts.forEach((m) => m && m.instanceColor && (m.instanceColor.needsUpdate = true));
     }
 
     // The far sky: many faint stars, and a few brighter ones grouped in constellations.
@@ -2955,17 +2987,18 @@ class GardenSplash extends HTMLElement {
     const zoom = this.skyView ? this.skyView.z : 1;
     const d = this.dummy;
     if (sky.logoPuffs) {
-      sky.puffs.forEach((q, i) => {
+      sky.puffs.forEach((q) => {
         const f = q.flower * 3;
         // Inside its big cloud a little cloud is hidden; it swells out of it as it comes away.
         const out = smooth(clamp((sky.logo[q.flower].k || 0) * 2.5, 0, 1));
+        const sz = Math.max(1e-3, q.r * out);
         d.position.set(fp[f] + q.off.x, fp[f + 1] + q.off.y, fp[f + 2] + q.off.z);
-        d.rotation.set(0, 0, 0);
-        d.scale.setScalar(Math.max(1e-3, q.r * out));
+        d.rotation.set(0, 0, q.rot);
+        d.scale.set(sz * q.sq[0], sz * q.sq[1], sz * q.sq[2]);
         d.updateMatrix();
-        sky.logoPuffs.setMatrixAt(i, d.matrix);
+        sky.logoPuffs[q.v].setMatrixAt(q.slot, d.matrix);
       });
-      sky.logoPuffs.instanceMatrix.needsUpdate = true;
+      sky.logoPuffs.forEach((m) => m && (m.instanceMatrix.needsUpdate = true));
     }
     // The clouds fade in as the view turns up to them.
     if (sky.cloudMat) {
@@ -3001,15 +3034,15 @@ class GardenSplash extends HTMLElement {
     fc.needsUpdate = true;
     // Clouds drift slowly across, coming round again on the other side.
     if (sky.driftPts) {
-      sky.drift.forEach((c, i) => {
+      sky.drift.forEach((c) => {
         c.x = driftX(c.p.x, c.speed);
         d.position.set(c.x, c.p.y, c.p.z);
-        d.rotation.set(0, 0, 0);
-        d.scale.setScalar(c.r);
+        d.rotation.set(0, 0, c.rot);
+        d.scale.set(c.r * c.sq[0], c.r * c.sq[1], c.r * c.sq[2]);
         d.updateMatrix();
-        sky.driftPts.setMatrixAt(i, d.matrix);
+        sky.driftPts[c.v].setMatrixAt(c.slot, d.matrix);
       });
-      sky.driftPts.instanceMatrix.needsUpdate = true;
+      sky.driftPts.forEach((m) => m && (m.instanceMatrix.needsUpdate = true));
     }
     this.flyPlanes(t, dt, show, p);
     sky.glows.forEach((g) => (g.material.opacity = dark));
