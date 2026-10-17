@@ -2346,8 +2346,8 @@ class GardenSplash extends HTMLElement {
   }
 
   /* A soft, lumpy puff of cloud: a few overlapping round blobs. */
-  cloudTexture(fine) {
-    const n = this.ps1 && !fine ? 24 : 64;
+  cloudTexture() {
+    const n = this.ps1 ? 24 : 64;
     const c = document.createElement('canvas');
     c.width = c.height = n;
     const g = c.getContext('2d');
@@ -2365,7 +2365,7 @@ class GardenSplash extends HTMLElement {
     blob(44 * u, 37 * u, 17 * u, 0.8);
     blob(30 * u, 24 * u, 15 * u, 0.85);
     const tex = new THREE.CanvasTexture(c);
-    if (this.ps1 && !fine) {
+    if (this.ps1) {
       tex.magFilter = THREE.NearestFilter;
       tex.minFilter = THREE.NearestFilter;
     }
@@ -2576,43 +2576,44 @@ class GardenSplash extends HTMLElement {
       return { group: grp, ball, top, bottom, R, open: 0, blinkAt: -1, nextBlink: 0 };
     };
 
-    // The watcher: in a corner of the sky, closed. At night it passes for the
-    // moon, by day it hides in a cloud, at sunrise and sunset it is the low sun.
-    const wR = Math.min(viewW, viewH) * 0.075;
-    const skin = time.dark ? [214, 220, 236] : time.warm > 0.4 ? [255, 196, 118] : [244, 248, 255];
-    const wIris = time.dark ? [120, 132, 170] : time.warm > 0.4 ? [212, 92, 40] : [66, 140, 210];
-    const watcher = skyEye(wR, skin, wIris);
-    const wSide = Math.random() < 0.5 ? -1 : 1;
-    watcher.group.position.set(eye.x + wSide * viewW * 0.36, eye.y - viewH * 0.31, eye.z + D * 1.15);
-    watcher.wakeAt = 5 + Math.random() * 4;
-    // A halo behind it: moonlight, sunglow, or the cloud it sits in.
-    // The watcher's cloud is soft: chunky texels would show up close when zoomed in.
-    const haloCloud = this.cloudTexture(true);
-    disposables.push(haloCloud);
-    const haloMat = new THREE.SpriteMaterial({ map: time.clouds && time.warm < 0.4 ? haloCloud : tex, color: toColor(time.dark ? [150, 170, 220] : time.warm > 0.4 ? [255, 170, 90] : [255, 255, 255]), transparent: true, opacity: 0, depthWrite: false, fog: false, blending: time.clouds && time.warm < 0.4 ? THREE.NormalBlending : THREE.AdditiveBlending });
-    const halo = new THREE.Sprite(haloMat);
-    halo.scale.setScalar(wR * (time.clouds && time.warm < 0.4 ? 5.5 : 4.5));
-    halo.position.copy(watcher.group.position).add(new THREE.Vector3(0, 0, 40));
-    halo.renderOrder = -2;
-    group.add(halo);
-    disposables.push(haloMat);
-    watcher.halo = halo;
+    // By day, things live in the clouds: eyes that push out of a puff, look
+    // about, and sink back in. Their lids are cloud, so closed they vanish into it.
+    const peekR = this.base * S * 2.2;
+    const peekers = time.clouds
+      ? [0, 1, 2, 3].map(() => {
+          const e = skyEye(peekR, mix(cloudShade, cloudLit, 0.75), mix(this.heroColor, [40, 40, 60], 0.2));
+          e.group.visible = false;
+          return e;
+        })
+      : [];
 
-    // Glances: now and then a star (or a puff of cloud) in the logo opens, looks, and closes.
-    const gR = this.base * S * (time.clouds ? 1.5 : 1.25);
-    const lidDark = time.dark ? [8, 10, 34] : mix(cloudShade, cloudLit, 0.7);
-    const glances = [0, 1].map(() => {
-      const e = skyEye(gR, lidDark, this.heroColor);
-      e.group.visible = false;
-      return e;
-    });
-
-    // Eyes in the dark: pairs of faint amber points that come and go between the stars.
-    const pairs = time.dark ? points(8, 11) : null;
+    // At night, now and then, lights that don't move the way anything should.
+    const orbs = [];
+    if (!time.clouds) {
+      const sprite = (color, blend) => {
+        const m = new THREE.SpriteMaterial({ map: tex, color: toColor(color), transparent: true, opacity: 0, depthWrite: false, fog: false, blending: blend });
+        const sp = new THREE.Sprite(m);
+        sp.renderOrder = 0;
+        sp.visible = false;
+        group.add(sp);
+        disposables.push(m);
+        return sp;
+      };
+      for (let i = 0; i < 3; i++) {
+        orbs.push({
+          aura: sprite([150, 255, 214], THREE.AdditiveBlending),
+          halo: sprite([150, 255, 214], THREE.AdditiveBlending),
+          core: sprite([255, 255, 255], THREE.AdditiveBlending),
+          ghosts: Array.from({ length: 7 }, () => sprite([150, 255, 214], THREE.AdditiveBlending)),
+          trail: [],
+          pos: new THREE.Vector3(),
+        });
+      }
+    }
 
     this.sky = {
       group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, field, fieldPts, drift, driftPts, glows, shoot,
-      watcher, glances, pairs, pairSlots: [0, 1, 2, 3].map(() => ({ until: 0, at: 0, nextAt: 4 + Math.random() * 6 })), nextGlance: 7 + Math.random() * 5,
+      peekers, nextPeek: 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: 6 + Math.random() * 6,
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
     };
   }
@@ -2789,84 +2790,213 @@ class GardenSplash extends HTMLElement {
     e.bottom.rotation.x = 0.7 * ap;
   }
 
-  /*
-   * What looks back from the sky: the watcher in the corner wakes after a
-   * while and follows the pointer; now and then a star or puff in the logo
-   * opens into an eye; at night, pairs of eyes come and go in the dark.
-   */
+  /* By day, eyes in the clouds; at night, the lights. */
   skyEyes(t, dt, show, p) {
+    if (this.reduced) return;
+    if (this.sky.time.clouds) this.cloudEyes(t, show, p);
+    else this.nightLights(t, dt, show, p);
+  }
+
+  /* Where a puff of cloud is now: one of the logo's, or one drifting across the sky. */
+  puffAt(host, out) {
+    const sky = this.sky;
+    if (host.drift) {
+      const dp = sky.driftPts.geometry.attributes.position;
+      return out.set(dp.getX(host.i), dp.getY(host.i), dp.getZ(host.i));
+    }
+    const lp = sky.logoPts.geometry.attributes.position;
+    return out.set(lp.getX(host.i), lp.getY(host.i), lp.getZ(host.i));
+  }
+
+  /*
+   * Something in the clouds: one eye, or two or three together, push out of
+   * a puff, glance about, settle on the viewer, blink, and sink back in.
+   * Coming out they are drawn beneath the cloud, so it veils them; once out,
+   * over it.
+   */
+  cloudEyes(t, show, p) {
     const sky = this.sky;
     const n = this.night;
-    const since = n.dir > 0 ? n.since : 0;
     const gaze = this.skyGazePoint(this.tmp);
-    const calm = this.reduced;
-
-    // The watcher. Zooming in close on it wakes it at once.
-    const w = sky.watcher;
-    const sv = this.skyView;
-    const near = sv && sv.z > 2.2;
-    if (n.dir > 0 && (since > w.wakeAt || near)) w.awake = true;
-    if (n.dir < 0) w.awake = false;
-    w.open = clamp(w.open + (w.awake ? dt / 2.4 : -dt / 0.5), 0, 1);
-    w.group.visible = show > 0.01;
-    this.lids(w, smooth(w.open) * (calm ? 0.8 : 1), t);
-    if (!calm) w.ball.lookAt(gaze);
-    w.halo.material.opacity = show * (sky.time.clouds && sky.time.warm < 0.4 ? 0.95 : 0.55);
-
-    // Glances from the logo.
-    if (!calm && n.dir > 0 && since > 6 && t > sky.nextGlance) {
-      const e = sky.glances.find((g) => !g.visible);
-      if (e) {
-        const s = sky.logo[(Math.random() * sky.logo.length) | 0];
-        e.group.position.set(s.to.x, s.to.y, s.to.z - 30);
-        Object.assign(e, { visible: true, t0: t, life: 2.8 + Math.random() * 1.5, nextBlink: t + 1 + Math.random() });
-        e.group.visible = true;
+    if (n.dir > 0 && p >= 1 && n.since > 3 && t > sky.nextPeek) {
+      const free = sky.peekers.filter((e) => !e.live);
+      const want = Math.random() < 0.3 ? Math.min(free.length, 2 + (Math.random() < 0.4 ? 1 : 0)) : Math.min(free.length, 1);
+      if (want) {
+        // A drifting cloud that is on screen now, or else one of the logo's puffs.
+        let host = null;
+        if (sky.drift.length && Math.random() < 0.5) {
+          const dp = sky.driftPts.geometry.attributes.position;
+          for (let k = 0; k < 12 && !host; k++) {
+            const i = (Math.random() * sky.drift.length) | 0;
+            if (Math.abs(dp.getX(i) - sky.eye.x) < sky.viewW * 0.42 && Math.abs(dp.getY(i) - sky.eye.y) < sky.viewH * 0.4) host = { drift: true, i };
+          }
+        }
+        if (!host) host = { i: (Math.random() * sky.logo.length) | 0 };
+        const inDrift = !!host.drift;
+        const t0 = t;
+        const life = 4.5 + Math.random() * 2.5;
+        // Drifting clouds are bigger: so are what live in them.
+        const size = inDrift ? 1.6 + Math.random() * 0.5 : 0.9 + Math.random() * 0.3;
+        free.slice(0, want).forEach((e, k) => {
+          const a = Math.random() * TAU;
+          const spread = k ? e.R * 2.6 * size : 0;
+          Object.assign(e, {
+            live: true, host, t0: t0 + k * (0.2 + Math.random() * 0.5), life, size,
+            off: new THREE.Vector3(Math.cos(a) * spread, Math.sin(a) * spread * 0.6, 0),
+            nextBlink: t0 + 1.8 + Math.random() * 1.5, blinkAt: -1, darting: null, dartAt: 0,
+          });
+        });
       }
-      sky.nextGlance = t + 4 + Math.random() * 7;
+      sky.nextPeek = t + 5 + Math.random() * 8;
     }
-    for (const e of sky.glances) {
-      if (!e.visible) continue;
+    const at = new THREE.Vector3();
+    for (const e of sky.peekers) {
+      if (!e.live) continue;
       const age = t - e.t0;
-      const o = smooth(range(age, 0, 0.5)) * (1 - smooth(range(age, e.life - 0.5, e.life)));
-      this.lids(e, o, t);
-      e.ball.lookAt(gaze);
+      if (age < 0) continue;
+      const out = smooth(range(age, 0, 0.9)) * (1 - smooth(range(age, e.life - 0.8, e.life)));
+      this.puffAt(e.host, at).add(e.off);
+      // From inside the cloud (farther up) out toward the viewer.
+      at.z += lerp(e.R * 3, -e.R * 0.8, out) * e.size;
+      e.group.position.copy(at);
+      e.group.scale.setScalar(e.size * lerp(0.45, 1, out));
+      e.group.visible = show > 0.05;
+      const order = out > 0.65 ? 1 : -2;
+      e.ball.renderOrder = e.top.renderOrder = e.bottom.renderOrder = order;
+      const open = smooth(range(age, 0.5, 1.2)) * (1 - smooth(range(age, e.life - 1.3, e.life - 0.7)));
+      this.lids(e, open, t);
+      // First it looks about, darting; then it finds the viewer and stays on them.
+      if (age < e.life * 0.45) {
+        if (t > e.dartAt) {
+          e.darting = new THREE.Vector3((Math.random() - 0.5) * sky.viewW, (Math.random() - 0.5) * sky.viewH, sky.eye.z);
+          e.dartAt = t + 0.35 + Math.random() * 0.6;
+        }
+        e.ball.lookAt(e.darting);
+      } else e.ball.lookAt(gaze);
       if (age > e.life || n.dir < 0) {
-        e.visible = false;
+        e.live = false;
         e.group.visible = false;
       }
     }
+  }
 
-    // Eyes in the dark.
-    if (sky.pairs) {
-      const pos = sky.pairs.geometry.attributes.position;
-      const col = sky.pairs.geometry.attributes.color;
-      const gap = sky.viewW * 0.012;
-      sky.pairSlots.forEach((slot, i) => {
-        if (!calm && n.dir > 0 && p >= 1 && t > slot.nextAt && t > slot.until) {
-          // Somewhere in the dark, away from the logo.
-          const a = Math.random() * TAU;
-          const r = 0.34 + Math.random() * 0.12;
-          slot.x = sky.eye.x + Math.cos(a) * sky.viewW * r;
-          slot.y = sky.eye.y + Math.sin(a) * sky.viewH * r * 1.1;
-          slot.at = t;
-          slot.until = t + 3 + Math.random() * 3;
-          slot.nextAt = slot.until + 6 + Math.random() * 12;
-          slot.blink = 1 + Math.random() * 1.2;
-        }
-        const life = slot.until - slot.at;
-        const age = t - slot.at;
-        let v = age >= 0 && age <= life ? smooth(range(age, 0, 0.8)) * (1 - smooth(range(age, life - 0.8, life))) : 0;
-        if (Math.abs(age - slot.blink) < 0.09) v = 0;
-        v *= show;
-        const z = sky.eye.z + sky.D * 1.25;
-        pos.setXYZ(i * 2, (slot.x || 0) - gap, slot.y || 0, z);
-        pos.setXYZ(i * 2 + 1, (slot.x || 0) + gap, slot.y || 0, z);
-        col.setXYZ(i * 2, v * 1, v * 0.62, v * 0.2);
-        col.setXYZ(i * 2 + 1, v * 1, v * 0.62, v * 0.2);
-      });
-      pos.needsUpdate = true;
-      col.needsUpdate = true;
+  /*
+   * Lights in the night sky. One, or a few in formation, fade in and hang
+   * there; then they move in ways nothing with weight could: instant stops,
+   * right-angle jumps, one breaking off and snapping back. In the end they
+   * shoot off into the distance in a smear of light and are gone.
+   */
+  nightLights(t, dt, show, p) {
+    const sky = this.sky;
+    const n = this.night;
+    const plane = sky.D * 1.05;
+    const world = (nx, ny, depth) => {
+      const k = depth / sky.D;
+      return new THREE.Vector3(sky.eye.x + nx * sky.viewW * 0.5 * k, sky.eye.y - ny * sky.viewH * 0.5 * k, sky.eye.z + depth);
+    };
+    if (!sky.encounter && n.dir > 0 && p >= 1 && n.since > 4 && t > sky.nextEncounter) {
+      const count = Math.random() < 0.5 ? 1 : Math.random() < 0.6 ? 3 : 2;
+      // A route of sudden hops between points, each held for a moment.
+      const hops = [];
+      const x0 = (Math.random() - 0.5) * 1.2;
+      const y0 = (Math.random() < 0.5 ? 0.55 : -0.55) + (Math.random() - 0.5) * 0.3;
+      let x = x0;
+      let y = y0;
+      const moves = 3 + ((Math.random() * 3) | 0);
+      let time0 = 1.6;
+      for (let i = 0; i < moves; i++) {
+        const hold = 0.5 + Math.random() * 1.6;
+        // Mostly straight across or straight up and down: right angles.
+        if (Math.random() < 0.5) x = clamp(x + (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.5), -0.85, 0.85);
+        else y = clamp(y + (Math.random() < 0.5 ? -1 : 1) * (0.2 + Math.random() * 0.4), -0.8, 0.8);
+        hops.push({ at: time0 + hold, x, y, dur: 0.07 + Math.random() * 0.12 });
+        time0 += hold + 0.2;
+      }
+      const a = Math.random() * TAU;
+      sky.encounter = {
+        t0: t, hops, start: [x0, y0],
+        exitAt: time0 + 0.8 + Math.random(), exitDir: [Math.cos(a), Math.sin(a)],
+        formation: [0, 1, 2].slice(0, count).map((i) => ({ dx: (i - (count - 1) / 2) * 0.06, dy: (i % 2) * 0.05, rogue: i === 2 && Math.random() < 0.7 })),
+        hue: Math.random() < 0.5 ? [150, 255, 214] : [170, 200, 255],
+      };
     }
+    const enc = sky.encounter;
+    sky.orbs.forEach((o, i) => {
+      const f = enc && enc.formation[i];
+      if (!f || n.dir < 0) {
+        o.aura.visible = o.halo.visible = o.core.visible = false;
+        o.ghosts.forEach((g) => (g.visible = false));
+        o.trail.length = 0;
+        return;
+      }
+      const age = t - enc.t0;
+      // Where the route has got to: a still hold, or an instant hop with no easing in or out.
+      let [x, y] = enc.start;
+      for (const h of enc.hops) {
+        if (age >= h.at + h.dur) [x, y] = [h.x, h.y];
+        else if (age >= h.at) {
+          const k = (age - h.at) / h.dur;
+          x = lerp(x, h.x, k);
+          y = lerp(y, h.y, k);
+          break;
+        } else break;
+      }
+      // The rogue breaks away to one side for a while, then snaps back into place.
+      let bx = f.dx;
+      let by = f.dy;
+      if (f.rogue && age > enc.hops[0].at + 0.3 && age < enc.exitAt - 1.2) bx += Math.sin(age * 1.7) > 0.4 ? 0.22 : 0;
+      // Hanging still, but never quite still.
+      const jit = 0.004;
+      x += bx + Math.sin(t * 13 + i * 2) * jit;
+      y += by + Math.cos(t * 11 + i * 3) * jit;
+      let depth = plane;
+      let fade = smooth(range(age, 0, 1.4));
+      const out = age - enc.exitAt;
+      if (out > 0) {
+        // Gone: off into the distance faster than the eye can follow.
+        const k = out / 0.55;
+        depth = plane * (1 + k * k * 9);
+        x += enc.exitDir[0] * k * k * 1.6;
+        y += enc.exitDir[1] * k * k * 1.6;
+        fade *= 1 - smooth(range(k, 0.55, 1));
+      }
+      const pos = world(x, y, depth);
+      o.trail.unshift(pos.clone());
+      if (o.trail.length > 8) o.trail.pop();
+      const px = (sky.viewW / this.w) * (depth / sky.D);
+      const pulse = 1 + 0.18 * Math.sin(t * 7.5 + i);
+      o.aura.position.copy(pos);
+      o.halo.position.copy(pos);
+      o.core.position.copy(pos);
+      // A wide faint aura that breathes, a bright halo, a hard white core.
+      o.aura.scale.setScalar(150 * px * (1 + 0.25 * Math.sin(t * 2.3 + i)));
+      o.halo.scale.setScalar(64 * px * pulse);
+      o.core.scale.setScalar(18 * px);
+      o.aura.material.color.copy(toColor(enc.hue));
+      o.halo.material.color.copy(toColor(enc.hue));
+      o.aura.material.opacity = 0.22 * fade * show;
+      o.halo.material.opacity = 0.8 * fade * show;
+      o.core.material.opacity = fade * show;
+      o.aura.visible = o.halo.visible = o.core.visible = fade > 0.01;
+      // A smear behind it while it moves fast; none while it hangs still.
+      const prev = o.trail[1];
+      const speed = prev ? pos.distanceTo(prev) / Math.max(1e-3, dt) / (sky.viewW * (depth / sky.D)) : 0;
+      const smear = clamp((speed - 0.6) / 3, 0, 1);
+      o.ghosts.forEach((g, k) => {
+        const q = o.trail[k + 1];
+        g.visible = !!q && smear > 0.02 && fade > 0.01;
+        if (!g.visible) return;
+        g.position.copy(q);
+        g.scale.setScalar(46 * px * (1 - k / 9));
+        g.material.color.copy(toColor(enc.hue));
+        g.material.opacity = 0.5 * smear * fade * show * (1 - k / 7);
+      });
+    });
+    if (enc && t - enc.t0 > enc.exitAt + 0.7) {
+      sky.encounter = null;
+      sky.nextEncounter = t + 14 + Math.random() * 22;
+    }
+    if (n.dir < 0) sky.encounter = null;
   }
 
   /* ---------------- zooming in the sky ---------------- */
