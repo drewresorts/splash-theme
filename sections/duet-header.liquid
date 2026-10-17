@@ -9,6 +9,11 @@
   a menu button with no menu chosen and the account link while customer
   accounts are off.
 
+  The home page (the splash) can have a header of its own: with "Separate
+  header on the home page" on, this one steps aside there and the copy of
+  this section in the home page's own sections shows instead, so changes
+  made to either stay where they were made.
+
   On the splash pages and the garden shop page it floats over the garden;
   everywhere else it is a sticky bar. It also holds the Pollen Dream game's
   name and how visitors reach it, which the game, the menu and the hidden
@@ -39,8 +44,14 @@
   if settings.garden_game == false
     assign game_access = 'off'
   endif
+  # The shared header gives the home page over to the home page's own header.
+  assign step_aside = false
+  if section.location == 'header' and template.name == 'index' and section.settings.home_own_header
+    assign step_aside = true
+  endif
 -%}
 
+{%- unless step_aside -%}
 {{ 'component-cart-notification.css' | asset_url | stylesheet_tag }}
 <script src="{{ 'cart-notification.js' | asset_url }}" defer="defer"></script>
 
@@ -374,6 +385,7 @@
     );
   }
 </script>
+{%- endunless -%}
 
 {% stylesheet %}
   .duet-header {
@@ -788,7 +800,14 @@
   "settings": [
     {
       "type": "paragraph",
-      "content": "The same header on every page. Each part is a block: choose its side, and drag blocks to change their order. On the splash and shop pages it floats over the garden."
+      "content": "Each part is a block: give each its own spot. On the splash and shop pages it floats over the garden."
+    },
+    {
+      "type": "checkbox",
+      "id": "home_own_header",
+      "label": "Separate header on the home page",
+      "default": false,
+      "info": "On: the home page uses its own copy of this header (under Template on the home page), so changes there stay on the home page, and changes here don't reach it. Has no effect on the home page's own copy."
     },
     {
       "type": "link_list",
@@ -1009,7 +1028,8 @@
     }
   ],
   "enabled_on": {
-    "groups": ["header"]
+    "groups": ["header"],
+    "templates": ["index"]
   },
   "presets": [
     {

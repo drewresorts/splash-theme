@@ -65,7 +65,8 @@
         "logo_width": 140,
         "logo_width_mobile": 140,
         "game_name": "Pollen Dream",
-        "game_access": "secret"
+        "game_access": "secret",
+        "home_own_header": true
       }
     },
     "header": {
