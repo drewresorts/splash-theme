@@ -2345,9 +2345,13 @@ class GardenSplash extends HTMLElement {
     return { light, warm, evening, clouds: light >= 0.4, dark: light < 0.4 };
   }
 
-  /* A soft, lumpy puff of cloud: a few overlapping round blobs. */
+  /*
+   * A soft, lumpy puff of cloud: a few overlapping round blobs. Always
+   * smooth, PS1 style or not: a blocky texture drawn this large breaks into
+   * squares.
+   */
   cloudTexture() {
-    const n = this.ps1 ? 24 : 64;
+    const n = 64;
     const c = document.createElement('canvas');
     c.width = c.height = n;
     const g = c.getContext('2d');
@@ -2365,10 +2369,6 @@ class GardenSplash extends HTMLElement {
     blob(44 * u, 37 * u, 17 * u, 0.8);
     blob(30 * u, 24 * u, 15 * u, 0.85);
     const tex = new THREE.CanvasTexture(c);
-    if (this.ps1) {
-      tex.magFilter = THREE.NearestFilter;
-      tex.minFilter = THREE.NearestFilter;
-    }
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }
@@ -2534,7 +2534,10 @@ class GardenSplash extends HTMLElement {
       sc.push(lin.r, lin.g, lin.b);
     }
     skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
-    const skyMat = this.snapMaterial(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide }));
+    // The PS1 dither suits the dark night sky; on a light, smooth sky it breaks
+    // into a grid of red, green and blue dots, so a day sky is left smooth.
+    const skyBase = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide });
+    const skyMat = time.clouds ? skyBase : this.snapMaterial(skyBase);
     const skyPlane = new THREE.Mesh(skyGeo, skyMat);
     skyPlane.position.set(eye.x, eye.y, eye.z + D * 1.45);
     skyPlane.renderOrder = -3;
