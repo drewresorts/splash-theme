@@ -46,7 +46,24 @@
  * backgrounds inside the page content (the header and footer stay solid).
  */
 body.garden-world-sections--translucent #MainContent .gradient {
-  background: rgba(var(--color-background), 0.92);
+  /* Frosted glass: the flowers show through, blurred, behind the copy. */
+  background: rgba(var(--color-background), 0.62);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
+}
+
+/* Glass inside glass would only thicken it: a section's own panels stay clear. */
+body.garden-world-sections--translucent #MainContent .gradient .gradient {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Without blur, a plain wash dense enough to keep the copy readable. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  body.garden-world-sections--translucent #MainContent .gradient {
+    background: rgba(var(--color-background), 0.86);
+  }
 }
 
 body.garden-world-sections--clear #MainContent .gradient {
@@ -82,7 +99,7 @@ body.has-splash-behind [data-soft-keep]::after {
   position: absolute;
   inset: 0;
   background: rgb(var(--color-background, 255, 255, 255));
-  opacity: var(--gw-veil, 0.7);
+  opacity: var(--gw-veil, 0.3);
   pointer-events: none;
 }
 

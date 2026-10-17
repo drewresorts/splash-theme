@@ -1586,8 +1586,8 @@
         "max": 90,
         "step": 5,
         "unit": "%",
-        "default": 70,
-        "info": "Washes the page color over the flowers so text and products stand out."
+        "default": 30,
+        "info": "Washes the page color over the flowers, on top of the frosted glass of each section."
       },
       {
         "type": "select",
@@ -1601,7 +1601,7 @@
           },
           {
             "value": "translucent",
-            "label": "Translucent — flowers show faintly"
+            "label": "Frosted glass — flowers show softly through"
           },
           {
             "value": "clear",
