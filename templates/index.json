@@ -31,11 +31,10 @@
         },
         "logo": {
           "type": "logo",
-          "disabled": true,
           "settings": {
             "logo": "shopify://shop_images/spellout-black.png",
             "show": true,
-            "position": "center"
+            "position": "left"
           }
         },
         "account": {
