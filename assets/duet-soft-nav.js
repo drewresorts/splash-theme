@@ -20,7 +20,7 @@
   const FILE = /\.(?:pdf|zip|jpe?g|png|gif|webp|svg|mp4|mov|xml|atom|json|js|css|txt|csv)$/i;
   // A garden on its own page (not the world behind every page).
   const SPLASH = 'garden-splash:not([data-mode])';
-  const BED = 'garden-splash[data-mode="background"]';
+  const BED = 'garden-splash[data-mode="background"], garden-splash[data-mode="blossoms"]';
 
   const cache = new Map();
   let shownUrl = location.pathname + location.search;

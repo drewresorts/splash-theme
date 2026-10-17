@@ -13,6 +13,7 @@
       "type": "garden-shop",
       "name": "Garden shop",
       "settings": {
+        "display": "blossoms",
         "logo": "shopify://shop_images/spellout-black.png",
         "logo_width": 150,
         "logo_link": "",

@@ -513,7 +513,7 @@ class GardenSplash extends HTMLElement {
         const look = {};
         for (const k of LOOK) if (d[k] !== undefined) look[k] = d[k];
         localStorage.setItem(LOOK_KEY, JSON.stringify(look));
-      } else if (d.mode === 'world') {
+      } else if (d.mode === 'world' || d.mode === 'blossoms') {
         const look = JSON.parse(localStorage.getItem(LOOK_KEY) || 'null');
         if (look) for (const k of LOOK) if (typeof look[k] === 'string') d[k] = look[k];
       }
@@ -590,7 +590,8 @@ class GardenSplash extends HTMLElement {
     const editor = !!(window.Shopify && window.Shopify.designMode);
     this.skipOpening = !this.backdrop && !!(visit && visit.entered) && !isReload() && !editor;
     if (!visit) writeVisit({ seed: this.seed, entered: false });
-    this.formed = this.world || this.skipOpening;
+    // The shop's blossoms grow in a bed that is already formed.
+    this.formed = this.world || this.blossoms || this.skipOpening;
 
     // A background bed starts fully grown unless it is set to grow in.
     this.elapsed = this.reduced || this.formed || (this.background && this.dataset.growIn !== 'true') ? this.duration * 1.2 : 0;
@@ -607,7 +608,7 @@ class GardenSplash extends HTMLElement {
     this.setupScene();
     this.bindEvents();
     this.bindEgg();
-    if (!this.backdrop) {
+    if (!this.backdrop && !this.blossoms) {
       this.bindZoom();
       this.bindNight();
     }
@@ -629,6 +630,11 @@ class GardenSplash extends HTMLElement {
         this.maskReady = true;
         this.resize(true);
         this.start();
+        if (this.blossoms && this.dataset.blossomsModule) {
+          import(this.dataset.blossomsModule)
+            .then((m) => m.attach(this, HELPERS))
+            .catch((e) => console.error('garden blossoms:', e));
+        }
       } catch (e) {
         this.fail(e);
       }
@@ -735,6 +741,8 @@ class GardenSplash extends HTMLElement {
     this.background = d.mode === 'background';
     // World mode: the formed logo arrangement, fixed behind another page.
     this.world = d.mode === 'world';
+    // Blossoms mode: the shop, its products growing in the formed bed (assets/garden-blossoms.js).
+    this.blossoms = d.mode === 'blossoms';
     // Either way it sits behind a page: no overlay, no inspecting, fewer frames.
     this.backdrop = this.background || this.world;
     // Weather and light follow the real season on the splash, unless turned off or fixed to one.
@@ -1838,6 +1846,7 @@ class GardenSplash extends HTMLElement {
   }
 
   tap(x, y) {
+    if (this.blossomTap && this.blossomTap(x, y)) return;
     this.pings.push({ x, y, t: 0 });
     const k = this.scaleNow();
     const f = this.nearest(x, y, this.base * 1.1 * k);
@@ -1970,6 +1979,7 @@ class GardenSplash extends HTMLElement {
 
     if (this.background && !this.reduced) this.wave(t);
     if (!this.background) this.drift(t, dt);
+    if (this.blossomUpdate) this.blossomUpdate(t, dt);
     if (this.weatherOn) this.updateWeather(t, dt);
     if (this.arranged && !this.background && !this.reduced) {
       // At night no gusts come, but heads still swinging come to rest.
@@ -4563,8 +4573,11 @@ class GardenSplash extends HTMLElement {
     const v = this.view;
     const hw = this.w / 2 / v.tz;
     const hh = this.h / 2 / v.tz;
-    v.tcx = clamp(v.tcx, hw, this.w - hw);
-    v.tcy = clamp(v.tcy, hh, this.h - hh);
+    // The shop's camera goes wherever its blossoms are.
+    if (!this.blossoms) {
+      v.tcx = clamp(v.tcx, hw, this.w - hw);
+      v.tcy = clamp(v.tcy, hh, this.h - hh);
+    }
     const zoomed = v.tz > 1.02;
     if (zoomed !== this.classList.contains('is-zoomed')) this.classList.toggle('is-zoomed', zoomed);
     this.start();
@@ -4573,7 +4586,8 @@ class GardenSplash extends HTMLElement {
   easeView(dt) {
     const v = this.view;
     if (this.classList.contains('is-nav-open') && v.tz !== 1) this.resetView();
-    const f = 1 - Math.exp(-dt * 14);
+    // The shop's camera glides between blossoms; elsewhere a zoom follows the fingers closely.
+    const f = 1 - Math.exp(-dt * (this.blossoms ? 3.2 : 14));
     const moving = Math.abs(v.tz - v.z) > 1e-4 || Math.abs(v.tcx - v.cx) > 0.01 || Math.abs(v.tcy - v.cy) > 0.01;
     if (!moving) return;
     v.z += (v.tz - v.z) * f;
@@ -5006,5 +5020,8 @@ export function createBed(config) {
   bed.setupScene();
   return bed;
 }
+
+/* What the shop's blossoms (assets/garden-blossoms.js) build with: handed over, so that file never imports this one a second time. */
+const HELPERS = { THREE, FLOOR_Z, STAGE, clamp, lerp, range, smooth, mix, tone, toColor, parseColor, mulberry32 };
 
 export { THREE, STAGE, FLOOR_Z, mulberry32, poissonDisc, parseColor, mix, tone, toColor, rgba, clamp, lerp, range, smooth, alphaTexture };

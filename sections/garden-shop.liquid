@@ -3,6 +3,12 @@
   left and the menu button on the right, and every product in the
   collection as just its image, floating over the garden background. No
   filters, sorting or paging: the catalog is small enough to see at once.
+
+  Products as blossoms: each product grows as a plant of its own in the
+  flower bed, opening to show its main image (or its 3D model), with the
+  camera on one blossom at a time (assets/garden-blossoms.js). The grid
+  stays in the page for screen readers and search engines, and shows
+  instead wherever the 3D garden can't run.
 {%- endcomment -%}
 {%- liquid
   assign shop_menu = section.settings.menu
@@ -12,8 +18,15 @@
   assign logo_link = section.settings.logo_link | default: routes.root_url
 -%}
 
+{%- liquid
+  assign blossoms = false
+  if section.settings.display == 'blossoms'
+    assign blossoms = true
+  endif
+-%}
+
 <div
-  class="garden-shop"
+  class="garden-shop{% if blossoms %} garden-shop--blossoms{% endif %}"
   id="GardenShop-{{ section.id }}"
   style="--gs-cols: {{ section.settings.columns_desktop }}; --gs-cols-mobile: {{ section.settings.columns_mobile }}; --gs-logo-width: {{ section.settings.logo_width }}px; --gs-menu-image-width: {{ section.settings.menu_image_width }}px; --gs-ink: {{ section.settings.ink_color }}; --gs-page: {{ section.settings.page_color }};"
 >
@@ -93,6 +106,77 @@
   <h1 class="visually-hidden">{{ collection.title | escape }}</h1>
 
   {%- paginate collection.products by 50 -%}
+    {%- if blossoms and collection.products.size > 0 -%}
+      {%- liquid
+        assign flower_logo_url = ''
+        if settings.garden_world_logo != blank
+          assign flower_logo_url = settings.garden_world_logo | image_url: width: 900
+        endif
+        assign flower_logo_mobile_url = ''
+        if settings.garden_world_logo_mobile != blank
+          assign flower_logo_mobile_url = settings.garden_world_logo_mobile | image_url: width: 900
+        endif
+      -%}
+      <script type="module" src="{{ 'garden-splash.js' | asset_url }}"></script>
+      <garden-splash
+        class="garden-shop__blossoms"
+        data-mode="blossoms"
+        data-blossoms-module="{{ 'garden-blossoms.js' | asset_url }}"
+        data-gltf-loader="{{ 'three-gltf-loader.js' | asset_url }}"
+        data-palette="{{ '["#A62749","#66A4C8","#191F6B","#B9E5FB","#F04E62","#B9E5FB"]' | escape }}"
+        data-foliage-color="#66A4C8"
+        data-center-color="#F04E62"
+        data-center-accent="#A62749"
+        data-soil-color="#FFFFFF"
+        data-duration="5"
+        data-density="{{ settings.garden_world_density | default: 'overgrown' }}"
+        data-style="ps1"
+        {% if settings.garden_follow_scheme != false %}data-follow-scheme="true"{% endif %}
+        {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
+        {% if flower_logo_mobile_url != blank %}data-flower-logo-mobile="{{ flower_logo_mobile_url }}"{% endif %}
+      >
+        <canvas class="garden-shop__blossoms-canvas" data-garden-canvas aria-hidden="true"></canvas>
+        <canvas class="garden-shop__blossoms-overlay" data-garden-overlay aria-hidden="true"></canvas>
+        <script type="application/json" data-blossom-products>
+          [
+          {%- for product in collection.products -%}
+            {%- liquid
+              assign blossom_image = ''
+              if product.featured_media
+                assign blossom_image = product.featured_media.preview_image | image_url: width: 900
+              endif
+              assign blossom_model = ''
+              for media in product.media
+                if media.media_type == 'model'
+                  for source in media.sources
+                    if source.format == 'glb'
+                      assign blossom_model = source.url
+                    endif
+                  endfor
+                  break
+                endif
+              endfor
+              assign blossom_price = product.price | money | strip_html
+              if product.price_varies
+                assign blossom_price = 'products.product.price.from_price_html' | t: price: blossom_price | strip_html
+              endif
+            -%}
+            {"title": {{ product.title | json }}, "url": {{ product.url | json }}, "price": {{ blossom_price | json }}, "image": {{ blossom_image | json }}, "model": {{ blossom_model | json }}}
+            {%- unless forloop.last -%},{%- endunless -%}
+          {%- endfor -%}
+          ]
+        </script>
+        <div class="garden-shop__blossom-ui" data-garden-ui>
+          <button type="button" class="garden-shop__blossom-step" data-blossom-prev aria-label="{{ 'general.slider.previous_slide' | t }}">&larr;</button>
+          <a class="garden-shop__blossom-label" data-blossom-link href="{{ collection.products.first.url }}">
+            <span class="garden-shop__blossom-title" data-blossom-title>{{ collection.products.first.title | escape }}</span>
+            <span class="garden-shop__blossom-price" data-blossom-price></span>
+            <span class="garden-shop__blossom-count" data-blossom-count></span>
+          </a>
+          <button type="button" class="garden-shop__blossom-step" data-blossom-next aria-label="{{ 'general.slider.next_slide' | t }}">&rarr;</button>
+        </div>
+      </garden-splash>
+    {%- endif -%}
     <ul class="garden-shop__grid" role="list">
       {%- for product in collection.products -%}
         <li class="garden-shop__item">
@@ -378,6 +462,136 @@
       transition: none;
     }
   }
+  /* ---------- Products as blossoms ---------- */
+
+  .garden-shop__blossoms {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    display: block;
+    overflow: hidden;
+    touch-action: pan-y;
+  }
+
+  .garden-shop__blossoms-canvas,
+  .garden-shop__blossoms-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .garden-shop__blossoms-canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  .garden-shop__blossoms-overlay {
+    pointer-events: none;
+  }
+
+  .garden-shop__blossoms.is-over-blossom {
+    cursor: pointer;
+  }
+
+  /* The product in focus: its name and price under the blossom, with steps to either side. */
+  .garden-shop__blossom-ui {
+    position: absolute;
+    left: 50%;
+    bottom: max(2.4rem, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    max-width: calc(100% - 3.2rem);
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    color: var(--gs-ink, #191f6b);
+  }
+
+  .garden-shop__blossoms.is-blossom-open .garden-shop__blossom-ui {
+    opacity: 1;
+  }
+
+  .garden-shop__blossom-label {
+    display: grid;
+    justify-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+    padding: 1rem 1.8rem;
+    color: inherit;
+    text-decoration: none;
+    text-align: center;
+    background: color-mix(in srgb, var(--gs-page, #fff) 62%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+
+  .garden-shop__blossom-title {
+    max-width: 26rem;
+    font-size: 1.3rem;
+    letter-spacing: 0.14em;
+    line-height: 1.4;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  .garden-shop__blossom-price,
+  .garden-shop__blossom-count {
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+  }
+
+  .garden-shop__blossom-count {
+    opacity: 0.6;
+  }
+
+  .garden-shop__blossom-label:hover .garden-shop__blossom-title {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .garden-shop__blossom-step {
+    width: 4.4rem;
+    height: 4.4rem;
+    margin: 0;
+    padding: 0;
+    border: 1px solid currentColor;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--gs-page, #fff) 62%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    color: inherit;
+    font: inherit;
+    font-size: 1.6rem;
+    cursor: pointer;
+  }
+
+  .garden-shop__blossom-step:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .garden-shop__blossom-step:focus-visible,
+  .garden-shop__blossom-label:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  /* With the blossoms running, the grid stays for screen readers only; without them, it shows. */
+  .garden-shop--blossoms:has(.garden-shop__blossoms.is-ready:not(.is-static)) .garden-shop__grid {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .garden-shop__blossoms.is-static {
+    display: none;
+  }
 {% endstylesheet %}
 
 {% schema %}
@@ -389,6 +603,17 @@
     {
       "type": "paragraph",
       "content": "The whole shop on one page: a transparent header with your logo and menu button, and every product in the collection (up to 50) as just its image. Pair with the Garden background section, and use product photos on transparent backgrounds."
+    },
+    {
+      "type": "select",
+      "id": "display",
+      "label": "Show products as",
+      "default": "grid",
+      "options": [
+        { "value": "grid", "label": "A grid of images" },
+        { "value": "blossoms", "label": "Blossoms in the flower bed" }
+      ],
+      "info": "Blossoms: each product grows as a flower of its own that opens to show its main image, or its 3D model if it has one. The camera rests on one at a time; shoppers tap the ones at the sides, swipe or use the arrows to move along, and tap the one in the middle to open it."
     },
     {
       "type": "header",
