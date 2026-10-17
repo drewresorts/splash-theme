@@ -2699,7 +2699,10 @@ class GardenSplash extends HTMLElement {
         if (Math.random() < 0.45 || source) add(cx + flip * rb * 1.45, cy + rb * 0.1, rb * 0.05, rb * (0.45 + Math.random() * 0.15), [1.2, 0.8, 1]);
         // The flat base the lobes sit on.
         add(cx, cy + rb * 0.32, rb * 0.15, rb * 1.05, [2.1, 0.32, 0.9]);
-        heaps.push({ cx, cy, z, rx: rb * 1.3, ry: rb * 0.45, speed: far ? 0.55 : 1, first, last: drift.length });
+        const h = { cx, cy, z, rx: rb * 1.3, ry: rb * 0.45, speed: far ? 0.55 : 1, first, last: drift.length, source };
+        heaps.push(h);
+        // A source cloud's own lobes melt away as it becomes the logo.
+        if (source) for (let i = first; i < drift.length; i++) drift[i].heap = h;
       };
       // The big clouds the logo comes out of, around it.
       const sources = this.w < 750 ? [[-0.25, -0.36], [0.25, 0.36], [0.22, -0.34]] : [[-0.36, -0.3], [0.34, -0.32], [-0.3, 0.33], [0.35, 0.3]];
@@ -2718,19 +2721,50 @@ class GardenSplash extends HTMLElement {
         heap(eye.x + (Math.random() - 0.5) * viewW * 2.6, eye.y + (Math.random() - 0.5) * viewH * 2.4, clamp(this.w * 0.065, 30, 90) * (0.7 + Math.random() * 0.5), 1.4, true, false);
       }
     }
-    // By day each flower's little cloud waits inside one of the big clouds
-    // around the logo (the nearest), and comes out of it to take its place.
+    // By day the big clouds around the logo become it. Each is made of the
+    // lobes of the part of the logo nearest it, packed into a cloud with
+    // their places kept (left stays left, top stays top, loosened a
+    // little), so when the time comes the whole mass moves as one: it
+    // stretches, bends and flows into the letters.
     if (time.clouds && heaps.length) {
       const sources = heaps.slice(0, this.logoSources || 0);
+      for (const h of sources) {
+        h.parts = [];
+        h.delay = 0.6 + Math.random() * 1.2;
+      }
       logo.forEach((s) => {
         let best = sources[0];
         for (const h of sources) if (Math.hypot(h.cx - s.to.x, h.cy - s.to.y) < Math.hypot(best.cx - s.to.x, best.cy - s.to.y)) best = h;
-        const a = Math.random() * TAU;
-        const r = Math.sqrt(Math.random()) * 0.8;
         s.source = best;
-        s.delay = 0.4 + Math.random() * 2.6;
-        s.inside = new THREE.Vector3(Math.cos(a) * r * best.rx, Math.sin(a) * r * best.ry, -10);
+        best.parts.push(s);
       });
+      for (const h of sources) {
+        if (!h.parts.length) continue;
+        const xs = h.parts.map((s) => s.to.x);
+        const ys = h.parts.map((s) => s.to.y);
+        const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        const far = Math.max(...h.parts.map((s) => Math.hypot(s.to.x - h.cx, s.to.y - h.cy)));
+        // Where its part of the logo is: the cloud leans and slides that way as it goes.
+        h.tx = xs.reduce((a, b) => a + b, 0) / xs.length;
+        h.ty = ys.reduce((a, b) => a + b, 0) / ys.length;
+        for (const s of h.parts) {
+          // Where it sits in its part of the logo, squeezed into the cloud's oval.
+          let u = x1 > x0 ? ((s.to.x - x0) / (x1 - x0)) * 2 - 1 : 0;
+          let v = y1 > y0 ? ((s.to.y - y0) / (y1 - y0)) * 2 - 1 : 0;
+          const a = Math.random() * TAU;
+          const r = Math.sqrt(Math.random());
+          u = lerp(u, Math.cos(a) * r, 0.35);
+          v = lerp(v, Math.sin(a) * r, 0.35);
+          const m = Math.hypot(u, v);
+          if (m > 1) {
+            u /= m;
+            v /= m;
+          }
+          s.inside = new THREE.Vector3(u * h.rx * 0.85, v * h.ry * 1.1 - h.ry * 0.4, -h.ry * 0.3);
+          // The whole cloud goes together; the part that has farthest to go leads a little.
+          s.delay = h.delay + (1 - Math.hypot(s.to.x - h.cx, s.to.y - h.cy) / far) * 0.5 + Math.random() * 0.25;
+        }
+      }
     }
     // Far clouds take on a little of the sky's blue.
     let driftPts = null;
@@ -2956,9 +2990,14 @@ class GardenSplash extends HTMLElement {
     const left = sky.eye.x - span / 2;
     const move = this.reduced ? 0 : t * sky.viewW * 0.006;
     const driftX = (x, speed) => left + ((((x - left + move * speed) % span) + span) % span);
+    if (sky.heaps) for (const h of sky.heaps) h.sum = h.n = 0;
     for (const s of sky.logo) {
-      // By day, each little cloud rides inside its big cloud until it comes out, slowly.
-      const k = this.reduced ? 1 : smooth(range(since - s.delay, 0, s.source ? 3.6 : 2.8));
+      // By day, each lobe rides in its big cloud until the cloud flows into the logo.
+      const k = this.reduced ? 1 : smooth(smooth(range(since - s.delay, 0, s.source ? 4.2 : 2.8)));
+      if (s.source) {
+        s.source.sum = (s.source.sum || 0) + k;
+        s.source.n = (s.source.n || 0) + 1;
+      }
       if (s.source) s.from.set(driftX(s.source.cx, s.source.speed) + s.inside.x, s.source.cy + s.inside.y, s.source.z + s.inside.z);
       let x = lerp(s.from.x, s.to.x, k);
       let y = lerp(s.from.y, s.to.y, k);
@@ -2989,9 +3028,8 @@ class GardenSplash extends HTMLElement {
     if (sky.logoPuffs) {
       sky.puffs.forEach((q) => {
         const f = q.flower * 3;
-        // Inside its big cloud a little cloud is hidden; it swells out of it as it comes away.
-        const out = smooth(clamp((sky.logo[q.flower].k || 0) * 2.5, 0, 1));
-        const sz = Math.max(1e-3, q.r * out);
+        // Lobes swell a little on the way, so the moving mass stays joined up.
+        const sz = q.r * (1 + 0.3 * Math.sin(Math.PI * (sky.logo[q.flower].k || 0)));
         d.position.set(fp[f] + q.off.x, fp[f + 1] + q.off.y, fp[f + 2] + q.off.z);
         d.rotation.set(0, 0, q.rot);
         d.scale.set(sz * q.sq[0], sz * q.sq[1], sz * q.sq[2]);
@@ -3038,7 +3076,21 @@ class GardenSplash extends HTMLElement {
         c.x = driftX(c.p.x, c.speed);
         d.position.set(c.x, c.p.y, c.p.z);
         d.rotation.set(0, 0, c.rot);
-        d.scale.set(c.r * c.sq[0], c.r * c.sq[1], c.r * c.sq[2]);
+        let r = c.r;
+        let stretch = 1;
+        const h = c.heap;
+        if (h && h.n && h.tx !== undefined) {
+          // A source cloud bends and slides toward its part of the logo,
+          // drawn out along the way, and thins away as its lobes arrive.
+          const prog = h.sum / h.n;
+          const hx = driftX(h.cx, h.speed);
+          const pull = smooth(clamp(prog * 1.4, 0, 1));
+          d.position.set(lerp(c.x, h.tx + (c.x - hx) * 0.6, pull * 0.8), lerp(c.p.y, h.ty + (c.p.y - h.cy) * 0.6, pull * 0.8), c.p.z);
+          stretch = 1 + Math.sin(Math.PI * clamp(prog * 1.2, 0, 1)) * 0.6;
+          r = Math.max(1e-3, c.r * (1 - smooth(clamp((prog - 0.15) * 1.6, 0, 1))));
+          d.rotation.z = c.rot + Math.atan2(h.ty - h.cy, h.tx - hx) * 0.25 * pull;
+        }
+        d.scale.set(r * c.sq[0] * stretch, r * c.sq[1], r * c.sq[2]);
         d.updateMatrix();
         sky.driftPts[c.v].setMatrixAt(c.slot, d.matrix);
       });
@@ -3285,7 +3337,7 @@ class GardenSplash extends HTMLElement {
           for (let k = 0; k < 12 && !host; k++) {
             const i = (Math.random() * sky.drift.length) | 0;
             const c = sky.drift[i];
-            if (!c.far && Math.abs((c.x === undefined ? c.p.x : c.x) - sky.eye.x) < sky.viewW * 0.42 && Math.abs(c.p.y - sky.eye.y) < sky.viewH * 0.4) host = { drift: true, i, r: c.r };
+            if (!c.far && !c.heap && Math.abs((c.x === undefined ? c.p.x : c.x) - sky.eye.x) < sky.viewW * 0.42 && Math.abs(c.p.y - sky.eye.y) < sky.viewH * 0.4) host = { drift: true, i, r: c.r };
           }
         }
         if (!host) {
