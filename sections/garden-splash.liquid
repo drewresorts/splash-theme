@@ -663,6 +663,22 @@
     --dh-ink: #b9e5fb !important;
   }
 
+  /* The logo images turn light against the night sky: lightness flipped, hue kept. */
+  duet-header .duet-header__bar .duet-header__logo img,
+  .garden-splash .garden-splash__top-logo .garden-splash__logo-img {
+    transition: filter 0.8s ease;
+  }
+
+  /* The cart count: dark figures on the light badge. */
+  html.garden-night duet-header .duet-header__cart .cart-count-bubble {
+    color: #0b1033;
+  }
+
+  html.garden-night duet-header .duet-header__bar .duet-header__logo img,
+  html.garden-night .garden-splash .garden-splash__top-logo .garden-splash__logo-img {
+    filter: invert(1) hue-rotate(180deg);
+  }
+
   /* ---------- Menu ---------- */
 
   /* It opens out of the logo: a circle that grows from the logo's center. */
