@@ -23,7 +23,7 @@
         "menu": {
           "type": "menu",
           "settings": {
-            "style": "icon_text",
+            "style": "text",
             "label": "Menu",
             "show": true,
             "position": "right"
@@ -63,7 +63,7 @@
         "cart"
       ],
       "settings": {
-        "home_own_header": false,
+        "home_own_header": true,
         "menu": "main-menu",
         "background": "transparent",
         "ink_color": "#191f6b",
