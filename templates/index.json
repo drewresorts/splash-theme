@@ -37,9 +37,9 @@
         "density": "overgrown",
         "graphics_style": "ps1",
         "weather": true,
-        "season": "spring",
+        "season": "winter",
         "hemisphere": "north",
-        "sky": "day",
+        "sky": "auto",
         "hint_text": ""
       }
     }
