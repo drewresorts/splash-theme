@@ -18,7 +18,7 @@
           "type": "search",
           "disabled": true,
           "settings": {
-            "position": "left"
+            "position": "left_3"
           }
         },
         "menu": {
@@ -45,7 +45,7 @@
         "cart": {
           "type": "cart",
           "settings": {
-            "position": "left"
+            "position": "left_2"
           }
         }
       },

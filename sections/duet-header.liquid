@@ -1,11 +1,13 @@
 {%- comment -%}
   The store header, the same on every page. Each part is a block (logo,
-  menu, search, account, cart) placed left, center or right; blocks on the
-  same side appear in their order in the theme editor, so dragging them
-  rearranges the header. A block switched off with its own Show setting
-  keeps its space (invisible), so the others stay exactly where they are;
-  so do a menu button with no menu chosen and the account link while
-  customer accounts are off.
+  menu, search, account, cart) put in a spot of its own: one of three
+  spots on each side, counted in from the edge, or the center. Each spot
+  keeps its place whatever happens to the others, so hiding a block (with
+  the editor's eye icon, or its own Show setting) never moves the rest.
+  Blocks given the same spot share it, side by side in editor order.
+  A block switched off with Show keeps its exact width (invisible); so do
+  a menu button with no menu chosen and the account link while customer
+  accounts are off.
 
   On the splash pages and the garden shop page it floats over the garden;
   everywhere else it is a sticky bar. It also holds the Pollen Dream game's
@@ -17,6 +19,23 @@
   assign game_access = section.settings.game_access | default: 'menu'
   assign game_name = section.settings.game_name | default: 'Pollen Dream'
   assign zones = 'left,center,right' | split: ','
+  # How many spots each side needs: up to the furthest one in use, so spots
+  # nearer the edge keep their room even when what was in them is hidden.
+  assign left_spots = 0
+  assign right_spots = 0
+  for block in section.blocks
+    assign pos = block.settings.position | default: 'right'
+    assign side = pos | split: '_' | first
+    assign spot = pos | split: '_' | last | plus: 0
+    if spot < 1
+      assign spot = 1
+    endif
+    if side == 'left' and spot > left_spots
+      assign left_spots = spot
+    elsif side == 'right' and spot > right_spots
+      assign right_spots = spot
+    endif
+  endfor
   if settings.garden_game == false
     assign game_access = 'off'
   endif
@@ -34,10 +53,43 @@
 >
   <div class="duet-header__bar">
     {%- for zone in zones -%}
-      <div class="duet-header__zone duet-header__zone--{{ zone }}">
+      {%- liquid
+        assign spots = 1
+        if zone == 'left'
+          assign spots = left_spots
+        elsif zone == 'right'
+          assign spots = right_spots
+        endif
+      -%}
+      <div class="duet-header__zone duet-header__zone--{{ zone }}" style="--dh-spots: {{ spots | at_least: 1 }};">
+        {%- for spot_index in (1..3) -%}
+          {%- if zone == 'center' and spot_index > 1 -%}
+            {%- break -%}
+          {%- endif -%}
+          {%- if zone != 'center' and spot_index > spots -%}
+            {%- break -%}
+          {%- endif -%}
+          {%- comment -%} The spot's column, counted in from this side's edge. {%- endcomment -%}
+          {%- liquid
+            assign column = spot_index
+            if zone == 'right'
+              assign column = spots | minus: spot_index | plus: 1
+            endif
+          -%}
+          <div class="duet-header__spot" style="grid-column: {{ column }};">
         {%- for block in section.blocks -%}
-          {%- assign position = block.settings.position | default: 'right' -%}
-          {%- if position != zone -%}
+          {%- liquid
+            assign position = block.settings.position | default: 'right'
+            assign side = position | split: '_' | first
+            assign spot = position | split: '_' | last | plus: 0
+            if spot < 1
+              assign spot = 1
+            endif
+          -%}
+          {%- if side != zone -%}
+            {%- continue -%}
+          {%- endif -%}
+          {%- if zone != 'center' and spot != spot_index -%}
             {%- continue -%}
           {%- endif -%}
           {%- liquid
@@ -142,6 +194,8 @@
                 {%- endif -%}
               </a>
           {%- endcase -%}
+          </div>
+        {%- endfor -%}
           </div>
         {%- endfor -%}
       </div>
@@ -377,8 +431,42 @@
     justify-content: center;
   }
 
+  /*
+   * The sides: a fixed column for each spot, counted in from the edge. An
+   * empty spot (its block hidden) still holds a button's width, so the
+   * spots further in stay put.
+   */
+  .duet-header__zone--left,
   .duet-header__zone--right {
-    justify-content: flex-end;
+    display: grid;
+    grid-template-columns: repeat(var(--dh-spots, 1), minmax(var(--dh-spot), max-content));
+    justify-content: start;
+    gap: 0;
+    /* A button's full width, so an emptied spot is exactly as wide as an icon in it. */
+    --dh-spot: 5.6rem;
+  }
+
+  @media (max-width: 749px) {
+    .duet-header__zone--left,
+    .duet-header__zone--right {
+      --dh-spot: 4.8rem;
+    }
+  }
+
+  .duet-header__zone--right {
+    justify-content: end;
+  }
+
+  .duet-header__spot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  .duet-header__zone--center .duet-header__spot {
+    display: contents;
   }
 
   .duet-header__logo {
@@ -793,11 +881,16 @@
           "type": "select",
           "id": "position",
           "label": "Position",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
           "default": "center",
           "options": [
-            { "value": "left", "label": "Left" },
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
             { "value": "center", "label": "Center" },
-            { "value": "right", "label": "Right" }
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
           ]
         }
       ]
@@ -824,11 +917,16 @@
           "type": "select",
           "id": "position",
           "label": "Position",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
           "default": "left",
           "options": [
-            { "value": "left", "label": "Left" },
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
             { "value": "center", "label": "Center" },
-            { "value": "right", "label": "Right" }
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
           ]
         }
       ]
@@ -843,11 +941,16 @@
           "type": "select",
           "id": "position",
           "label": "Position",
-          "default": "right",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
+          "default": "left_2",
           "options": [
-            { "value": "left", "label": "Left" },
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
             { "value": "center", "label": "Center" },
-            { "value": "right", "label": "Right" }
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
           ]
         }
       ]
@@ -866,11 +969,16 @@
           "type": "select",
           "id": "position",
           "label": "Position",
-          "default": "right",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
+          "default": "right_2",
           "options": [
-            { "value": "left", "label": "Left" },
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
             { "value": "center", "label": "Center" },
-            { "value": "right", "label": "Right" }
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
           ]
         }
       ]
@@ -885,11 +993,16 @@
           "type": "select",
           "id": "position",
           "label": "Position",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
           "default": "right",
           "options": [
-            { "value": "left", "label": "Left" },
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
             { "value": "center", "label": "Center" },
-            { "value": "right", "label": "Right" }
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
           ]
         }
       ]
@@ -903,9 +1016,9 @@
       "name": "Duet header",
       "blocks": [
         { "type": "menu", "settings": { "position": "left" } },
-        { "type": "search", "settings": { "position": "left" } },
+        { "type": "search", "settings": { "position": "left_2" } },
         { "type": "logo", "settings": { "position": "center" } },
-        { "type": "account", "settings": { "position": "right" } },
+        { "type": "account", "settings": { "position": "right_2" } },
         { "type": "cart", "settings": { "position": "right" } }
       ]
     }
