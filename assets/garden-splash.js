@@ -2232,7 +2232,7 @@ class GardenSplash extends HTMLElement {
       'pointermove',
       (e) => {
         if (!path || e.pointerId !== path.id) return;
-        if (this.view && this.view.tz > 1.02) {
+        if ((this.view && this.view.tz > 1.02) || (this.skyView && this.skyView.tz > 1.02)) {
           path = null;
           return;
         }
@@ -2275,6 +2275,7 @@ class GardenSplash extends HTMLElement {
       this.skyTime = this.skyNow();
       this.buildSky();
       this.night = { t: 0, dir: 1, since: 0, nextShoot: 3 + Math.random() * 4 };
+      this.skyView = { z: 1, tz: 1, ax: 0, ay: 0, tax: 0, tay: 0 };
       this.classList.add('is-night');
     } else {
       this.night.dir = -this.night.dir;
@@ -2284,6 +2285,7 @@ class GardenSplash extends HTMLElement {
 
   endNight() {
     this.night = null;
+    this.skyView = null;
     this.classList.remove('is-night');
     document.documentElement.classList.remove('garden-night');
     if (this.sky) this.sky.group.visible = false;
@@ -2344,8 +2346,8 @@ class GardenSplash extends HTMLElement {
   }
 
   /* A soft, lumpy puff of cloud: a few overlapping round blobs. */
-  cloudTexture() {
-    const n = this.ps1 ? 24 : 64;
+  cloudTexture(fine) {
+    const n = this.ps1 && !fine ? 24 : 64;
     const c = document.createElement('canvas');
     c.width = c.height = n;
     const g = c.getContext('2d');
@@ -2363,7 +2365,7 @@ class GardenSplash extends HTMLElement {
     blob(44 * u, 37 * u, 17 * u, 0.8);
     blob(30 * u, 24 * u, 15 * u, 0.85);
     const tex = new THREE.CanvasTexture(c);
-    if (this.ps1) {
+    if (this.ps1 && !fine) {
       tex.magFilter = THREE.NearestFilter;
       tex.minFilter = THREE.NearestFilter;
     }
@@ -2553,7 +2555,66 @@ class GardenSplash extends HTMLElement {
 
     group.visible = false;
     this.scene.add(group);
-    this.sky = { group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, field, fieldPts, drift, driftPts, glows, shoot, gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D) };
+    // Things that look back. An eye made for the sky: unlit, so it reads the
+    // same by day or night, turned to face down at the one lying below.
+    const skyEye = (R, lid, iris) => {
+      const grp = new THREE.Group();
+      grp.rotation.x = Math.PI;
+      const eyeTex = eyeTexture(iris);
+      const ballMat = this.snapMaterial(new THREE.MeshBasicMaterial({ map: eyeTex, fog: false }));
+      const lidMat = this.snapMaterial(new THREE.MeshBasicMaterial({ color: toColor(lid), side: THREE.DoubleSide, fog: false }));
+      const ball = new THREE.Mesh(this.geometries.eye, ballMat);
+      const top = new THREE.Mesh(this.geometries.lidTop, lidMat);
+      const bottom = new THREE.Mesh(this.geometries.lidBottom, lidMat);
+      [ball, top, bottom].forEach((m) => {
+        m.scale.setScalar(R);
+        m.renderOrder = 1;
+      });
+      grp.add(ball, top, bottom);
+      group.add(grp);
+      disposables.push(eyeTex, ballMat, lidMat);
+      return { group: grp, ball, top, bottom, R, open: 0, blinkAt: -1, nextBlink: 0 };
+    };
+
+    // The watcher: in a corner of the sky, closed. At night it passes for the
+    // moon, by day it hides in a cloud, at sunrise and sunset it is the low sun.
+    const wR = Math.min(viewW, viewH) * 0.075;
+    const skin = time.dark ? [214, 220, 236] : time.warm > 0.4 ? [255, 196, 118] : [244, 248, 255];
+    const wIris = time.dark ? [120, 132, 170] : time.warm > 0.4 ? [212, 92, 40] : [66, 140, 210];
+    const watcher = skyEye(wR, skin, wIris);
+    const wSide = Math.random() < 0.5 ? -1 : 1;
+    watcher.group.position.set(eye.x + wSide * viewW * 0.36, eye.y - viewH * 0.31, eye.z + D * 1.15);
+    watcher.wakeAt = 5 + Math.random() * 4;
+    // A halo behind it: moonlight, sunglow, or the cloud it sits in.
+    // The watcher's cloud is soft: chunky texels would show up close when zoomed in.
+    const haloCloud = this.cloudTexture(true);
+    disposables.push(haloCloud);
+    const haloMat = new THREE.SpriteMaterial({ map: time.clouds && time.warm < 0.4 ? haloCloud : tex, color: toColor(time.dark ? [150, 170, 220] : time.warm > 0.4 ? [255, 170, 90] : [255, 255, 255]), transparent: true, opacity: 0, depthWrite: false, fog: false, blending: time.clouds && time.warm < 0.4 ? THREE.NormalBlending : THREE.AdditiveBlending });
+    const halo = new THREE.Sprite(haloMat);
+    halo.scale.setScalar(wR * (time.clouds && time.warm < 0.4 ? 5.5 : 4.5));
+    halo.position.copy(watcher.group.position).add(new THREE.Vector3(0, 0, 40));
+    halo.renderOrder = -2;
+    group.add(halo);
+    disposables.push(haloMat);
+    watcher.halo = halo;
+
+    // Glances: now and then a star (or a puff of cloud) in the logo opens, looks, and closes.
+    const gR = this.base * S * (time.clouds ? 1.5 : 1.25);
+    const lidDark = time.dark ? [8, 10, 34] : mix(cloudShade, cloudLit, 0.7);
+    const glances = [0, 1].map(() => {
+      const e = skyEye(gR, lidDark, this.heroColor);
+      e.group.visible = false;
+      return e;
+    });
+
+    // Eyes in the dark: pairs of faint amber points that come and go between the stars.
+    const pairs = time.dark ? points(8, 11) : null;
+
+    this.sky = {
+      group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, field, fieldPts, drift, driftPts, glows, shoot,
+      watcher, glances, pairs, pairSlots: [0, 1, 2, 3].map(() => ({ until: 0, at: 0, nextAt: 4 + Math.random() * 6 })), nextGlance: 7 + Math.random() * 5,
+      gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
+    };
   }
 
   /* Turning over, lying there, and turning back. */
@@ -2577,7 +2638,18 @@ class GardenSplash extends HTMLElement {
     const tip = smooth(range(p, 0.5, 1));
     c.position.set(lerp(this.camBase.x, sky.eye.x, across), lerp(this.camBase.y, sky.eye.y, across), lerp(this.camBase.z, sky.eye.z, down));
     c.quaternion.setFromEuler(new THREE.Euler(Math.PI * tip, 0, 0));
-    c.fov = lerp(FOV, sky.fov, down);
+    // Zoomed into the sky: a narrower view, turned toward where it was zoomed.
+    const sv = this.skyView;
+    if (sv) {
+      if (n.dir < 0) Object.assign(sv, { tz: 1, tax: 0, tay: 0 });
+      const ease = 1 - Math.exp(-dt * 12);
+      sv.z += (sv.tz - sv.z) * ease;
+      sv.ax += (sv.tax - sv.ax) * ease;
+      sv.ay += (sv.tay - sv.ay) * ease;
+      c.rotateY(-sv.ax * tip);
+      c.rotateX(sv.ay * tip);
+    }
+    c.fov = lerp(FOV, sky.fov / (sv ? sv.z : 1), down);
     c.updateProjectionMatrix();
 
     // The sky comes in behind everything, and the light turns to the sky's:
@@ -2684,8 +2756,159 @@ class GardenSplash extends HTMLElement {
       }
     }
 
+    this.skyEyes(t, dt, show, p);
+
     // Flower eyes look up at the sky too.
     this.viewDirty = true;
+  }
+
+  /* Where the one lying below is looking: the pointer if there is one, else straight up. */
+  skyGazePoint(out) {
+    const c = this.camera;
+    const ptr = this.pointer;
+    if (ptr.active && ptr.type === 'mouse') out.set((ptr.x / this.w) * 2 - 1, -(ptr.y / this.h) * 2 + 1, 0.5).unproject(c);
+    else out.set(0, 0, 0.5).unproject(c);
+    // A point a little way out along that line: close by, so the eyes look right at the viewer.
+    return out.sub(c.position).normalize().multiplyScalar(60).add(c.position);
+  }
+
+  /* An eye's lids for how open it is (0..1), with a blink now and then. */
+  lids(e, open, t) {
+    if (t > e.nextBlink) {
+      e.blinkAt = t;
+      e.nextBlink = t + 3 + Math.random() * 6;
+    }
+    let b = 1;
+    if (e.blinkAt >= 0 && t >= e.blinkAt) {
+      const bt = (t - e.blinkAt) / (BLINK * 1.6);
+      if (bt >= 1) e.blinkAt = -1;
+      else b = Math.abs(Math.cos(Math.PI * bt));
+    }
+    const ap = open * b;
+    e.top.rotation.x = -1.05 * ap;
+    e.bottom.rotation.x = 0.7 * ap;
+  }
+
+  /*
+   * What looks back from the sky: the watcher in the corner wakes after a
+   * while and follows the pointer; now and then a star or puff in the logo
+   * opens into an eye; at night, pairs of eyes come and go in the dark.
+   */
+  skyEyes(t, dt, show, p) {
+    const sky = this.sky;
+    const n = this.night;
+    const since = n.dir > 0 ? n.since : 0;
+    const gaze = this.skyGazePoint(this.tmp);
+    const calm = this.reduced;
+
+    // The watcher. Zooming in close on it wakes it at once.
+    const w = sky.watcher;
+    const sv = this.skyView;
+    const near = sv && sv.z > 2.2;
+    if (n.dir > 0 && (since > w.wakeAt || near)) w.awake = true;
+    if (n.dir < 0) w.awake = false;
+    w.open = clamp(w.open + (w.awake ? dt / 2.4 : -dt / 0.5), 0, 1);
+    w.group.visible = show > 0.01;
+    this.lids(w, smooth(w.open) * (calm ? 0.8 : 1), t);
+    if (!calm) w.ball.lookAt(gaze);
+    w.halo.material.opacity = show * (sky.time.clouds && sky.time.warm < 0.4 ? 0.95 : 0.55);
+
+    // Glances from the logo.
+    if (!calm && n.dir > 0 && since > 6 && t > sky.nextGlance) {
+      const e = sky.glances.find((g) => !g.visible);
+      if (e) {
+        const s = sky.logo[(Math.random() * sky.logo.length) | 0];
+        e.group.position.set(s.to.x, s.to.y, s.to.z - 30);
+        Object.assign(e, { visible: true, t0: t, life: 2.8 + Math.random() * 1.5, nextBlink: t + 1 + Math.random() });
+        e.group.visible = true;
+      }
+      sky.nextGlance = t + 4 + Math.random() * 7;
+    }
+    for (const e of sky.glances) {
+      if (!e.visible) continue;
+      const age = t - e.t0;
+      const o = smooth(range(age, 0, 0.5)) * (1 - smooth(range(age, e.life - 0.5, e.life)));
+      this.lids(e, o, t);
+      e.ball.lookAt(gaze);
+      if (age > e.life || n.dir < 0) {
+        e.visible = false;
+        e.group.visible = false;
+      }
+    }
+
+    // Eyes in the dark.
+    if (sky.pairs) {
+      const pos = sky.pairs.geometry.attributes.position;
+      const col = sky.pairs.geometry.attributes.color;
+      const gap = sky.viewW * 0.012;
+      sky.pairSlots.forEach((slot, i) => {
+        if (!calm && n.dir > 0 && p >= 1 && t > slot.nextAt && t > slot.until) {
+          // Somewhere in the dark, away from the logo.
+          const a = Math.random() * TAU;
+          const r = 0.34 + Math.random() * 0.12;
+          slot.x = sky.eye.x + Math.cos(a) * sky.viewW * r;
+          slot.y = sky.eye.y + Math.sin(a) * sky.viewH * r * 1.1;
+          slot.at = t;
+          slot.until = t + 3 + Math.random() * 3;
+          slot.nextAt = slot.until + 6 + Math.random() * 12;
+          slot.blink = 1 + Math.random() * 1.2;
+        }
+        const life = slot.until - slot.at;
+        const age = t - slot.at;
+        let v = age >= 0 && age <= life ? smooth(range(age, 0, 0.8)) * (1 - smooth(range(age, life - 0.8, life))) : 0;
+        if (Math.abs(age - slot.blink) < 0.09) v = 0;
+        v *= show;
+        const z = sky.eye.z + sky.D * 1.25;
+        pos.setXYZ(i * 2, (slot.x || 0) - gap, slot.y || 0, z);
+        pos.setXYZ(i * 2 + 1, (slot.x || 0) + gap, slot.y || 0, z);
+        col.setXYZ(i * 2, v * 1, v * 0.62, v * 0.2);
+        col.setXYZ(i * 2 + 1, v * 1, v * 0.62, v * 0.2);
+      });
+      pos.needsUpdate = true;
+      col.needsUpdate = true;
+    }
+  }
+
+  /* ---------------- zooming in the sky ---------------- */
+
+  /* Lying on the bed, looking up, and not on the way in or out. */
+  lyingDown() {
+    return !!(this.night && this.night.dir > 0 && this.night.t >= 1 && this.sky);
+  }
+
+  /* Zooms the sky view to z, keeping the sky under the screen point (sx, sy) in place. */
+  skyZoomTo(z, sx, sy) {
+    const sv = this.skyView;
+    const fov0 = (this.sky.fov * Math.PI) / 180;
+    const aspect = this.w / this.h;
+    const tv = (zz) => Math.tan(fov0 / 2 / zz);
+    const nx = (sx / this.w) * 2 - 1;
+    const ny = 1 - (sy / this.h) * 2;
+    const ax = sv.tax + Math.atan(nx * tv(sv.tz) * aspect);
+    const ay = sv.tay + Math.atan(ny * tv(sv.tz));
+    sv.tz = clamp(z, 1, 6);
+    sv.tax = ax - Math.atan(nx * tv(sv.tz) * aspect);
+    sv.tay = ay - Math.atan(ny * tv(sv.tz));
+    this.clampSkyView();
+  }
+
+  skyPan(dx, dy) {
+    const sv = this.skyView;
+    const k = (2 * Math.atan(Math.tan((this.sky.fov * Math.PI) / 360 / sv.tz))) / this.h;
+    sv.tax -= dx * k;
+    sv.tay += dy * k;
+    this.clampSkyView();
+  }
+
+  /* Keeps the zoomed view inside the sky first seen. */
+  clampSkyView() {
+    const sv = this.skyView;
+    const fov0 = (this.sky.fov * Math.PI) / 180;
+    const aspect = this.w / this.h;
+    const lim = (k) => Math.atan(Math.tan(fov0 / 2) * k) - Math.atan((Math.tan(fov0 / 2) * k) / sv.tz);
+    sv.tax = clamp(sv.tax, -lim(aspect), lim(aspect));
+    sv.tay = clamp(sv.tay, -lim(1), lim(1));
+    this.start();
   }
 
   /* ---------------- seasons and weather ---------------- */
@@ -2994,7 +3217,11 @@ class GardenSplash extends HTMLElement {
       const r = this.getBoundingClientRect();
       return [e.clientX - r.left, e.clientY - r.top];
     };
-    const navOpen = () => this.classList.contains('is-nav-open') || !!this.night;
+    // In the sky the same gestures zoom and look around the sky instead of the bed.
+    const navOpen = () => this.classList.contains('is-nav-open') || (!!this.night && !this.lyingDown());
+    const zoomNow = () => (this.lyingDown() ? this.skyView.tz : this.view.tz);
+    const anchor = (x, y) => (this.lyingDown() ? [x, y] : this.bedAt(x, y));
+    const zoomAt = (z, w, sx, sy) => (this.lyingDown() ? this.skyZoomTo(z, sx, sy) : this.zoomTo(z, w[0], w[1], sx, sy));
     const pts = new Map();
     let g = null;
     let holdTimer = 0;
@@ -3006,8 +3233,7 @@ class GardenSplash extends HTMLElement {
         e.preventDefault();
         const [x, y] = local(e);
         const d = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
-        const [wx, wy] = this.bedAt(x, y);
-        this.zoomTo(this.view.tz * Math.exp(-d * (e.ctrlKey ? 0.012 : 0.0025)), wx, wy, x, y);
+        zoomAt(zoomNow() * Math.exp(-d * (e.ctrlKey ? 0.012 : 0.0025)), anchor(x, y), x, y);
         this.markInteracted();
       },
       { passive: false }
@@ -3017,11 +3243,11 @@ class GardenSplash extends HTMLElement {
     this.addEventListener('gesturestart', (e) => {
       e.preventDefault();
       const [x, y] = local(e);
-      safari = { z0: this.view.tz, x, y, w: this.bedAt(x, y) };
+      safari = { z0: zoomNow(), x, y, w: anchor(x, y) };
     });
     this.addEventListener('gesturechange', (e) => {
       e.preventDefault();
-      if (safari) this.zoomTo(safari.z0 * e.scale, safari.w[0], safari.w[1], safari.x, safari.y);
+      if (safari) zoomAt(safari.z0 * e.scale, safari.w, safari.x, safari.y);
     });
     this.addEventListener('gestureend', (e) => {
       e.preventDefault();
@@ -3044,7 +3270,7 @@ class GardenSplash extends HTMLElement {
           const [a, b] = [...pts.values()];
           const mx = (a.x + b.x) / 2;
           const my = (a.y + b.y) / 2;
-          g = { mode: 'pinch', d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), z0: this.view.tz, w: this.bedAt(mx, my) };
+          g = { mode: 'pinch', d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoomNow(), w: anchor(mx, my), mx, my };
           endGrowth();
         } else if (pts.size === 1) {
           g = { mode: null, id: e.pointerId, sx: x, sy: y, lx: x, ly: y };
@@ -3052,8 +3278,8 @@ class GardenSplash extends HTMLElement {
             holdTimer = window.setTimeout(() => {
               if (!g || g.mode !== null || g.id !== e.pointerId) return;
               g.mode = 'hold';
-              g.z0 = this.view.tz;
-              g.w = this.bedAt(g.lx, g.ly);
+              g.z0 = zoomNow();
+              g.w = anchor(g.lx, g.ly);
               g.hx = g.lx;
               g.hy = g.ly;
               endGrowth();
@@ -3075,18 +3301,21 @@ class GardenSplash extends HTMLElement {
         if (g.mode === 'pinch' && pts.size >= 2) {
           const [a, b] = [...pts.values()];
           const d = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
-          this.zoomTo((g.z0 * d) / g.d0, g.w[0], g.w[1], (a.x + b.x) / 2, (a.y + b.y) / 2);
+          zoomAt((g.z0 * d) / g.d0, g.w, (a.x + b.x) / 2, (a.y + b.y) / 2);
         } else if (g.mode === 'hold' && e.pointerId === g.id) {
           // Slide up to zoom in, down to zoom out, around the point first held.
-          this.zoomTo(g.z0 * Math.exp((g.hy - y) * 0.012), g.w[0], g.w[1], g.hx, g.hy);
+          zoomAt(g.z0 * Math.exp((g.hy - y) * 0.012), g.w, g.hx, g.hy);
         } else if (g.mode === 'pan' && e.pointerId === g.id) {
-          const v = this.view;
-          v.tcx -= (x - g.lx) / v.tz;
-          v.tcy -= (y - g.ly) / v.tz;
-          this.clampView();
+          if (this.lyingDown()) this.skyPan(x - g.lx, y - g.ly);
+          else {
+            const v = this.view;
+            v.tcx -= (x - g.lx) / v.tz;
+            v.tcy -= (y - g.ly) / v.tz;
+            this.clampView();
+          }
         } else if (g.mode === null && e.pointerId === g.id && Math.hypot(x - g.sx, y - g.sy) > 10) {
           clearTimeout(holdTimer);
-          if (this.view.tz > 1.02) {
+          if (zoomNow() > 1.02) {
             g.mode = 'pan';
             endGrowth();
             try {
