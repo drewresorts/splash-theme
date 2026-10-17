@@ -2924,6 +2924,7 @@ class GardenSplash extends HTMLElement {
     this.sky = {
       group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, puffs, logoPuffs, cloudMat, fpos: new Float32Array(logo.length * 3), field, fieldPts, drift, driftPts, glows, shoot,
       heaps, planes: this.buildPlanes(group, disposables, atlas, tex, time, D), nextPlane: this.elapsed + 9 + Math.random() * 10,
+      birds: this.buildBirds(group, disposables, time), nextBirds: this.elapsed + 7 + Math.random() * 6,
       peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 6 + Math.random() * 6,
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
     };
@@ -3106,6 +3107,7 @@ class GardenSplash extends HTMLElement {
       sky.driftPts.forEach((m) => m && (m.instanceMatrix.needsUpdate = true));
     }
     this.flyPlanes(t, dt, show, p);
+    this.flyBirds(t, dt, show, p);
     sky.glows.forEach((g) => (g.material.opacity = dark));
 
     // Now and then a shooting star, like the bees by day.
@@ -3211,6 +3213,107 @@ class GardenSplash extends HTMLElement {
       trail.renderOrder = -1;
     }
     return { plane, lights, trail, puffs: Array.from({ length: 320 }, () => ({ age: -1 })), next: 0, active: null, depth: D * 1.1 };
+  }
+
+  /*
+   * Birds, now and then, by day: a small flock crossing far below the
+   * clouds, so they look bigger and quicker than anything up there. Dark
+   * against the bright sky, wings beating and now and then held in a glide.
+   */
+  buildBirds(group, disposables, time) {
+    if (time.light <= 0.2) return null;
+    const color = mix([46, 52, 78], time.evening ? [70, 44, 66] : [84, 56, 70], time.warm * 0.6);
+    const mat = this.snapMaterial(new THREE.MeshBasicMaterial({ color: toColor(color), side: THREE.DoubleSide, fog: false }));
+    // Seen from below, nose along +x: a slim body and a swept wing (made for the right side, mirrored for the left).
+    const bodyShape = new THREE.Shape();
+    [[0.32, 0], [0.18, 0.05], [-0.22, 0.045], [-0.42, 0.13], [-0.36, 0], [-0.42, -0.13], [-0.22, -0.045], [0.18, -0.05]].forEach(([x, y], i) => (i ? bodyShape.lineTo(x, y) : bodyShape.moveTo(x, y)));
+    const wingShape = new THREE.Shape();
+    [[0.1, 0], [0.06, 0.2], [-0.04, 0.38], [-0.2, 0.5], [-0.1, 0.3], [-0.12, 0.12], [-0.1, 0]].forEach(([x, y], i) => (i ? wingShape.lineTo(x, y) : wingShape.moveTo(x, y)));
+    const bodyGeo = new THREE.ShapeGeometry(bodyShape);
+    const wingGeo = new THREE.ShapeGeometry(wingShape);
+    disposables.push(mat, bodyGeo, wingGeo);
+    const birds = [];
+    for (let i = 0; i < 9; i++) {
+      const b = new THREE.Group();
+      const body = new THREE.Mesh(bodyGeo, mat);
+      const right = new THREE.Mesh(wingGeo, mat);
+      const left = new THREE.Mesh(wingGeo, mat);
+      left.scale.y = -1;
+      b.add(body, right, left);
+      b.visible = false;
+      group.add(b);
+      birds.push({ g: b, right, left, phase: Math.random() * TAU, rate: 7 + Math.random() * 3, glideAt: 0, gliding: false });
+    }
+    return { birds, flock: null };
+  }
+
+  flyBirds(t, dt, show, p) {
+    const sky = this.sky;
+    const B = sky.birds;
+    const n = this.night;
+    if (!B) return;
+    // Well below the clouds: about a third of the way up to them.
+    const depth = sky.D * 0.35;
+    const k = depth / sky.D;
+    const unit = (sky.viewW / this.w) * k;
+    const cx = sky.eye.x;
+    const cy = sky.eye.y;
+    if (!B.flock && !this.reduced && n.dir > 0 && p >= 1 && t > sky.nextBirds) {
+      const count = 3 + Math.floor(Math.random() * 6);
+      const a = Math.random() * TAU;
+      const dir = new THREE.Vector2(Math.cos(a), Math.sin(a));
+      const R0 = sky.viewW * k * 0.7;
+      const side = (Math.random() - 0.5) * sky.viewH * k * 0.6;
+      const span = (26 + Math.random() * 14) * unit;
+      const vee = Math.random() < 0.5;
+      // A loose V, or a ragged straggle.
+      const slots = Array.from({ length: count }, (_, i) => {
+        const rank = Math.ceil(i / 2);
+        const wing = i % 2 ? 1 : -1;
+        return vee
+          ? new THREE.Vector2(-rank * span * 0.9, wing * rank * span * 0.75)
+          : new THREE.Vector2(-(Math.random() * 3) * span, (Math.random() - 0.5) * 4 * span);
+      });
+      B.flock = {
+        pos: new THREE.Vector2(cx - dir.x * R0 - dir.y * side, cy - dir.y * R0 + dir.x * side),
+        dir, speed: (R0 * 2) / (6 + Math.random() * 3), R0, span, slots, t0: t, wobble: Math.random() * TAU,
+      };
+    }
+    const F = B.flock;
+    B.birds.forEach((b, i) => {
+      if (!F || i >= F.slots.length || n.dir < 0) {
+        b.g.visible = false;
+        return;
+      }
+      const heading = Math.atan2(F.dir.y, F.dir.x) + Math.sin((t - F.t0) * 0.6 + F.wobble) * 0.12;
+      const c = Math.cos(heading);
+      const s2 = Math.sin(heading);
+      const sl = F.slots[i];
+      // Each bird keeps its place loosely, bobbing a little out of step.
+      const bob = Math.sin(t * 1.3 + i * 1.7) * F.span * 0.15;
+      b.g.position.set(F.pos.x + c * sl.x - s2 * (sl.y + bob), F.pos.y + s2 * sl.x + c * (sl.y + bob), sky.eye.z + depth);
+      b.g.rotation.set(0, 0, heading);
+      b.g.scale.setScalar(F.span);
+      b.g.visible = show > 0.05;
+      // Beat, beat, beat... and now and then a glide on still wings.
+      if (t > b.glideAt) {
+        b.gliding = !b.gliding && Math.random() < 0.4;
+        b.glideAt = t + (b.gliding ? 0.6 + Math.random() * 0.8 : 1 + Math.random() * 2);
+      }
+      b.phase += dt * (b.gliding ? 0 : b.rate);
+      const flap = b.gliding ? 0.15 : Math.sin(b.phase) * 0.85;
+      b.right.rotation.x = flap;
+      b.left.rotation.x = -flap;
+    });
+    if (F) {
+      F.pos.addScaledVector(F.dir, F.speed * dt);
+      const away = new THREE.Vector2(F.pos.x - cx, F.pos.y - cy);
+      if (away.length() > F.R0 * 1.25 && away.dot(F.dir) > 0) {
+        B.flock = null;
+        sky.nextBirds = t + 15 + Math.random() * 20;
+      }
+      if (n.dir < 0) B.flock = null;
+    }
   }
 
   flyPlanes(t, dt, show, p) {
