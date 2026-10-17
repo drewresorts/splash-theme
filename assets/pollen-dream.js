@@ -777,16 +777,12 @@ class PollenDream {
     this.disposables.push(grass);
 
     // A soft round glow, for the pollen, its halos and the dust in the air.
-    const glow = document.createElement('canvas');
-    glow.width = glow.height = 64;
-    const g = glow.getContext('2d');
-    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.35, 'rgba(255,255,255,0.55)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 64, 64);
-    this.glowTex = new THREE.CanvasTexture(glow);
+    // White with computed transparency: a canvas gradient's dither turns into
+    // colored specks where the glow is faint.
+    this.glowTex = G.alphaTexture(64, (u, v) => {
+      const t = Math.hypot(u - 0.5, v - 0.5) / 0.5;
+      return t < 0.35 ? 1 - (t / 0.35) * 0.45 : t < 1 ? 0.55 * (1 - (t - 0.35) / 0.65) : 0;
+    }, 0);
     this.disposables.push(this.glowTex);
 
     // Specks of pollen drifting in the air.

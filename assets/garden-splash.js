@@ -222,6 +222,9 @@ const SEASON_LOOK = {
 };
 
 /* 15-bit color with a 4x4 Bayer dither, as on the PlayStation. */
+/* The same 4x4 ordered-dither matrix, for textures made in JavaScript. */
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
 const DITHER_GLSL = `
 uniform float uDither;
 const float BAYER[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
@@ -335,6 +338,33 @@ const PETALS = {
   // Sepals and leaves: pointed and folded along the midrib.
   leaf: () => petalGeometry((u) => 0.5 * Math.sin(Math.PI * u ** 0.85) + 0.01, 0, 0.06, 0.35),
 };
+
+/*
+ * A white texture whose transparency is computed here, pixel by pixel.
+ * Painting it on a canvas instead lets the browser dither the gradients a
+ * little differently in each color channel, and where the image is nearly
+ * transparent the GPU magnifies that into bright red, green and blue
+ * specks. alpha(u, v) is 0..1 over the square; dither > 0 cuts it into that
+ * many steps with a 4x4 ordered dither, the PS1 way.
+ */
+function alphaTexture(n, alpha, dither) {
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      let a = clamp(alpha((x + 0.5) / n, (y + 0.5) / n), 0, 1);
+      if (dither) a = Math.floor(a * dither + BAYER4[(y & 3) * 4 + (x & 3)] / 16) / dither;
+      const i = (y * n + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 255;
+      data[i + 3] = Math.round(clamp(a, 0, 1) * 255);
+    }
+  }
+  const tex = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+  const filter = dither ? THREE.NearestFilter : THREE.LinearFilter;
+  tex.magFilter = filter;
+  tex.minFilter = filter;
+  tex.needsUpdate = true;
+  return tex;
+}
 
 /* The eye texture: veined sclera, a ringed iris and the pupil, centred at u = v = 0.5. */
 function eyeTexture(iris) {
@@ -2346,44 +2376,33 @@ class GardenSplash extends HTMLElement {
   }
 
   /*
-   * A soft, lumpy puff of cloud: a few overlapping round blobs. Always
-   * smooth, PS1 style or not: a blocky texture drawn this large breaks into
-   * squares.
+   * A soft, lumpy puff of cloud: a few overlapping round blobs. In the PS1
+   * style it is chunky, its edge a white ordered dither.
    */
   cloudTexture() {
-    const n = 64;
-    const c = document.createElement('canvas');
-    c.width = c.height = n;
-    const g = c.getContext('2d');
-    const blob = (x, y, r, a) => {
-      const grad = g.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, `rgba(255,255,255,${a})`);
-      grad.addColorStop(0.6, `rgba(255,255,255,${a * 0.75})`);
-      grad.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = grad;
-      g.fillRect(0, 0, n, n);
+    const blobs = [
+      [0.5, 0.56, 0.41, 0.9],
+      [0.31, 0.59, 0.25, 0.8],
+      [0.69, 0.58, 0.27, 0.8],
+      [0.47, 0.38, 0.23, 0.85],
+    ];
+    const alpha = (u, v) => {
+      let clear = 1;
+      for (const [x, y, r, peak] of blobs) {
+        const t = Math.hypot(u - x, v - y) / r;
+        if (t < 1) clear *= 1 - peak * (t < 0.6 ? 1 - (t / 0.6) * 0.25 : 0.75 * (1 - (t - 0.6) / 0.4));
+      }
+      return 1 - clear;
     };
-    const u = n / 64;
-    blob(32 * u, 36 * u, 26 * u, 0.9);
-    blob(20 * u, 38 * u, 16 * u, 0.8);
-    blob(44 * u, 37 * u, 17 * u, 0.8);
-    blob(30 * u, 24 * u, 15 * u, 0.85);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+    return this.ps1 ? alphaTexture(24, alpha, 4) : alphaTexture(64, alpha, 0);
   }
 
+  /* A round glow: bright in the middle, fading to nothing at the edge. */
   glowTexture() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 32;
-    const g = c.getContext('2d');
-    const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-    grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.3, 'rgba(255,255,255,0.7)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 32, 32);
-    return new THREE.CanvasTexture(c);
+    return alphaTexture(32, (u, v) => {
+      const t = Math.hypot(u - 0.5, v - 0.5) / 0.5;
+      return t < 0.3 ? 1 - (t / 0.3) * 0.3 : t < 1 ? 0.7 * (1 - (t - 0.3) / 0.7) : 0;
+    }, 0);
   }
 
   /* The sky and its stars, laid out for this screen and this clearing. */
@@ -2429,6 +2448,8 @@ class GardenSplash extends HTMLElement {
       const pts = new THREE.Points(geo, mat);
       pts.frustumCulled = false;
       pts.renderOrder = -1;
+      // Clouds are things in the sky, so they grow as it is zoomed into; stars stay points.
+      pts.baseSize = cloud ? mat.size : 0;
       group.add(pts);
       disposables.push(geo, mat);
       return pts;
@@ -2710,6 +2731,8 @@ class GardenSplash extends HTMLElement {
     lp.needsUpdate = true;
     lc.needsUpdate = true;
     if (time.clouds) sky.logoPts.material.opacity = show;
+    const zoom = this.skyView ? this.skyView.z : 1;
+    for (const pts of [sky.logoPts, sky.driftPts]) if (pts && pts.baseSize) pts.material.size = pts.baseSize * zoom;
     // Stars fade out as the sky lightens; a few linger at dawn and dusk.
     const stars = clamp(1 - time.light * 1.6, 0, 1);
     const fc = sky.fieldPts.geometry.attributes.color;
@@ -3733,4 +3756,4 @@ export function createBed(config) {
   return bed;
 }
 
-export { THREE, STAGE, FLOOR_Z, mulberry32, poissonDisc, parseColor, mix, tone, toColor, rgba, clamp, lerp, range, smooth };
+export { THREE, STAGE, FLOOR_Z, mulberry32, poissonDisc, parseColor, mix, tone, toColor, rgba, clamp, lerp, range, smooth, alphaTexture };
