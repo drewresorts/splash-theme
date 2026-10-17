@@ -2598,11 +2598,13 @@ class GardenSplash extends HTMLElement {
     });
     const pxPerUnit = (S * this.w) / viewW;
     const logoPts = time.clouds ? null : points(logo.length, 8);
-    // Low-poly clouds: lumpy lobes of flat-shaded facets in blue-grey to
-    // periwinkle, flattened underneath. The light is baked into each
-    // facet's color (the sun at the upper left; screen up is -y, the viewer
-    // toward -z), so they look the same whatever the scene's lights do.
-    // Three lobe shapes, turned and stretched, so no two clouds match.
+    // Low-poly clouds seen from straight below: lumpy lobes of flat-shaded
+    // facets in blue-grey to periwinkle, their flat bases toward the viewer
+    // (who is toward -z). The sun is above the clouds, so the thick middle of
+    // a base is a deeper blue-grey and its thin edges let the light through,
+    // the same all round: nothing reads as a top or a bottom. The light is
+    // baked into each facet's color, and three lobe shapes are turned and
+    // stretched so no two clouds match.
     const cloudMat = time.light > 0.2 ? new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }) : null;
     if (cloudMat) disposables.push(cloudMat);
     const lobe = (seed, detail) => {
@@ -2618,18 +2620,19 @@ class GardenSplash extends HTMLElement {
         if (!moved.has(key)) {
           const k = 1 + (rng() - 0.5) * 0.36;
           const w = v.clone().multiplyScalar(k);
-          // A flat base: nothing hangs below the level.
-          w.y = Math.min(w.y, 0.42);
+          // A flat base, facing the viewer below.
+          w.z = Math.max(w.z, -0.45);
           moved.set(key, w);
         }
         const w = moved.get(key);
         pos.setXYZ(i, w.x, w.y, w.z);
       }
-      // Each facet one color, from how squarely it faces the sun.
-      const sun = new THREE.Vector3(-0.45, -0.62, -0.64).normalize();
-      const lit = mix([208, 218, 240], cloudLit, time.warm * 0.6);
-      const mid = mix([158, 173, 207], [205, 150, 170], time.warm * 0.55);
-      const dark = mix([112, 126, 166], [130, 96, 150], time.warm * 0.55);
+      // Each facet one color: the base (facing straight down at the viewer)
+      // deepest, the facets turning toward the edge lighter, with a little
+      // variety facet to facet.
+      const lit = mix([238, 242, 252], cloudLit, time.warm * 0.6);
+      const mid = mix([196, 207, 232], [214, 168, 184], time.warm * 0.55);
+      const dark = mix([160, 174, 208], [160, 122, 168], time.warm * 0.55);
       const a = new THREE.Vector3();
       const b2 = new THREE.Vector3();
       const c = new THREE.Vector3();
@@ -2639,7 +2642,7 @@ class GardenSplash extends HTMLElement {
         b2.fromBufferAttribute(pos, i + 1);
         c.fromBufferAttribute(pos, i + 2);
         const nrm = b2.clone().sub(a).cross(c.clone().sub(a)).normalize();
-        const k = clamp(nrm.dot(sun) * 0.8 + 0.35 - Math.max(0, nrm.y) * 0.25, 0, 1);
+        const k = clamp(0.32 + (1 - Math.abs(nrm.z)) * 0.75 + (rng() - 0.5) * 0.14, 0, 1);
         const col = toColor(k < 0.5 ? mix(dark, mid, k / 0.5) : mix(mid, lit, (k - 0.5) / 0.5));
         for (let j = 0; j < 3; j++) cols.push(col.r, col.g, col.b);
       }
@@ -2670,8 +2673,11 @@ class GardenSplash extends HTMLElement {
       const R = this.base * S;
       logo.forEach((s, i) => {
         // One lumpy lobe per flower, and now and then a smaller one on its sunny side.
-        puffs.push({ flower: i, off: new THREE.Vector3(0, 0, 0), r: R * (1.3 + Math.random() * 0.25), sq: [1.15, 0.85, 1], rot: (Math.random() - 0.5) * 0.8 });
-        if (Math.random() < 0.45) puffs.push({ flower: i, off: new THREE.Vector3(-0.4 * R, -0.35 * R, -0.3 * R), r: R * (0.65 + Math.random() * 0.2), sq: [1, 0.9, 1], rot: (Math.random() - 0.5) * 0.8 });
+        puffs.push({ flower: i, off: new THREE.Vector3(0, 0, 0), r: R * (1.3 + Math.random() * 0.25), sq: [1.1, 1, 0.55], rot: Math.random() * TAU });
+        if (Math.random() < 0.45) {
+          const a = Math.random() * TAU;
+          puffs.push({ flower: i, off: new THREE.Vector3(Math.cos(a) * 0.55 * R, Math.sin(a) * 0.55 * R, 0.2 * R), r: R * (0.65 + Math.random() * 0.2), sq: [1, 1, 0.55], rot: Math.random() * TAU });
+        }
       });
       logoPuffs = lobeSet(1, puffs, 11);
     }
@@ -2689,17 +2695,19 @@ class GardenSplash extends HTMLElement {
         const z = eye.z + D * depth;
         const rb = big * 0.5 * unit * depth;
         const first = drift.length;
-        const flip = Math.random() < 0.5 ? -1 : 1;
-        const add = (x, y, dz, r, sq) => drift.push({ p: new THREE.Vector3(x, y, z + dz), r, sq, rot: (Math.random() - 0.5) * 0.25, speed: far ? 0.55 : 1, far });
-        // The main lobe, wide and squat.
-        add(cx + flip * rb * 0.35, cy - rb * 0.1, -rb * 0.1, rb * (1.05 + Math.random() * 0.2), [1.45, 0.72, 1]);
-        // The smaller lobe beside it, a little lower.
-        add(cx - flip * rb * 0.95, cy + rb * 0.05, 0, rb * (0.6 + Math.random() * 0.15), [1.3, 0.8, 1]);
-        // Now and then a third, small, on the other side.
-        if (Math.random() < 0.45 || source) add(cx + flip * rb * 1.45, cy + rb * 0.1, rb * 0.05, rb * (0.45 + Math.random() * 0.15), [1.2, 0.8, 1]);
-        // The flat base the lobes sit on.
-        add(cx, cy + rb * 0.32, rb * 0.15, rb * 1.05, [2.1, 0.32, 0.9]);
-        const h = { cx, cy, z, rx: rb * 1.3, ry: rb * 0.45, speed: far ? 0.55 : 1, first, last: drift.length, source };
+        const add = (x, y, dz, r, sq) => drift.push({ p: new THREE.Vector3(x, y, z + dz), r, sq, rot: Math.random() * TAU, speed: far ? 0.55 : 1, far });
+        // Seen from below, a cloud is spread out flat: a big main lobe, and
+        // smaller ones around it in any direction, all with their bases toward us.
+        const along = Math.random() * TAU;
+        add(cx, cy, 0, rb * (1.05 + Math.random() * 0.2), [1.35, 1.05, 0.5]);
+        const more = 2 + Math.floor(Math.random() * 3) + (source ? 1 : 0);
+        for (let j = 0; j < more; j++) {
+          // Mostly strung out along one direction, the way clouds stretch in the wind.
+          const a = along + (j % 2 ? Math.PI : 0) + (Math.random() - 0.5) * 1.6;
+          const d = rb * (0.9 + Math.random() * 0.6);
+          add(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.8, rb * 0.1, rb * (0.5 + Math.random() * 0.3), [1.2, 1, 0.5]);
+        }
+        const h = { cx, cy, z, rx: rb * 1.4, ry: rb * 1.1, speed: far ? 0.55 : 1, first, last: drift.length, source };
         heaps.push(h);
         // A source cloud's own lobes melt away as it becomes the logo.
         if (source) for (let i = first; i < drift.length; i++) drift[i].heap = h;
@@ -2760,7 +2768,8 @@ class GardenSplash extends HTMLElement {
             u /= m;
             v /= m;
           }
-          s.inside = new THREE.Vector3(u * h.rx * 0.85, v * h.ry * 1.1 - h.ry * 0.4, -h.ry * 0.3);
+          // Tucked up behind the cloud's base until it moves.
+          s.inside = new THREE.Vector3(u * h.rx * 0.8, v * h.ry * 0.8, h.rx * 0.3);
           // The whole cloud goes together; the part that has farthest to go leads a little.
           s.delay = h.delay + (1 - Math.hypot(s.to.x - h.cx, s.to.y - h.cy) / far) * 0.5 + Math.random() * 0.25;
         }
