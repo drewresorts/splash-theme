@@ -52,6 +52,7 @@
   data-weather="{% if section.settings.weather == false %}false{% else %}true{% endif %}"
   data-season="{{ section.settings.season | default: 'auto' }}"
   data-hemisphere="{{ section.settings.hemisphere | default: 'north' }}"
+  data-sky="{{ section.settings.sky | default: 'auto' }}"
   style="--gs-ground: {{ section.settings.soil_color }}; --gs-ink: {{ hud_ink }}; --gs-hero: {{ section.settings.center_color }}; --gs-logo-width: {{ logo_width }}px; --gs-menu-image-width: {{ section.settings.menu_image_width | default: 64 }}px;"
 >
   <canvas class="garden-splash__canvas" data-garden-canvas aria-hidden="true"></canvas>
@@ -1162,6 +1163,20 @@
           "label": "Southern (summer in December)"
         }
       ]
+    },
+    {
+      "type": "select",
+      "id": "sky",
+      "label": "Hidden sky view",
+      "default": "auto",
+      "options": [
+        { "value": "auto", "label": "By the visitor's time of day" },
+        { "value": "day", "label": "Always day (clouds)" },
+        { "value": "sunrise", "label": "Always sunrise" },
+        { "value": "sunset", "label": "Always sunset" },
+        { "value": "night", "label": "Always night (stars)" }
+      ],
+      "info": "What visitors see when they draw a circle around the logo. Choose one to preview it."
     },
     {
       "type": "text",

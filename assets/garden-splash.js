@@ -657,6 +657,7 @@ class GardenSplash extends HTMLElement {
     this.weatherOn = !this.backdrop && d.weather !== 'false';
     this.seasonSetting = d.season || 'auto';
     this.south = d.hemisphere === 'south';
+    this.skySetting = d.sky || 'auto';
     // The splash's graphics style: PS1 (low resolution, wobble, dither) or smooth.
     this.ps1 = this.backdrop || d.style !== 'smooth';
     this.classList.toggle('is-ps1', this.ps1);
@@ -2271,6 +2272,7 @@ class GardenSplash extends HTMLElement {
     if (!this.night) {
       if (!this.logoBox || !this.flowers.length) return;
       if (this.view) this.resetView(true);
+      this.skyTime = this.skyNow();
       this.buildSky();
       this.night = { t: 0, dir: 1, since: 0, nextShoot: 3 + Math.random() * 4 };
       this.classList.add('is-night');
@@ -2317,6 +2319,58 @@ class GardenSplash extends HTMLElement {
     return best || [cx, b.y + b.h + this.base];
   }
 
+  /*
+   * The sky overhead at the visitor's own time of day (or the one chosen in
+   * the theme editor): light 0 at night to 1 by day, and warm, the glow of
+   * sunrise or sunset, peaking as the sun is low.
+   */
+  skyNow() {
+    const fixed = { day: [1, 0], sunrise: [0.6, 1], sunset: [0.55, 1], night: [0, 0] }[this.skySetting];
+    let light;
+    let warm;
+    let evening;
+    if (fixed) {
+      [light, warm] = fixed;
+      evening = this.skySetting === 'sunset';
+    } else {
+      const now = new Date();
+      const h = now.getHours() + now.getMinutes() / 60;
+      light = smooth(range(h, 5.5, 8)) * (1 - smooth(range(h, 17.5, 20.5)));
+      const bump = (c, w) => Math.max(0, 1 - Math.abs(h - c) / w);
+      warm = Math.max(bump(6.8, 1.6), bump(19.2, 1.8));
+      evening = h > 12;
+    }
+    return { light, warm, evening, clouds: light >= 0.4, dark: light < 0.4 };
+  }
+
+  /* A soft, lumpy puff of cloud: a few overlapping round blobs. */
+  cloudTexture() {
+    const n = this.ps1 ? 24 : 64;
+    const c = document.createElement('canvas');
+    c.width = c.height = n;
+    const g = c.getContext('2d');
+    const blob = (x, y, r, a) => {
+      const grad = g.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, `rgba(255,255,255,${a})`);
+      grad.addColorStop(0.6, `rgba(255,255,255,${a * 0.75})`);
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, n, n);
+    };
+    const u = n / 64;
+    blob(32 * u, 36 * u, 26 * u, 0.9);
+    blob(20 * u, 38 * u, 16 * u, 0.8);
+    blob(44 * u, 37 * u, 17 * u, 0.8);
+    blob(30 * u, 24 * u, 15 * u, 0.85);
+    const tex = new THREE.CanvasTexture(c);
+    if (this.ps1) {
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+    }
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
   glowTexture() {
     const c = document.createElement('canvas');
     c.width = c.height = 32;
@@ -2339,7 +2393,12 @@ class GardenSplash extends HTMLElement {
     const group = new THREE.Group();
     const disposables = [];
     const tex = this.glowTexture();
-    disposables.push(tex);
+    const cloudTex = this.cloudTexture();
+    disposables.push(tex, cloudTex);
+    const time = this.skyTime || this.skyNow();
+    // Sunlit clouds by day; at sunrise and sunset they take the sky's glow.
+    const cloudLit = mix(WHITE, time.evening ? [255, 168, 150] : [255, 196, 160], time.warm * 0.75);
+    const cloudShade = mix(mix([196, 210, 232], [150, 120, 170], time.warm * 0.6), [70, 80, 120], 1 - time.light);
     const [gx, gy] = this.clearing();
     // Lying just above the flower heads, looking straight up: nothing but sky in view.
     const top = this.flowers.reduce((m, f) => Math.max(m, f.z + f.r * 0.6), 0);
@@ -2355,13 +2414,16 @@ class GardenSplash extends HTMLElement {
     // Looking up with the view turned over, screen right is +x and screen up is -y.
     const skyPoint = (sx, sy, z) => new THREE.Vector3(eye.x + (sx - lcx) * S, eye.y + (sy - lcy) * S, eye.z + z);
 
-    const points = (n, size) => {
+    const points = (n, size, cloud) => {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
       geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
       // Sizes in screen pixels (three scales them by the pixel ratio).
       // PS1 style: hard square pixels; smooth style: soft round glows.
-      const mat = new THREE.PointsMaterial({ size: this.ps1 ? Math.max(1, Math.round(size * 0.25)) / (this.rs || 1) : size, sizeAttenuation: false, map: this.ps1 ? null : tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      // Clouds are soft puffs either way (chunky ones in PS1 style), laid over the sky rather than added to it.
+      const mat = cloud
+        ? new THREE.PointsMaterial({ size: size / (this.rs || 1), sizeAttenuation: false, map: cloudTex, vertexColors: true, transparent: true, depthWrite: false, fog: false })
+        : new THREE.PointsMaterial({ size: this.ps1 ? Math.max(1, Math.round(size * 0.25)) / (this.rs || 1) : size, sizeAttenuation: false, map: this.ps1 ? null : tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
       const pts = new THREE.Points(geo, mat);
       pts.frustumCulled = false;
       pts.renderOrder = -1;
@@ -2370,14 +2432,48 @@ class GardenSplash extends HTMLElement {
       return pts;
     };
 
-    // One white star for each flower, starting scattered across the sky.
+    // One white star for each flower (by day, a puff of cloud), starting scattered across the sky.
     const logo = this.flowers.map((f, i) => {
       const to = skyPoint(f.dest[0], f.dest[1], D);
       const from = new THREE.Vector3(eye.x + (Math.random() - 0.5) * viewW * 1.1, eye.y + (Math.random() - 0.5) * viewH * 1.1, eye.z + D);
-      const col = WHITE;
+      // Puffs are lit from one side and shaded on the other, for some body.
+      const col = time.clouds ? mix(cloudShade, cloudLit, 0.55 + 0.45 * Math.random()) : WHITE;
       return { from, to, col, delay: 0.3 + ((f.dest[0] - b.x) / b.w) * 1.2 + Math.random() * 0.4, tw: 1.5 + Math.random() * 3, ph: Math.random() * TAU, i };
     });
-    const logoPts = points(logo.length, 8);
+    // A puff a little wider than its flower, so neighbors run together into one cloud.
+    const pxPerUnit = (S * this.w) / viewW;
+    const logoPts = time.clouds ? points(logo.length, clamp(this.base * 2.4 * pxPerUnit, 10, 120), true) : points(logo.length, 8);
+
+    // By day, clouds drifting across the rest of the sky.
+    const drift = [];
+    if (time.light > 0.2) {
+      for (let k = 0; k < 9; k++) {
+        const cx = eye.x + (Math.random() - 0.5) * viewW * 1.6;
+        const cy = eye.y + (Math.random() - 0.5) * viewH * 1.6;
+        // Away from the logo in the middle.
+        if (Math.abs(cx - eye.x) < viewW * 0.36 && Math.abs(cy - eye.y) < viewH * 0.3) continue;
+        const n = 6 + Math.floor(Math.random() * 6);
+        const spread = viewW * (0.04 + Math.random() * 0.05);
+        for (let j = 0; j < n; j++) {
+          drift.push({
+            p: new THREE.Vector3(cx + (Math.random() - 0.5) * spread * 2.4, cy + (Math.random() - 0.5) * spread * 0.8, eye.z + D * 1.2),
+            col: mix(cloudShade, cloudLit, 0.5 + 0.5 * Math.random()),
+          });
+        }
+      }
+    }
+    const driftPts = drift.length ? points(drift.length, clamp(this.w * 0.07, 24, 110), true) : null;
+    if (driftPts) {
+      const dp = driftPts.geometry.attributes.position;
+      const dc = driftPts.geometry.attributes.color;
+      drift.forEach((c, i) => {
+        dp.setXYZ(i, c.p.x, c.p.y, c.p.z);
+        const lin = toColor(c.col);
+        dc.setXYZ(i, lin.r, lin.g, lin.b);
+      });
+      dp.needsUpdate = true;
+      dc.needsUpdate = true;
+    }
 
     // The far sky: many faint stars, and a few brighter ones grouped in constellations.
     const field = [];
@@ -2411,13 +2507,25 @@ class GardenSplash extends HTMLElement {
     const sc = [];
     const sp = skyGeo.attributes.position;
     const blobs = [this.heroAccent, this.foliage, this.heroColor].map((c) => [c, Math.random() * TAU, 0.2 + Math.random() * 0.25]);
+    // Low sun: warm toward one side of the sky, the side the sun is on.
+    const sunA = time.evening ? Math.PI * 0.85 : Math.PI * 0.15;
     for (let i = 0; i < sp.count; i++) {
       const u = sp.getX(i) / (viewW * 1.2);
       const v = sp.getY(i) / (viewH * 1.2);
-      let c = mix([5, 7, 28], [16, 20, 66], Math.max(0, 1 - Math.hypot(u, v) * 0.9));
+      const mid = Math.max(0, 1 - Math.hypot(u, v) * 0.9);
+      let c = mix([5, 7, 28], [16, 20, 66], mid);
       for (const [tint, a, r] of blobs) {
         const d = Math.hypot(u - Math.cos(a) * 0.45, v - Math.sin(a) * 0.4);
         c = mix(c, mix(tint, [10, 12, 40], 0.7), Math.max(0, 1 - d / r) * 0.6);
+      }
+      // Day: clear blue, paler toward the middle of the view.
+      const day = mix([62, 128, 206], [150, 202, 242], mid);
+      c = mix(c, day, time.light);
+      // Sunrise and sunset: gold low on the sun's side, through rose, to violet away from it.
+      if (time.warm > 0) {
+        const toward = 0.5 + 0.5 * (u * Math.cos(sunA) + v * Math.sin(sunA));
+        const glow = toward > 0.6 ? mix([255, 120, 140], [255, 196, 120], (toward - 0.6) / 0.4) : mix([84, 64, 140], [255, 120, 140], toward / 0.6);
+        c = mix(c, glow, time.warm * 0.85);
       }
       // Vertex colors are linear, like everything three.js shades.
       const lin = toColor(c);
@@ -2445,7 +2553,7 @@ class GardenSplash extends HTMLElement {
 
     group.visible = false;
     this.scene.add(group);
-    this.sky = { group, disposables, eye, fov, D, viewW, viewH, logo, logoPts, field, fieldPts, glows, shoot, gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D) };
+    this.sky = { group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, field, fieldPts, drift, driftPts, glows, shoot, gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D) };
   }
 
   /* Turning over, lying there, and turning back. */
@@ -2472,21 +2580,29 @@ class GardenSplash extends HTMLElement {
     c.fov = lerp(FOV, sky.fov, down);
     c.updateProjectionMatrix();
 
-    // Night falls: the sky darkens behind everything, the light turns to moonlight.
+    // The sky comes in behind everything, and the light turns to the sky's:
+    // moonlight at night, sun and blue sky by day, low gold at sunrise and sunset.
     const dark = smooth(range(p, 0.1, 0.8));
+    const time = sky.time;
     const NIGHT = [7, 10, 38];
-    this.renderer.setClearColor(toColor(NIGHT), dark);
+    const air = mix(mix(NIGHT, [96, 156, 220], time.light), time.evening ? [214, 120, 140] : [236, 160, 140], time.warm * 0.7);
+    this.renderer.setClearColor(toColor(air), dark);
     const day = this.dayLight();
-    this.keyLight.intensity = lerp(day.key, 0.7, dark);
-    this.keyLight.color.copy(toColor(mix(day.keyColor, POWDER, dark)));
-    this.ambient.intensity = lerp(day.amb, 0.45, dark);
-    this.ambient.color.copy(toColor(mix(day.ambColor, OCEAN, dark * 0.7)));
-    this.scene.fog.color.copy(this.fogColor).lerp(toColor(NIGHT), dark);
+    const skyKey = lerp(0.7, day.key * 0.95, time.light);
+    const skyKeyColor = mix(mix(POWDER, day.keyColor, time.light), [255, 186, 140], time.warm * 0.6);
+    const skyAmb = lerp(0.45, day.amb, time.light);
+    const skyAmbColor = mix(mix(OCEAN, day.ambColor, time.light), mix(day.ambColor, [255, 190, 170], 0.4), time.warm * 0.5);
+    this.keyLight.intensity = lerp(day.key, skyKey, dark);
+    this.keyLight.color.copy(toColor(mix(day.keyColor, skyKeyColor, dark)));
+    this.ambient.intensity = lerp(day.amb, skyAmb, dark);
+    this.ambient.color.copy(toColor(mix(day.ambColor, skyAmbColor, dark * 0.7)));
+    this.scene.fog.color.copy(this.fogColor).lerp(toColor(air), dark);
     // The haze that softens the bed from above would swallow it as the camera turns: push it away.
     const haze = smooth(range(p, 0, 0.3));
     this.scene.fog.near = this.camDist + 30 + haze * 5000;
     this.scene.fog.far = this.camDist + 320 + haze * 9000;
-    document.documentElement.classList.toggle('garden-night', dark > 0.5);
+    // Only a dark sky turns the page's logo light; a day sky leaves it as it is.
+    document.documentElement.classList.toggle('garden-night', dark > 0.5 && time.dark);
 
     // Stars: lying down, they gather into the logo; twinkling all the while.
     if (n.dir > 0 && p >= 1) n.since += dt;
@@ -2494,27 +2610,52 @@ class GardenSplash extends HTMLElement {
     const show = smooth(range(p, 0.45, 1));
     const lp = sky.logoPts.geometry.attributes.position;
     const lc = sky.logoPts.geometry.attributes.color;
+    const unit = (sky.viewW / this.w) * 2;
     for (const s of sky.logo) {
       const k = this.reduced ? 1 : smooth(range(since - s.delay, 0, 2.8));
-      const x = lerp(s.from.x, s.to.x, k);
-      const y = lerp(s.from.y, s.to.y, k);
+      let x = lerp(s.from.x, s.to.x, k);
+      let y = lerp(s.from.y, s.to.y, k);
       const lift = Math.sin(Math.PI * k) * 120;
-      lp.setXYZ(s.i, x, y, s.to.z - lift);
-      const tw = (this.reduced ? 1 : 0.85 + 0.25 * Math.sin(t * s.tw + s.ph)) * show * 1.15;
-      lc.setXYZ(s.i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
+      if (time.clouds) {
+        // Formed, the puffs keep billowing a little.
+        if (!this.reduced) {
+          x += Math.sin(t * 0.35 + s.ph) * unit * k;
+          y += Math.cos(t * 0.27 + s.ph * 1.3) * unit * 0.6 * k;
+        }
+        lp.setXYZ(s.i, x, y, s.to.z - lift);
+        const lin = toColor(s.col);
+        lc.setXYZ(s.i, lin.r, lin.g, lin.b);
+      } else {
+        lp.setXYZ(s.i, x, y, s.to.z - lift);
+        const tw = (this.reduced ? 1 : 0.85 + 0.25 * Math.sin(t * s.tw + s.ph)) * show * 1.15;
+        lc.setXYZ(s.i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
+      }
     }
     lp.needsUpdate = true;
     lc.needsUpdate = true;
+    if (time.clouds) sky.logoPts.material.opacity = show;
+    // Stars fade out as the sky lightens; a few linger at dawn and dusk.
+    const stars = clamp(1 - time.light * 1.6, 0, 1);
     const fc = sky.fieldPts.geometry.attributes.color;
     sky.field.forEach((s, i) => {
-      const tw = (this.reduced ? 0.8 : 0.5 + 0.5 * Math.sin(t * s.tw + s.ph) ** 2) * show * (s.bright ? 1.3 : 1);
+      const tw = (this.reduced ? 0.8 : 0.5 + 0.5 * Math.sin(t * s.tw + s.ph) ** 2) * show * stars * (s.bright ? 1.3 : 1);
       fc.setXYZ(i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
     });
     fc.needsUpdate = true;
+    // Clouds drift slowly across, coming round again on the other side.
+    if (sky.driftPts) {
+      const dp = sky.driftPts.geometry.attributes.position;
+      const span = sky.viewW * 1.8;
+      const left = sky.eye.x - span / 2;
+      const move = this.reduced ? 0 : t * sky.viewW * 0.006;
+      sky.drift.forEach((c, i) => dp.setX(i, left + ((((c.p.x - left + move) % span) + span) % span)));
+      dp.needsUpdate = true;
+      sky.driftPts.material.opacity = show * clamp(time.light * 1.4, 0, 1);
+    }
     sky.glows.forEach((g) => (g.material.opacity = dark));
 
     // Now and then a shooting star, like the bees by day.
-    if (!this.reduced && p >= 1) {
+    if (!this.reduced && p >= 1 && stars > 0.5) {
       n.nextShoot -= dt;
       if (n.nextShoot <= 0 && !n.shot) {
         const a = Math.random() * TAU;
