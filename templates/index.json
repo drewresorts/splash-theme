@@ -39,6 +39,7 @@
         "weather": true,
         "season": "auto",
         "hemisphere": "north",
+        "sky": "day",
         "hint_text": ""
       }
     }
