@@ -3736,58 +3736,139 @@ class GardenSplash extends HTMLElement {
     this.ambient.color.copy(toColor(day.ambColor));
   }
 
-  /* Particles for every kind of weather, made once; each frame only as many are drawn as the weather calls for. */
+  /*
+   * The weather, made once; each frame only as much is drawn as the season
+   * calls for. Snow, rain, leaves and petals come down from above the camera
+   * toward the ground (seen from straight above, they drift in from the edges
+   * and close in as they fall) and land: on the soil, or on a flower head.
+   * What lands stays and builds up: a blanket of snow, puddles and beads of
+   * water, drifts of leaves and petals. Out of season it melts, dries or
+   * wilts away again. Pollen still rises off the flowers.
+   */
   buildWeather() {
     const group = new THREE.Group();
     const disposables = [];
-    const pts = (n, color, px) => {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
-      geo.setDrawRange(0, 0);
-      const mat = new THREE.PointsMaterial({ color: toColor(color), size: px / Math.max(0.5, this.rs || 1), sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false, fog: false });
-      const o = new THREE.Points(geo, mat);
+    const add = (o, ...extra) => {
       o.frustumCulled = false;
       group.add(o);
-      disposables.push(geo, mat);
+      disposables.push(...extra);
       return o;
     };
-    const flakes = (n, geo, mat, colors) => {
-      const o = new THREE.InstancedMesh(geo, mat, n);
+    const instanced = (n, geo, mat, colors) => {
+      const o = add(new THREE.InstancedMesh(geo, mat, n));
       o.count = 0;
-      o.frustumCulled = false;
-      const c = new THREE.Color();
-      for (let i = 0; i < n; i++) o.setColorAt(i, c.copy(toColor(pick(Math.random, colors))));
-      group.add(o);
+      o.colors = colors;
+      if (colors) {
+        const c = new THREE.Color();
+        for (let i = 0; i < n; i++) o.setColorAt(i, c.copy(toColor(pick(Math.random, colors))));
+      }
       disposables.push(o);
       return o;
     };
+    const flake = new THREE.IcosahedronGeometry(1, 0);
+    const ring = new THREE.RingGeometry(0.72, 1, 10);
+    const disc = new THREE.CircleGeometry(1, 10);
+    disposables.push(flake, ring, disc);
+    const snowColor = [214, 224, 240];
+    const snowMat = new THREE.MeshBasicMaterial({ color: toColor(snowColor), fog: false });
+    // Settled snow a shade bluer than the page when the page is light, so the blanket still reads.
+    const pileMat = this.snapMaterial(new THREE.MeshLambertMaterial({ color: toColor(this.isLight ? [204, 216, 236] : [236, 241, 250]), flatShading: true }));
+    const water = mix(POWDER, OCEAN, 0.25);
+    // Puddles: darker than light ground, a sheen on dark ground.
+    const puddleMat = new THREE.MeshBasicMaterial({ color: toColor(this.isLight ? tone(mix(this.soil, OCEAN, 0.45), -0.25) : mix(this.soil, POWDER, 0.5)), transparent: true, opacity: 0.32, depthWrite: false });
+    const splashMat = new THREE.MeshBasicMaterial({ color: toColor(water), transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide });
+    const beadMat = this.makeMaterial({ color: toColor(tone(water, 0.3)), shininess: 60, specular: 0x888888 });
+    disposables.push(snowMat, pileMat, puddleMat, splashMat, beadMat);
+    const leafColors = [[166, 39, 73], [201, 104, 52], [222, 150, 60], [140, 70, 40], [240, 78, 98]];
+    const petalColors = [[255, 255, 255], [255, 210, 220], [240, 78, 98], [185, 229, 251]];
+
+    const pollenGeo = new THREE.BufferGeometry();
+    pollenGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(140 * 3), 3));
+    pollenGeo.setDrawRange(0, 0);
+    const pollenMat = new THREE.PointsMaterial({ color: toColor([242, 178, 70]), size: 2 / Math.max(0.5, this.rs || 1), sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false, fog: false });
     const rainGeo = new THREE.BufferGeometry();
-    rainGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(180 * 6), 3));
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(260 * 6), 3));
     rainGeo.setDrawRange(0, 0);
-    const rainMat = new THREE.LineBasicMaterial({ color: toColor(mix(POWDER, OCEAN, 0.25)), transparent: true, opacity: 0.6, depthWrite: false, fog: false });
-    const rain = new THREE.LineSegments(rainGeo, rainMat);
-    rain.frustumCulled = false;
-    group.add(rain);
-    disposables.push(rainGeo, rainMat);
+    const rainMat = new THREE.LineBasicMaterial({ color: toColor(water), transparent: true, opacity: 0.55, depthWrite: false, fog: false });
+
+    // Each kind in the air, and what it leaves where it lands (with how much of it there can be).
     const kinds = {
-      // Pale blue-grey, so it shows against the white page as well as over the flowers.
-      snow: { n: 380, o: pts(380, [196, 208, 230], 3) },
-      pollen: { n: 140, o: pts(140, [242, 178, 70], 2) },
-      rain: { n: 180, o: rain },
-      leaves: { n: 60, o: flakes(60, this.geometries.leaf, this.materials.foliage, [[166, 39, 73], [201, 104, 52], [222, 150, 60], [140, 70, 40], [240, 78, 98]]) },
-      petals: { n: 50, o: flakes(50, this.geometries.round, this.materials.petal, [[255, 255, 255], [255, 210, 220], [240, 78, 98], [185, 229, 251]]) },
+      snow: { n: 420, o: instanced(420, flake, snowMat), pile: 'snow' },
+      rain: { n: 260, o: add(new THREE.LineSegments(rainGeo, rainMat), rainGeo, rainMat) },
+      leaves: { n: 70, o: instanced(70, this.geometries.leaf, this.materials.foliage, leafColors), pile: 'leaves' },
+      petals: { n: 60, o: instanced(60, this.geometries.round, this.materials.petal, petalColors), pile: 'petals' },
+      pollen: { n: 140, o: add(new THREE.Points(pollenGeo, pollenMat), pollenGeo, pollenMat) },
     };
-    // Each particle: position, speed, and a phase for its sway. y below -1e5 means not in the air.
-    for (const k of Object.values(kinds)) k.p = Array.from({ length: k.n }, () => ({ x: 0, y: -1e6, z: 0, s: Math.random(), ph: Math.random() * TAU, spin: Math.random() * TAU }));
+    for (const k of Object.values(kinds)) k.p = Array.from({ length: k.n }, () => ({ x: 0, y: 0, z: -1e6, s: Math.random(), ph: Math.random() * TAU, spin: Math.random() * TAU, live: false }));
+    const piles = {
+      snow: { o: instanced(1500, flake, pileMat), items: [] },
+      leaves: { o: instanced(480, this.geometries.leaf, this.materials.foliage, leafColors), items: [] },
+      petals: { o: instanced(300, this.geometries.round, this.materials.petal, petalColors), items: [] },
+      puddles: { o: instanced(40, disc, puddleMat), items: [] },
+      splashes: { o: instanced(90, ring, splashMat), items: [] },
+      beads: { o: instanced(220, flake, beadMat), items: [] },
+    };
+    for (const p of Object.values(piles)) p.cap = p.o.instanceMatrix.count;
+    piles.puddles.o.renderOrder = -1;
     group.renderOrder = 5;
     this.scene.add(group);
-    this.weather = { group, disposables, kinds, wet: 0, wind: 0, shower: Math.random() * TAU, flurry: Math.random() * TAU, dummy: new THREE.Object3D() };
+    this.weather = { group, disposables, kinds, piles, wet: 0, wind: 0, shower: Math.random() * TAU, flurry: Math.random() * TAU, dummy: new THREE.Object3D(), v: new THREE.Vector3() };
   }
 
-  /* Where a particle at height z can be and still be on screen: the view narrows toward the camera. */
+  /* Where a point at height z can be and still be on screen: the view narrows toward the camera. */
   weatherBox(z) {
     const k = (this.camDist - z) / this.camDist;
     return { x0: this.w / 2 - (this.w / 2) * k, x1: this.w / 2 + (this.w / 2) * k, y0: this.h / 2 - (this.h / 2) * k, y1: this.h / 2 + (this.h / 2) * k };
+  }
+
+  /* How hard the passing gust pushes at screen x (signed by its direction), 0 with none. */
+  gustPush(x) {
+    const g = this.gust;
+    if (!g || this.gustFront === undefined) return 0;
+    const behind = (this.gustFront - x) * g.dir;
+    const k = behind < 0 ? Math.exp(-((behind / (g.width * 0.35)) ** 2)) : Math.exp(-behind / g.width) * (1 + 0.25 * Math.sin(behind * 0.05));
+    return g.dir * k * g.strength;
+  }
+
+  /* The open flower whose head is under (x, y), the highest if heads overlap, or null. */
+  headUnder(x, y) {
+    let best = null;
+    for (const f of this.flowers) {
+      if (f.p < STAGE.bud[1] || f.g < 0.3) continue;
+      const r = f.r * f.g * 0.8;
+      const dx = x - f.x;
+      const dy = y - (this.h - f.y);
+      if (dx * dx + dy * dy < r * r && (!best || f.z > best.z)) best = f;
+    }
+    return best;
+  }
+
+  /* Puts something down where a particle landed, on the pile of its kind; a full pile gives up its oldest. */
+  layDown(pile, item) {
+    const W = this.weather;
+    const P = W.piles[pile];
+    if (P.items.length >= P.cap) this.pickUp(P, 0);
+    item.i = P.items.length;
+    item.c = P.o.colors ? pick(Math.random, P.o.colors) : null;
+    if (item.f) item.f.wl = (item.f.wl || 0) + 1;
+    P.items.push(item);
+    if (item.c) {
+      P.o.setColorAt(item.i, toColor(item.c));
+      P.o.instanceColor.needsUpdate = true;
+    }
+    return item;
+  }
+
+  pickUp(P, i) {
+    const items = P.items;
+    const gone = items[i];
+    if (gone.f) gone.f.wl = Math.max(0, (gone.f.wl || 0) - 1);
+    // Keep the oldest first: shift down rather than swap, so the pile gives up its oldest next time too.
+    items.splice(i, 1);
+    if (P.o.colors) {
+      for (let k = i; k < items.length; k++) P.o.setColorAt(k, toColor(items[k].c));
+      P.o.instanceColor.needsUpdate = true;
+    }
   }
 
   updateWeather(t, dt) {
@@ -3804,6 +3885,19 @@ class GardenSplash extends HTMLElement {
     W.group.visible = !quiet;
     if (quiet) return;
     const w = this.seasonNow.weights;
+
+    // A new layout, or new flowers: what had settled no longer lines up, so it is cleared.
+    const layout = this.w + 'x' + this.h;
+    if (W.layout !== layout || W.flowers !== this.flowers) {
+      if (W.layout !== layout) for (const P of Object.values(W.piles)) P.items.length = 0;
+      else for (const P of Object.values(W.piles)) P.items = P.items.filter((it) => !it.f);
+      for (const P of Object.values(W.piles)) if (P.o.colors) P.items.forEach((it, i) => P.o.setColorAt(i, toColor(it.c)));
+      W.layout = layout;
+      W.flowers = this.flowers;
+      // Leaves and petals sized to the flowers they fall among.
+      const radii = this.flowers.map((f) => f.r).sort((a, b) => a - b);
+      W.r = radii.length ? radii[radii.length >> 1] : 20;
+    }
 
     // How hard it is coming down right now: snow in flurries, rain in passing showers.
     const flurry = 0.55 + 0.45 * Math.sin(t * 0.05 + W.flurry);
@@ -3824,42 +3918,62 @@ class GardenSplash extends HTMLElement {
     const gust = this.gust ? this.gust.dir * 140 * this.gust.strength : 0;
     W.wind = lerp(W.wind, (this.seasonNow.name === 'autumn' ? 25 : 10) + gust, 1 - Math.exp(-dt * 2));
     const d = W.dummy;
+    const camZ = this.camera.position.z;
+    // Things come into view from well above the flowers, below the camera.
+    const top = FLOOR_Z + (camZ - FLOOR_Z) * 0.62;
+    const ground = this.weatherBox(FLOOR_Z);
+    let heads = FLOOR_Z;
+    for (const f of this.flowers) heads = Math.max(heads, f.z + f.lift);
+    heads += 8;
+    // On a flower head there is room for only so much before the rest slides off onto the soil.
+    const room = { snow: 16, rain: 5, leaves: 2, petals: 3 };
 
     for (const [name, kind] of Object.entries(W.kinds)) {
       const want = Math.round(kind.n * clamp(level[name], 0, 1));
       let shown = 0;
       for (let i = 0; i < kind.n; i++) {
         const q = kind.p[i];
-        const live = q.y > -1e5;
-        if (!live || q.out) {
-          // Past the number wanted, a particle that lands stays down.
-          if (i >= want) {
-            q.y = -1e6;
-            q.out = false;
-            continue;
+        const rising = name === 'pollen';
+        if (!q.live) {
+          if (i >= want) continue;
+          q.live = true;
+          q.checked = false;
+          q.on = null;
+          if (rising) {
+            // Pollen: anywhere in view at first, after that up off the flowers.
+            q.z = lerp(30, this.camDist * 0.45, Math.random());
+            const b = this.weatherBox(q.z);
+            q.x = lerp(b.x0 - 40, b.x1 + 40, Math.random());
+            q.y = q.first ? b.y0 - 10 : lerp(b.y0, b.y1, Math.random());
+          } else {
+            // Anywhere from the top down when the weather first starts, from the top after that.
+            q.z = q.first ? top : lerp(heads, top, Math.random());
+            // Aim for anywhere on the ground in view, starting upwind of it.
+            const fall = (q.z - FLOOR_Z) / (name === 'rain' ? 1200 : name === 'snow' ? 80 : 75);
+            const drift = W.wind * (name === 'rain' ? 1.5 : name === 'snow' ? 0.6 : 1.4) * fall;
+            q.x = lerp(ground.x0 - 30, ground.x1 + 30, Math.random()) - drift;
+            q.y = lerp(ground.y0 - 30, ground.y1 + 30, Math.random());
           }
-          // (Re)spawn at a random height: at the top of the view (the bottom for rising
-          // pollen), or anywhere in it when the weather first starts.
-          q.z = lerp(30, this.camDist * 0.45, Math.random());
-          const b = this.weatherBox(q.z);
-          q.x = lerp(b.x0 - 40, b.x1 + 40, Math.random());
-          if (name === 'pollen') q.y = live ? b.y0 - 10 : lerp(b.y0, b.y1, Math.random());
-          else q.y = live ? b.y1 + 20 : lerp(b.y0, b.y1 + 20, Math.random());
-          q.out = false;
+          q.first = true;
         }
-        // Each kind falls (or rises) in its own way. World y is up the screen.
+        // Each kind falls (or rises) in its own way. World y is up the screen, z up toward the camera.
         const sway = Math.sin(t * (1.1 + q.s) + q.ph);
+        const sway2 = Math.cos(t * (0.9 + q.s) + q.ph * 1.7);
         let vx = 0;
         let vy = 0;
+        let vz = 0;
         if (name === 'snow') {
-          vy = -(25 + 35 * q.s);
+          vz = -(55 + 50 * q.s);
           vx = W.wind * 0.6 + sway * 14;
+          vy = sway2 * 10;
         } else if (name === 'rain') {
-          vy = -(700 + 250 * q.s);
-          vx = W.wind * 1.5 - 120;
+          vz = -(1050 + 300 * q.s);
+          vx = W.wind * 1.5;
         } else if (name === 'leaves' || name === 'petals') {
-          vy = -((name === 'leaves' ? 50 : 30) + 35 * q.s);
+          // Falling leaf: slips sideways and checks its fall as it swings.
+          vz = -((name === 'leaves' ? 60 : 40) + 30 * q.s) * (0.75 + 0.45 * Math.abs(sway));
           vx = W.wind * 1.4 + sway * 38;
+          vy = sway2 * 24;
           q.spin += dt * (1.5 + q.s * 2);
         } else {
           vy = 8 + 10 * q.s;
@@ -3867,18 +3981,46 @@ class GardenSplash extends HTMLElement {
         }
         q.x += vx * dt;
         q.y += vy * dt;
-        const b = this.weatherBox(q.z);
-        if (q.y < b.y0 - 40 || q.y > b.y1 + 40 || q.x < b.x0 - 120 || q.x > b.x1 + 120) q.out = true;
+        q.z += vz * dt;
 
-        if (name === 'snow' || name === 'pollen') {
-          kind.o.geometry.attributes.position.setXYZ(shown, q.x, q.y, q.z);
-        } else if (name === 'rain') {
-          // A short streak along its fall.
+        if (rising) {
+          const b = this.weatherBox(q.z);
+          if (q.y > b.y1 + 40 || q.x < b.x0 - 120 || q.x > b.x1 + 120) q.live = false;
+          else kind.o.geometry.attributes.position.setXYZ(shown++, q.x, q.y, q.z);
+          continue;
+        }
+
+        // Once down among the flowers: is there a head under it with room left?
+        if (!q.checked && q.z < heads) {
+          q.checked = true;
+          const f = this.headUnder(q.x, q.y);
+          q.on = f && (f.wl || 0) < room[name] * (name === 'snow' ? f.r / 30 : 1) ? f : null;
+        }
+        const landZ = q.on ? q.on.z + q.on.lift + 3 : FLOOR_Z + 0.5;
+        if (q.z <= landZ) {
+          this.land(name, q, t);
+          q.live = false;
+          continue;
+        }
+        if (q.x < ground.x0 - 400 || q.x > ground.x1 + 400) {
+          q.live = false;
+          continue;
+        }
+
+        if (name === 'rain') {
+          // A streak along its fall: seen from above, longest close to the camera.
           const pos = kind.o.geometry.attributes.position;
           pos.setXYZ(shown * 2, q.x, q.y, q.z);
-          pos.setXYZ(shown * 2 + 1, q.x - vx * 0.035, q.y - vy * 0.035, q.z);
+          pos.setXYZ(shown * 2 + 1, q.x - vx * 0.04, q.y, q.z + 60);
+        } else if (name === 'snow') {
+          const size = 1.6 + q.s * 1.4;
+          d.position.set(q.x, q.y, q.z);
+          d.rotation.set(q.ph, q.spin, 0);
+          d.scale.setScalar(size);
+          d.updateMatrix();
+          kind.o.setMatrixAt(shown, d.matrix);
         } else {
-          const size = this.base * (name === 'leaves' ? 0.9 : 0.55);
+          const size = W.r * (name === 'leaves' ? 2.2 : 1.1);
           d.position.set(q.x, q.y, q.z);
           d.rotation.set(Math.sin(q.spin) * 1.2, q.spin * 0.7, q.spin + q.ph);
           d.scale.set(size, size * 0.6, size * 0.6);
@@ -3894,6 +4036,133 @@ class GardenSplash extends HTMLElement {
         kind.o.geometry.setDrawRange(0, name === 'rain' ? shown * 2 : shown);
         kind.o.geometry.attributes.position.needsUpdate = true;
       }
+    }
+    this.updatePiles(t, dt, w, level);
+  }
+
+  /* A particle has come down: it joins what has built up there. */
+  land(name, q, t) {
+    const W = this.weather;
+    const f = q.on;
+    const at = f ? { f, dx: q.x - f.x, dy: q.y - (this.h - f.y), z: 0 } : { f: null, x: q.x, y: q.y, z: FLOOR_Z };
+    if (name === 'snow') {
+      const P = W.piles.snow;
+      // On a full pile, the flake thickens the snow already there instead.
+      if (P.items.length >= P.cap) {
+        const it = P.items[(Math.random() * P.items.length) | 0];
+        it.max = Math.min(it.max + 0.4, f ? 6 : 15);
+        return;
+      }
+      this.layDown('snow', Object.assign(at, { s: 1.4, max: f ? 2.5 + Math.random() * 2.5 : 5 + Math.random() * 6, yaw: Math.random() * TAU, ph: Math.random() }));
+    } else if (name === 'rain') {
+      this.layDown('splashes', Object.assign({}, at, { t0: t, yaw: Math.random() * TAU }));
+      if (f) {
+        this.layDown('beads', Object.assign(at, { s: 0.9 + Math.random() * 1.1, yaw: Math.random() * TAU, ph: Math.random() }));
+        return;
+      }
+      // Into a puddle, which spreads; now and then the start of a new one.
+      const P = W.piles.puddles;
+      const hit = P.items.find((p) => (p.x - q.x) ** 2 + (p.y - q.y) ** 2 < (p.s + 12) ** 2);
+      if (hit) hit.max = Math.min(hit.max + 0.25, hit.cap);
+      else if (Math.random() < 0.04) this.layDown('puddles', Object.assign(at, { s: 2, max: 6, cap: 26 + Math.random() * 46, sq: 0.55 + Math.random() * 0.45, yaw: Math.random() * TAU, ph: Math.random() }));
+    } else {
+      // Lying flat, a little tipped, settling onto whatever is under it.
+      const P = W.piles[name];
+      const stack = f ? 1.5 + (f.wl || 0) * 0.8 : 0.6 + (P.items.length % 7) * 0.35;
+      this.layDown(name, Object.assign(at, { z: (at.z || 0) + stack, yaw: q.spin + q.ph, tx: (Math.random() - 0.5) * 0.5, ty: (Math.random() - 0.5) * 0.5, s: 1, ph: Math.random(), vx: 0 }));
+    }
+  }
+
+  /* Everything that has landed: built up while its weather lasts, melting, drying or wilting away after. */
+  updatePiles(t, dt, w, level) {
+    const W = this.weather;
+    const d = W.dummy;
+    const v = W.v;
+    const at = (it) => {
+      if (!it.f) return v.set(it.x, it.y, it.z);
+      const f = it.f;
+      v.set(f.x + it.dx, this.h - f.y + it.dy, f.z + f.lift + 3 + it.z);
+      if (f.bent) v.applyMatrix4(f.bent);
+      return v;
+    };
+    const draw = (P, fn) => {
+      // Near full, the oldest give way gradually rather than vanishing when a new one lands.
+      const over = P.items.length - Math.floor(P.cap * 0.85);
+      for (let k = 0; k < over; k++) P.items[k].old = true;
+      let i = 0;
+      while (i < P.items.length) {
+        const it = P.items[i];
+        if (it.old && it.s !== undefined) it.s -= dt * (P === W.piles.snow ? 1.5 : 0.4);
+        if (fn(it) === false) {
+          this.pickUp(P, i);
+          continue;
+        }
+        d.updateMatrix();
+        P.o.setMatrixAt(i, d.matrix);
+        i++;
+      }
+      P.o.count = P.items.length;
+      P.o.instanceMatrix.needsUpdate = true;
+    };
+
+    // Snow: each clump spreads while it snows; out of season it melts away, unevenly.
+    const snowing = level.snow > 0.02;
+    const melt = w.snow < 0.03;
+    draw(W.piles.snow, (it) => {
+      if (snowing && !it.old) it.s = Math.min(it.max, it.s + dt * (0.25 + level.snow * 0.6));
+      if (melt) it.s -= dt * (0.05 + it.ph * 0.12);
+      if (it.s < 0.3) return false;
+      d.position.copy(at(it));
+      d.rotation.set(0, 0, it.yaw);
+      d.scale.set(it.s, it.s * 0.85, it.s * 0.3);
+    });
+
+    // Rain: rings where drops hit, puddles that spread while it rains and dry up after, beads on the petals.
+    draw(W.piles.splashes, (it) => {
+      const age = t - it.t0;
+      if (age > 0.32) return false;
+      const k = age / 0.32;
+      const s = 1.5 + k * 6;
+      d.position.copy(at(it));
+      d.position.z += 0.4;
+      d.rotation.set(0, 0, it.yaw);
+      d.scale.set(s * (1 - k * 0.5), s * (1 - k * 0.5), 1);
+    });
+    const raining = level.rain > 0.05;
+    draw(W.piles.puddles, (it) => {
+      it.s = raining && !it.old ? Math.min(it.max, it.s + dt * 6) : it.s - dt * (0.6 + it.ph * 0.8);
+      if (it.s < 0.5) return false;
+      d.position.set(it.x, it.y, FLOOR_Z + 0.2);
+      d.rotation.set(0, 0, it.yaw);
+      d.scale.set(it.s, it.s * it.sq, 1);
+    });
+    draw(W.piles.beads, (it) => {
+      if (!raining) it.s -= dt * (0.04 + it.ph * 0.06);
+      if (it.s < 0.2) return false;
+      d.position.copy(at(it));
+      d.rotation.set(it.ph * 3, 0, it.yaw);
+      d.scale.setScalar(it.s);
+    });
+
+    // Leaves and petals: lie where they fell; a gust skitters the ones on the ground along; out of season they wither.
+    for (const name of ['leaves', 'petals']) {
+      const size = W.r * (name === 'leaves' ? 2.2 : 1.1);
+      const wilt = w[name] < 0.03;
+      draw(W.piles[name], (it) => {
+        if (wilt) it.s -= dt * (0.01 + it.ph * 0.03);
+        if (it.s < 0.05) return false;
+        if (!it.f) {
+          const push = this.gustPush(it.x);
+          if (Math.abs(push) * (0.4 + it.ph) > 0.35) it.vx = lerp(it.vx, push * (name === 'leaves' ? 90 : 120), 1 - Math.exp(-dt * 6));
+          it.vx *= Math.exp(-dt * 2.5);
+          it.x += it.vx * dt;
+          it.yaw += it.vx * dt * 0.02;
+        }
+        d.position.copy(at(it));
+        d.rotation.set(it.tx, it.ty, it.yaw);
+        const s = size * it.s;
+        d.scale.set(s, s * 0.6, s * 0.6);
+      });
     }
   }
 
@@ -4167,14 +4436,9 @@ class GardenSplash extends HTMLElement {
       front = start + g.dir * g.speed * (t - g.t0);
       done = g.dir > 0 ? front > this.w + g.width * 2.5 : front < -g.width * 2.5;
     }
-    this.sway(dt, (f) => {
-      if (!g || done) return 0;
-      // How far behind the front this flower is (positive: the front has passed it).
-      const behind = (front - f.dest[0]) * g.dir;
-      // A quick push as the front reaches it, easing out over a longer tail.
-      const k = behind < 0 ? Math.exp(-((behind / (g.width * 0.35)) ** 2)) : Math.exp(-behind / g.width) * (1 + 0.25 * Math.sin(behind * 0.05));
-      return g.dir * k * g.strength;
-    });
+    this.gustFront = g && !done ? front : undefined;
+    // Each flower is pushed by how far behind the front it is: a quick push as the front reaches it, easing out over a longer tail.
+    this.sway(dt, (f) => this.gustPush(f.dest[0]));
     if (g && done) {
       this.gust = null;
       const gap = this.seasonNow ? SEASON_LOOK[this.seasonNow.name].gusts : [7, 15];
