@@ -1,0 +1,113 @@
+/*
+ * The flower world behind the page (snippets/garden-world.liquid).
+ * It sits fixed under everything and never takes a click; the page's own
+ * content stays on top, fully usable.
+ */
+.garden-world {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  display: block;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.2s linear;
+}
+
+.garden-world.is-ready:not(.is-static) {
+  opacity: 1;
+}
+
+.garden-world__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.garden-world__overlay {
+  display: none;
+}
+
+/*
+ * One pane of fogged glass over the flowers, the whole screen top to bottom:
+ * the bed shows through, blurred and washed with the page color, behind
+ * every part of the page alike (header, sections, gaps and footer). Fade
+ * flowers (Theme settings → Garden motif) sets how milky the glass is.
+ */
+body.has-garden-world::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  /* With the flowers, behind everything else; last in the page, so over them. */
+  z-index: -1;
+  pointer-events: none;
+  background: rgba(var(--color-background, 255, 255, 255), calc(0.4 + var(--gw-veil, 0.3) * 0.5));
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
+}
+
+/* Without blur, a plain wash dense enough to keep the copy readable. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  body.has-garden-world::after {
+    background: rgba(var(--color-background, 255, 255, 255), 0.82);
+  }
+}
+
+/*
+ * The page's sections over the glass (Theme settings → Garden motif →
+ * Section backgrounds). Glass: sections drop their own backgrounds, so the
+ * one pane runs unbroken down the page. Solid: every section as designed,
+ * on the glass. Clear: no glass at all, only the light wash.
+ */
+body.garden-world-sections--translucent :is(#MainContent, .shopify-section-group-footer-group) .gradient,
+body.garden-world-sections--clear :is(#MainContent, .shopify-section-group-footer-group) .gradient {
+  background: transparent;
+}
+
+body.garden-world-sections--clear::after {
+  background: rgba(var(--color-background, 255, 255, 255), var(--gw-veil, 0.3));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Form fields on the glass: a little milkier, with an edge, so they read as fields. */
+body.has-garden-world #MainContent :is(.field__input, .select__select, .text-area) {
+  background-color: rgba(var(--color-background), 0.6);
+  box-shadow: inset 0 0 0 1px rgba(var(--color-foreground), 0.22);
+}
+
+/*
+ * After a seamless page change from the splash (assets/duet-soft-nav.js),
+ * the splash itself stays behind the new page in place of the world: only
+ * its flowers show, under the same fogged glass, and it takes no clicks.
+ */
+body.has-splash-behind [data-soft-keep] {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  margin: 0;
+  pointer-events: none;
+}
+
+body.has-splash-behind [data-soft-keep] garden-splash {
+  height: 100%;
+  min-height: 0;
+}
+
+body.has-splash-behind [data-soft-keep] garden-splash > :not([data-garden-canvas]),
+body.has-splash-behind [data-soft-keep] > :not(garden-splash) {
+  display: none !important;
+}
+
+/* The whole page is already a garden: no strip above the footer. */
+body.has-garden-world .section--garden-strip {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .garden-world {
+    transition: none;
+  }
+}

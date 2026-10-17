@@ -1,0 +1,1047 @@
+{%- comment -%}
+  The store header, the same on every page. Each part is a block (logo,
+  menu, search, account, cart) put in a spot of its own: one of three
+  spots on each side, counted in from the edge, or the center. Each spot
+  keeps its place whatever happens to the others, so hiding a block (with
+  the editor's eye icon, or its own Show setting) never moves the rest.
+  Blocks given the same spot share it, side by side in editor order.
+  A block switched off with Show keeps its exact width (invisible); so do
+  a menu button with no menu chosen and the account link while customer
+  accounts are off.
+
+  The home page (the splash) can have a header of its own: with "Separate
+  header on the home page" on, this one steps aside there and the copy of
+  this section in the home page's own sections shows instead, so changes
+  made to either stay where they were made.
+
+  On the splash pages and the garden shop page it floats over the garden;
+  everywhere else it is a sticky bar. It also holds the Pollen Dream game's
+  name and how visitors reach it, which the game, the menu and the hidden
+  asterisk read from data attributes.
+{%- endcomment -%}
+{%- liquid
+  assign header_menu = section.settings.menu
+  assign game_access = section.settings.game_access | default: 'menu'
+  assign game_name = section.settings.game_name | default: 'Pollen Dream'
+  assign zones = 'left,center,right' | split: ','
+  # How many spots each side needs: up to the furthest one in use, so spots
+  # nearer the edge keep their room even when what was in them is hidden.
+  assign left_spots = 0
+  assign right_spots = 0
+  for block in section.blocks
+    assign pos = block.settings.position | default: 'right'
+    assign side = pos | split: '_' | first
+    assign spot = pos | split: '_' | last | plus: 0
+    if spot < 1
+      assign spot = 1
+    endif
+    if side == 'left' and spot > left_spots
+      assign left_spots = spot
+    elsif side == 'right' and spot > right_spots
+      assign right_spots = spot
+    endif
+  endfor
+  if settings.garden_game == false
+    assign game_access = 'off'
+  endif
+  # The shared header gives the home page over to the home page's own header.
+  assign step_aside = false
+  if section.location == 'header' and template.name == 'index' and section.settings.home_own_header
+    assign step_aside = true
+  endif
+-%}
+
+{%- unless step_aside -%}
+{{ 'component-cart-notification.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'cart-notification.js' | asset_url }}" defer="defer"></script>
+
+<duet-header
+  class="duet-header duet-header--{{ section.settings.background | default: 'solid' }}"
+  data-duet-header
+  data-game-access="{{ game_access }}"
+  data-game-name="{{ game_name | escape }}"
+  style="--dh-ink: {{ section.settings.ink_color | default: '#191F6B' }}; --dh-bg: {{ section.settings.bar_color | default: '#FFFFFF' }}; --dh-panel: {{ section.settings.panel_color | default: '#FFFFFF' }}; --dh-logo-width: {{ section.settings.logo_width | default: 140 }}px; --dh-logo-width-mobile: {{ section.settings.logo_width_mobile | default: 100 }}px;"
+>
+  <div class="duet-header__bar">
+    {%- for zone in zones -%}
+      {%- liquid
+        assign spots = 1
+        if zone == 'left'
+          assign spots = left_spots
+        elsif zone == 'right'
+          assign spots = right_spots
+        endif
+      -%}
+      <div class="duet-header__zone duet-header__zone--{{ zone }}" style="--dh-spots: {{ spots | at_least: 1 }};">
+        {%- for spot_index in (1..3) -%}
+          {%- if zone == 'center' and spot_index > 1 -%}
+            {%- break -%}
+          {%- endif -%}
+          {%- if zone != 'center' and spot_index > spots -%}
+            {%- break -%}
+          {%- endif -%}
+          {%- comment -%} The spot's column, counted in from this side's edge. {%- endcomment -%}
+          {%- liquid
+            assign column = spot_index
+            if zone == 'right'
+              assign column = spots | minus: spot_index | plus: 1
+            endif
+          -%}
+          <div class="duet-header__spot" style="grid-column: {{ column }};">
+        {%- for block in section.blocks -%}
+          {%- liquid
+            assign position = block.settings.position | default: 'right'
+            assign side = position | split: '_' | first
+            assign spot = position | split: '_' | last | plus: 0
+            if spot < 1
+              assign spot = 1
+            endif
+          -%}
+          {%- if side != zone -%}
+            {%- continue -%}
+          {%- endif -%}
+          {%- if zone != 'center' and spot != spot_index -%}
+            {%- continue -%}
+          {%- endif -%}
+          {%- liquid
+            assign hidden = false
+            if block.settings.show == false
+              assign hidden = true
+            elsif block.type == 'menu' and header_menu == blank
+              assign hidden = true
+            elsif block.type == 'account' and shop.customer_accounts_enabled == false
+              assign hidden = true
+            endif
+          -%}
+          <div class="duet-header__slot{% if hidden %} is-hidden{% endif %}"{% if hidden %} aria-hidden="true" inert{% endif %}>
+          {%- case block.type -%}
+            {%- when 'logo' -%}
+              <a href="{{ routes.root_url }}" class="duet-header__logo" {{ block.shopify_attributes }}>
+                {%- if block.settings.logo != blank -%}
+                  {%- assign logo_alt = block.settings.logo.alt | default: shop.name -%}
+                  {%- liquid
+                    assign logo_class = ''
+                    if block.settings.logo_mobile != blank
+                      assign logo_class = 'duet-header__logo-desktop'
+                    endif
+                  -%}
+                  {{
+                    block.settings.logo
+                    | image_url: width: 600
+                    | image_tag: widths: '200, 300, 400, 600', sizes: '(min-width: 750px) 240px, 40vw', loading: 'eager', alt: logo_alt, class: logo_class
+                  }}
+                  {%- if block.settings.logo_mobile != blank -%}
+                    {{
+                      block.settings.logo_mobile
+                      | image_url: width: 400
+                      | image_tag: widths: '150, 200, 300, 400', sizes: '40vw', loading: 'eager', alt: logo_alt, class: 'duet-header__logo-mobile'
+                    }}
+                  {%- endif -%}
+                {%- else -%}
+                  <span class="duet-header__logo-text">{{ shop.name | escape }}</span>
+                {%- endif -%}
+              </a>
+            {%- when 'menu' -%}
+              {%- assign menu_label = block.settings.label | default: 'Menu' -%}
+              <button
+                type="button"
+                class="duet-header__item duet-header__menu"
+                data-dh-open="menu"
+                aria-expanded="false"
+                aria-controls="DuetHeaderMenu-{{ section.id }}"
+                {% unless block.settings.style == 'text' %}aria-label="{{ menu_label | escape }}"{% endunless %}
+                {{ block.shopify_attributes }}
+              >
+                {%- unless block.settings.style == 'text' -%}
+                  <span class="svg-wrapper">{{ 'icon-hamburger.svg' | inline_asset_content }}</span>
+                {%- endunless -%}
+                {%- unless block.settings.style == 'icon' -%}
+                  <span class="duet-header__label">{{ menu_label | escape }}</span>
+                {%- endunless -%}
+              </button>
+            {%- when 'search' -%}
+              <a
+                href="{{ routes.search_url }}"
+                class="duet-header__item"
+                data-dh-open="search"
+                aria-controls="DuetHeaderSearch-{{ section.id }}"
+                aria-expanded="false"
+                {{ block.shopify_attributes }}
+              >
+                <span class="svg-wrapper">{{ 'icon-search.svg' | inline_asset_content }}</span>
+                <span class="visually-hidden">{{ 'general.search.search' | t }}</span>
+              </a>
+            {%- when 'account' -%}
+              <a
+                href="{%- if customer -%}{{ routes.account_url }}{%- else -%}{{ routes.account_login_url }}{%- endif -%}"
+                class="duet-header__item"
+                rel="nofollow"
+                {{ block.shopify_attributes }}
+              >
+                <span class="svg-wrapper">{{ 'icon-account.svg' | inline_asset_content }}</span>
+                <span class="visually-hidden">
+                  {%- if customer -%}{{ 'customer.account_fallback' | t }}{%- else -%}{{ 'customer.log_in' | t }}{%- endif -%}
+                </span>
+              </a>
+            {%- when 'cart' -%}
+              {%- comment -%}
+                Same markup as sections/cart-icon-bubble.liquid: after an add to cart,
+                the cart notification swaps this link's contents for that section.
+              {%- endcomment -%}
+              <a href="{{ routes.cart_url }}" class="duet-header__item duet-header__cart" id="cart-icon-bubble" {{ block.shopify_attributes }}>
+                {%- if cart == empty -%}
+                  <span class="svg-wrapper">{{ 'icon-cart-empty.svg' | inline_asset_content }}</span>
+                {%- else -%}
+                  <span class="svg-wrapper">{{ 'icon-cart.svg' | inline_asset_content }}</span>
+                {%- endif -%}
+                <span class="visually-hidden">{{ 'templates.cart.cart' | t }}</span>
+                {%- if cart != empty -%}
+                  <div class="cart-count-bubble">
+                    {%- if cart.item_count < 100 -%}
+                      <span aria-hidden="true">{{ cart.item_count }}</span>
+                    {%- endif -%}
+                    <span class="visually-hidden">{{ 'sections.header.cart_count' | t: count: cart.item_count }}</span>
+                  </div>
+                {%- endif -%}
+              </a>
+          {%- endcase -%}
+          </div>
+        {%- endfor -%}
+          </div>
+        {%- endfor -%}
+      </div>
+    {%- endfor -%}
+  </div>
+
+  {%- if settings.cart_type == 'notification' -%}
+    {%- render 'cart-notification' -%}
+  {%- endif -%}
+
+  {%- if header_menu != blank -%}
+    <nav
+      id="DuetHeaderMenu-{{ section.id }}"
+      class="duet-header__panel duet-header__nav"
+      data-dh-panel="menu"
+      aria-label="{{ header_menu.title | escape }}"
+    >
+      <button type="button" class="duet-header__close" data-dh-close>{{ 'accessibility.close' | t }}</button>
+      <ol class="duet-header__nav-list" role="list">
+        {%- for link in header_menu.links -%}
+          <li class="duet-header__nav-item">
+            <a href="{{ link.url }}" class="duet-header__nav-link"{% if link.current %} aria-current="page"{% endif %}>
+              {{- link.title | escape -}}
+            </a>
+            {%- if link.links != blank -%}
+              <ul class="duet-header__nav-sublist" role="list">
+                {%- for child in link.links -%}
+                  <li>
+                    <a href="{{ child.url }}" class="duet-header__nav-link duet-header__nav-link--sub"{% if child.current %} aria-current="page"{% endif %}>{{ child.title | escape }}</a>
+                    {%- if child.links != blank -%}
+                      <ul class="duet-header__nav-sublist duet-header__nav-sublist--deep" role="list">
+                        {%- for grandchild in child.links -%}
+                          <li>
+                            <a href="{{ grandchild.url }}" class="duet-header__nav-link duet-header__nav-link--sub"{% if grandchild.current %} aria-current="page"{% endif %}>{{ grandchild.title | escape }}</a>
+                          </li>
+                        {%- endfor -%}
+                      </ul>
+                    {%- endif -%}
+                  </li>
+                {%- endfor -%}
+              </ul>
+            {%- endif -%}
+          </li>
+        {%- endfor -%}
+        {%- if game_access == 'menu' -%}
+          <li class="duet-header__nav-item">
+            <button type="button" class="duet-header__nav-link duet-header__nav-link--game" data-pollen-dream>
+              {{- game_name | escape -}}
+            </button>
+          </li>
+        {%- endif -%}
+      </ol>
+    </nav>
+  {%- endif -%}
+
+  <div
+    id="DuetHeaderSearch-{{ section.id }}"
+    class="duet-header__panel duet-header__search"
+    data-dh-panel="search"
+    role="dialog"
+    aria-label="{{ 'general.search.search' | t }}"
+  >
+    <button type="button" class="duet-header__close" data-dh-close>{{ 'accessibility.close' | t }}</button>
+    <form action="{{ routes.search_url }}" method="get" role="search" class="duet-header__search-form">
+      <label class="visually-hidden" for="DuetHeaderSearchInput-{{ section.id }}">{{ 'general.search.search' | t }}</label>
+      <input
+        id="DuetHeaderSearchInput-{{ section.id }}"
+        class="duet-header__search-input"
+        type="search"
+        name="q"
+        placeholder="{{ 'general.search.search' | t }}"
+        autocomplete="off"
+      >
+      <input type="hidden" name="options[prefix]" value="last">
+      <button type="submit" class="duet-header__search-submit">
+        <span class="svg-wrapper">{{ 'icon-search.svg' | inline_asset_content }}</span>
+        <span class="visually-hidden">{{ 'general.search.search' | t }}</span>
+      </button>
+    </form>
+  </div>
+</duet-header>
+
+<script>
+  // Menu and search open full screen; Escape, Close or the same button closes
+  // them, focus stays inside while open and returns to what opened it.
+  if (!customElements.get('duet-header')) {
+    customElements.define(
+      'duet-header',
+      class DuetHeader extends HTMLElement {
+        connectedCallback() {
+          this.openPanel = null;
+          this.opener = null;
+          this.onKey = this.onKey.bind(this);
+          this.addEventListener('click', (e) => {
+            const open = e.target.closest('[data-dh-open]');
+            if (open && this.contains(open)) {
+              e.preventDefault();
+              const name = open.getAttribute('data-dh-open');
+              if (this.openPanel && this.openPanel.dataset.dhPanel === name) this.close();
+              else this.open(name, open);
+              return;
+            }
+            if (e.target.closest('[data-dh-close]')) this.close();
+            // Starting the game closes the menu; the game puts focus back when it ends.
+            if (e.target.closest('[data-pollen-dream]')) this.close(true);
+          });
+          document.addEventListener('keydown', this.onKey);
+          this.onPageShow = (e) => e.persisted && this.close(true);
+          window.addEventListener('pageshow', this.onPageShow);
+        }
+
+        disconnectedCallback() {
+          document.removeEventListener('keydown', this.onKey);
+          window.removeEventListener('pageshow', this.onPageShow);
+          document.documentElement.classList.remove('duet-header-locked');
+        }
+
+        /* The flower logo on the splash opens this same menu, out of the logo. */
+        openMenu(from) {
+          this.open('menu', from);
+        }
+
+        open(name, from) {
+          const panel = this.querySelector(`[data-dh-panel="${name}"]`);
+          if (!panel) return;
+          if (this.openPanel) this.close(true);
+          const r = from && from.getBoundingClientRect ? from.getBoundingClientRect() : null;
+          if (r) {
+            panel.style.setProperty('--dh-origin-x', `${Math.round(r.left + r.width / 2)}px`);
+            panel.style.setProperty('--dh-origin-y', `${Math.round(r.top + r.height / 2)}px`);
+          }
+          this.opener = from || null;
+          this.openPanel = panel;
+          panel.classList.add('is-open');
+          this.classList.add('is-panel-open');
+          document.documentElement.classList.add('duet-header-locked');
+          this.querySelectorAll(`[data-dh-open="${name}"]`).forEach((b) => b.setAttribute('aria-expanded', 'true'));
+          if (from && from.setAttribute && from.hasAttribute('aria-expanded')) from.setAttribute('aria-expanded', 'true');
+          const first = panel.querySelector('input[type="search"], .duet-header__nav-link');
+          if (first) first.focus({ preventScroll: true });
+        }
+
+        close(quiet) {
+          const panel = this.openPanel;
+          if (!panel) return;
+          panel.classList.remove('is-open');
+          this.classList.remove('is-panel-open');
+          document.documentElement.classList.remove('duet-header-locked');
+          this.querySelectorAll('[data-dh-open]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+          if (this.opener && this.opener.hasAttribute && this.opener.hasAttribute('aria-expanded')) this.opener.setAttribute('aria-expanded', 'false');
+          this.openPanel = null;
+          if (!quiet && this.opener && this.opener.isConnected) this.opener.focus({ preventScroll: true });
+        }
+
+        onKey(e) {
+          const panel = this.openPanel;
+          if (!panel) return;
+          if (e.key === 'Escape') {
+            this.close();
+            return;
+          }
+          if (e.key !== 'Tab') return;
+          const items = Array.from(panel.querySelectorAll('a[href], button, input:not([type="hidden"])')).filter((el) => el.offsetParent !== null);
+          if (!items.length) return;
+          const first = items[0];
+          const last = items[items.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    );
+  }
+</script>
+{%- endunless -%}
+
+{% stylesheet %}
+  .duet-header {
+    --dh-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: block;
+    color: var(--dh-ink, #191f6b);
+  }
+
+  .duet-header--solid .duet-header__bar {
+    background: var(--dh-bg, #fff);
+  }
+
+  /* Splash pages and the garden shop: the header floats over the garden. */
+  body.layout-splash-streams .duet-header,
+  body.duet-header-overlay .duet-header {
+    position: fixed;
+    left: 0;
+    right: 0;
+  }
+
+  body.layout-splash-streams .duet-header__bar,
+  body.duet-header-overlay .duet-header__bar {
+    background: transparent;
+  }
+
+  .duet-header__bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 1.2rem;
+    padding: max(1.2rem, env(safe-area-inset-top)) max(1.6rem, env(safe-area-inset-right)) 1.2rem
+      max(1.6rem, env(safe-area-inset-left));
+  }
+
+  .duet-header__zone {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  /* Each block keeps its place: a hidden one is invisible but still takes its space. */
+  .duet-header__slot {
+    display: contents;
+  }
+
+  .duet-header__slot.is-hidden > * {
+    visibility: hidden;
+  }
+
+  .duet-header__zone--center {
+    justify-content: center;
+  }
+
+  /*
+   * The sides: a fixed column for each spot, counted in from the edge. An
+   * empty spot (its block hidden) still holds a button's width, so the
+   * spots further in stay put.
+   */
+  .duet-header__zone--left,
+  .duet-header__zone--right {
+    display: grid;
+    grid-template-columns: repeat(var(--dh-spots, 1), minmax(var(--dh-spot), max-content));
+    justify-content: start;
+    gap: 0;
+    /* A button's full width, so an emptied spot is exactly as wide as an icon in it. */
+    --dh-spot: 5.6rem;
+  }
+
+  @media (max-width: 749px) {
+    .duet-header__zone--left,
+    .duet-header__zone--right {
+      --dh-spot: 4.8rem;
+    }
+  }
+
+  .duet-header__zone--right {
+    justify-content: end;
+  }
+
+  .duet-header__spot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  .duet-header__zone--center .duet-header__spot {
+    display: contents;
+  }
+
+  .duet-header__logo {
+    display: block;
+    width: var(--dh-logo-width, 140px);
+    max-width: 40vw;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .duet-header__logo img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .duet-header__logo .duet-header__logo-mobile {
+    display: none;
+  }
+
+  @media (max-width: 749px) {
+    .duet-header__logo .duet-header__logo-desktop {
+      display: none;
+    }
+
+    .duet-header__logo .duet-header__logo-mobile {
+      display: block;
+    }
+  }
+
+  .duet-header__logo-text {
+    font-family: var(--dh-mono);
+    font-size: 1.8rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .duet-header__item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8rem;
+    min-width: 4.4rem;
+    min-height: 4.4rem;
+    justify-content: center;
+    margin: 0;
+    padding: 0 0.6rem;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: var(--dh-mono);
+    font-size: 1.1rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .duet-header__item .svg-wrapper {
+    display: inline-flex;
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  .duet-header__item svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .duet-header__item:hover {
+    opacity: 0.65;
+  }
+
+  .duet-header__item:focus-visible,
+  .duet-header__logo:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  .duet-header__cart .cart-count-bubble {
+    position: absolute;
+    right: 0.2rem;
+    bottom: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.7rem;
+    height: 1.7rem;
+    padding: 0 0.3rem;
+    border-radius: 1rem;
+    background: var(--dh-ink, #191f6b);
+    color: var(--dh-bg, #fff);
+    font-size: 0.9rem;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+
+  /* ---------- Full-screen menu and search ---------- */
+
+  .duet-header__panel {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: flex-start;
+    padding: 9.6rem max(1.6rem, 8vw);
+    background: color-mix(in srgb, var(--dh-panel, #fff) 97%, transparent);
+    color: var(--dh-ink, #191f6b);
+    font-family: var(--dh-mono);
+    overflow-y: auto;
+    opacity: 0;
+    visibility: hidden;
+    clip-path: circle(0 at var(--dh-origin-x, 50%) var(--dh-origin-y, 0));
+    transition: opacity 0.3s linear, clip-path 0.45s cubic-bezier(0.6, 0, 0.8, 0.2), visibility 0s linear 0.45s;
+  }
+
+  .duet-header__panel.is-open {
+    opacity: 1;
+    visibility: visible;
+    clip-path: circle(150vmax at var(--dh-origin-x, 50%) var(--dh-origin-y, 0));
+    transition: opacity 0.2s linear, clip-path 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .duet-header__close {
+    position: absolute;
+    top: max(1.6rem, env(safe-area-inset-top));
+    right: max(1.6rem, env(safe-area-inset-right));
+    margin: 0;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid currentColor;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 1.1rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .duet-header__close:hover,
+  .duet-header__close:focus-visible {
+    background: var(--dh-ink, #191f6b);
+    color: var(--dh-panel, #fff);
+    outline: none;
+  }
+
+  .duet-header__nav-list {
+    display: grid;
+    gap: 0.4rem;
+    width: 100%;
+    max-width: 72rem;
+    /* Centered when it fits; scrolls from the first item when it doesn't. */
+    margin: auto 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: duet-nav;
+  }
+
+  .duet-header__nav-item {
+    counter-increment: duet-nav;
+    border-top: 1px solid currentColor;
+  }
+
+  .duet-header__nav-item:last-child {
+    border-bottom: 1px solid currentColor;
+  }
+
+  .duet-header__nav-link {
+    display: flex;
+    align-items: baseline;
+    gap: 2.4rem;
+    width: 100%;
+    margin: 0;
+    padding: 1.4rem 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: inherit;
+    font-size: clamp(2rem, 3.2vw, 3.2rem);
+    letter-spacing: 0.08em;
+    text-align: left;
+    text-transform: uppercase;
+    text-decoration: none;
+    text-shadow: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
+    cursor: pointer;
+  }
+
+  .duet-header__nav-item > .duet-header__nav-link::before {
+    content: counter(duet-nav, decimal-leading-zero);
+    font-size: 1.1rem;
+    letter-spacing: 0.14em;
+    opacity: 0.6;
+  }
+
+  .duet-header__nav-link--game::after {
+    content: '✱';
+    margin-left: auto;
+    font-size: 0.6em;
+    color: #f04e62;
+  }
+
+  .duet-header__nav-link:hover,
+  .duet-header__nav-link:focus-visible,
+  .duet-header__nav-link[aria-current='page'] {
+    color: #f04e62;
+    outline: none;
+  }
+
+  .duet-header__nav-sublist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2.4rem;
+    margin: -0.6rem 0 1.2rem 4rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  .duet-header__nav-sublist--deep {
+    margin: 0 0 0.6rem 1.6rem;
+    opacity: 0.8;
+  }
+
+  .duet-header__nav-link--sub {
+    width: auto;
+    padding: 0.6rem 0;
+    font-size: 1.2rem;
+    letter-spacing: 0.14em;
+  }
+
+  .duet-header__search-form {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    width: 100%;
+    max-width: 72rem;
+    margin: 0 auto;
+    border-bottom: 1px solid currentColor;
+  }
+
+  .duet-header__search-input {
+    flex: 1;
+    min-width: 0;
+    padding: 1.2rem 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: inherit;
+    font-size: clamp(2rem, 3.2vw, 3.2rem);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    outline: none;
+  }
+
+  .duet-header__search-submit {
+    display: inline-flex;
+    width: 4.4rem;
+    height: 4.4rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .duet-header__search-submit .svg-wrapper {
+    width: 2.4rem;
+    height: 2.4rem;
+  }
+
+  html.duet-header-locked,
+  html.duet-header-locked body {
+    overflow: hidden;
+  }
+
+  /* One header on every page: the splash's corner menu button and the shop's own header step aside. */
+  body:has(duet-header) .garden-splash__hud--tr,
+  body:has(duet-header) .garden-shop__header,
+  body:has(duet-header) .garden-shop__nav {
+    display: none;
+  }
+
+  @media (max-width: 749px) {
+    .duet-header__logo {
+      width: var(--dh-logo-width-mobile, 100px);
+    }
+
+    .duet-header__bar {
+      gap: 0.4rem;
+      padding-left: max(0.8rem, env(safe-area-inset-left));
+      padding-right: max(0.8rem, env(safe-area-inset-right));
+    }
+
+    .duet-header__item {
+      min-width: 4rem;
+      padding: 0 0.4rem;
+    }
+
+    .duet-header__label {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .duet-header__panel,
+    .duet-header__panel.is-open {
+      transition: none;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Duet header",
+  "tag": "div",
+  "class": "section-duet-header",
+  "limit": 1,
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Each part is a block: give each its own spot. On the splash and shop pages it floats over the garden."
+    },
+    {
+      "type": "checkbox",
+      "id": "home_own_header",
+      "label": "Separate header on the home page",
+      "default": false,
+      "info": "On: the home page uses its own copy of this header (under Template on the home page), so changes there stay on the home page, and changes here don't reach it. Has no effect on the home page's own copy."
+    },
+    {
+      "type": "link_list",
+      "id": "menu",
+      "label": "Menu",
+      "default": "main-menu"
+    },
+    {
+      "type": "select",
+      "id": "background",
+      "label": "Background on other pages",
+      "default": "solid",
+      "options": [
+        { "value": "solid", "label": "Solid" },
+        { "value": "transparent", "label": "Transparent" }
+      ]
+    },
+    {
+      "type": "color",
+      "id": "ink_color",
+      "label": "Icons and text",
+      "default": "#191F6B"
+    },
+    {
+      "type": "color",
+      "id": "bar_color",
+      "label": "Header background",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "panel_color",
+      "label": "Menu and search background",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "range",
+      "id": "logo_width",
+      "label": "Logo width",
+      "min": 40,
+      "max": 320,
+      "step": 4,
+      "unit": "px",
+      "default": 140
+    },
+    {
+      "type": "range",
+      "id": "logo_width_mobile",
+      "label": "Logo width on phones",
+      "min": 40,
+      "max": 240,
+      "step": 4,
+      "unit": "px",
+      "default": 100
+    },
+    {
+      "type": "header",
+      "content": "Pollen Dream game"
+    },
+    {
+      "type": "text",
+      "id": "game_name",
+      "label": "Game name",
+      "default": "Pollen Dream",
+      "info": "Shown in the menu and on the game's title screen."
+    },
+    {
+      "type": "select",
+      "id": "game_access",
+      "label": "How visitors find it",
+      "default": "menu",
+      "options": [
+        { "value": "menu", "label": "In the menu" },
+        { "value": "secret", "label": "Secret only" },
+        { "value": "off", "label": "Off" }
+      ],
+      "info": "Either way, tapping the flowers of the logo's asterisk five times opens it: they react to each tap, then the view dives into the flowers and the game begins there. Secret only leaves it out of the menu."
+    }
+  ],
+  "blocks": [
+    {
+      "type": "logo",
+      "name": "Logo",
+      "limit": 1,
+      "settings": [
+        { "type": "image_picker", "id": "logo", "label": "Logo image", "info": "Leave blank to show the store name." },
+        { "type": "image_picker", "id": "logo_mobile", "label": "Logo image on phones", "info": "Optional. Shown instead on screens narrower than 750px." },
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
+          "default": "center",
+          "options": [
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
+            { "value": "center", "label": "Center" },
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "menu",
+      "name": "Menu button",
+      "limit": 1,
+      "settings": [
+        {
+          "type": "select",
+          "id": "style",
+          "label": "Style",
+          "default": "icon",
+          "options": [
+            { "value": "icon", "label": "Icon" },
+            { "value": "text", "label": "Text" },
+            { "value": "icon_text", "label": "Icon and text" }
+          ]
+        },
+        { "type": "text", "id": "label", "label": "Text", "default": "Menu" },
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
+          "default": "left",
+          "options": [
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
+            { "value": "center", "label": "Center" },
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "search",
+      "name": "Search",
+      "limit": 1,
+      "settings": [
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
+          "default": "left_2",
+          "options": [
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
+            { "value": "center", "label": "Center" },
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "account",
+      "name": "Account",
+      "limit": 1,
+      "settings": [
+        {
+          "type": "paragraph",
+          "content": "Shown when customer accounts are turned on in Settings → Customer accounts."
+        },
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
+          "default": "right_2",
+          "options": [
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
+            { "value": "center", "label": "Center" },
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "cart",
+      "name": "Cart",
+      "limit": 1,
+      "settings": [
+        { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
+        {
+          "type": "select",
+          "id": "position",
+          "label": "Position",
+          "info": "Give each block its own spot, and hiding one never moves the others.",
+          "default": "right",
+          "options": [
+            { "value": "left", "label": "Left edge" },
+            { "value": "left_2", "label": "Left, 2nd" },
+            { "value": "left_3", "label": "Left, 3rd" },
+            { "value": "center", "label": "Center" },
+            { "value": "right_3", "label": "Right, 3rd" },
+            { "value": "right_2", "label": "Right, 2nd" },
+            { "value": "right", "label": "Right edge" }
+          ]
+        }
+      ]
+    }
+  ],
+  "enabled_on": {
+    "groups": ["header"],
+    "templates": ["index"]
+  },
+  "presets": [
+    {
+      "name": "Duet header",
+      "blocks": [
+        { "type": "menu", "settings": { "position": "left" } },
+        { "type": "search", "settings": { "position": "left_2" } },
+        { "type": "logo", "settings": { "position": "center" } },
+        { "type": "account", "settings": { "position": "right_2" } },
+        { "type": "cart", "settings": { "position": "right" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

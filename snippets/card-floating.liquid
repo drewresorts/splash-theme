@@ -1,0 +1,44 @@
+{%- comment -%}
+  A product as just its image, floating over the garden: no border, no
+  background and no text on screen (the name and price stay for screen
+  readers). Works best with product photos on a transparent background.
+
+  Accepts:
+  - card_product: {Object} product
+  - index: {Number} position in the grid, staggers the float
+  - lazy_load: {Boolean} lazy-load the image (default true)
+
+  Usage:
+  {% render 'card-floating', card_product: product, index: forloop.index %}
+{%- endcomment -%}
+{%- liquid
+  assign delay = index | default: 0 | times: 7 | modulo: 12 | times: -0.5
+  assign media = card_product.featured_media
+-%}
+<a href="{{ card_product.url }}" class="garden-float" style="--float-delay: {{ delay }}s;">
+  {%- if media -%}
+    {%- liquid
+      assign loading = 'lazy'
+      if lazy_load == false
+        assign loading = 'eager'
+      endif
+      assign alt = media.alt | default: card_product.title
+    -%}
+    {{
+      media
+      | image_url: width: 720
+      | image_tag:
+        widths: '240, 360, 533, 720',
+        sizes: '(min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)',
+        loading: loading,
+        alt: alt,
+        class: 'garden-float__img'
+    }}
+  {%- else -%}
+    {{ 'product-apparel-1' | placeholder_svg_tag: 'garden-float__img garden-float__placeholder' }}
+  {%- endif -%}
+  <span class="visually-hidden">
+    {{- card_product.title | escape }}, {{ card_product.price | money -}}
+    {%- if card_product.available == false %}, {{ 'products.product.sold_out' | t }}{% endif -%}
+  </span>
+</a>

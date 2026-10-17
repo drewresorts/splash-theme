@@ -1,0 +1,260 @@
+/*
+ * The About page sections (sections/duet-mission.liquid,
+ * duet-authenticity.liquid, duet-location.liquid), in the site's interface
+ * language: monospace capitals, ocean ink, the fuchsia/teal double edge on
+ * titles, thin rules instead of boxes.
+ */
+.duet-about {
+  --da-ink: #191f6b;
+  --da-hero: #f04e62;
+  --da-teal: #66a4c8;
+  --da-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  color: var(--da-ink);
+}
+
+.duet-about__inner {
+  display: grid;
+  gap: 3.2rem;
+  max-width: 112rem;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.duet-about__head {
+  display: grid;
+  gap: 1.2rem;
+  max-width: 72rem;
+}
+
+.duet-about__eyebrow {
+  margin: 0;
+  font-family: var(--da-mono);
+  font-size: 1.1rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.duet-about__title {
+  margin: 0;
+  color: inherit;
+  font-family: var(--da-mono);
+  font-size: clamp(2.6rem, 4.4vw, 4.4rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 2px 0 rgba(240, 78, 98, 0.55), -2px 0 rgba(102, 164, 200, 0.55);
+}
+
+.duet-about__text {
+  font-size: 1.6rem;
+  line-height: 1.7;
+}
+
+.duet-about__text > :first-child {
+  margin-top: 0;
+}
+
+.duet-about__text > :last-child {
+  margin-bottom: 0;
+}
+
+.duet-about__text a {
+  color: inherit;
+}
+
+/* Columns of short titled paragraphs: the mission's pillars, the guarantee's steps. */
+.duet-about__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: 2.4rem 3.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.duet-about__item {
+  display: grid;
+  align-content: start;
+  gap: 0.8rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid currentColor;
+}
+
+.duet-about__item h3 {
+  margin: 0;
+  color: inherit;
+  font-family: var(--da-mono);
+  font-size: 1.3rem;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.duet-about__num {
+  font-family: var(--da-mono);
+  font-size: 1.1rem;
+  letter-spacing: 0.2em;
+  color: var(--da-hero);
+}
+
+.duet-about__item .duet-about__text {
+  font-size: 1.5rem;
+}
+
+.duet-about__button {
+  justify-self: start;
+  display: inline-block;
+  padding: 1.2rem 1.8rem;
+  border: 1px solid currentColor;
+  color: inherit;
+  font-family: var(--da-mono);
+  font-size: 1.2rem;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.duet-about__button:hover {
+  background: var(--da-ink);
+  color: #fff;
+}
+
+.duet-about__button:focus-visible {
+  outline: 2px solid var(--da-hero);
+  outline-offset: 3px;
+}
+
+.duet-about__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+/* ---------- Authenticity: the guarantee itself stands out ---------- */
+
+.duet-about__promise {
+  display: grid;
+  gap: 1.2rem;
+  padding: 2.8rem;
+  border: 1px solid currentColor;
+  box-shadow: 4px 4px 0 var(--da-hero), -4px -4px 0 var(--da-teal);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.duet-about__promise-title {
+  margin: 0;
+  color: inherit;
+  font-family: var(--da-mono);
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.duet-about__subhead {
+  margin: 0;
+  font-family: var(--da-mono);
+  font-size: 1.3rem;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.duet-about__authenticator-logo {
+  display: block;
+  max-width: 14rem;
+  height: auto;
+}
+
+.duet-about__authenticator a {
+  color: inherit;
+}
+
+.duet-about__placeholder {
+  padding: 1.2rem;
+  border: 1px dashed currentColor;
+  font-family: var(--da-mono);
+  font-size: 1.2rem;
+  opacity: 0.7;
+}
+
+.duet-about__fine {
+  max-width: 72rem;
+  font-size: 1.3rem;
+  opacity: 0.85;
+}
+
+/* ---------- Location: details beside the map ---------- */
+
+.duet-about__visit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 3.2rem;
+  align-items: start;
+}
+
+.duet-about__details {
+  display: grid;
+  gap: 2.4rem;
+}
+
+.duet-about__detail {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid currentColor;
+}
+
+.duet-about__detail address {
+  font-style: normal;
+  font-size: 1.6rem;
+  line-height: 1.6;
+}
+
+.duet-about__detail a {
+  color: inherit;
+}
+
+.duet-about__map {
+  position: relative;
+  border: 1px solid currentColor;
+  aspect-ratio: 4 / 3;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.duet-about__map iframe,
+.duet-about__map img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+
+.duet-about__storefront {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid currentColor;
+}
+
+@media (max-width: 749px) {
+  .duet-about__inner {
+    gap: 2.4rem;
+  }
+
+  .duet-about__visit {
+    grid-template-columns: 1fr;
+  }
+
+  .duet-about__promise {
+    padding: 2rem;
+  }
+
+  .duet-about__map {
+    aspect-ratio: 1 / 1;
+  }
+}

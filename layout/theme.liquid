@@ -38,6 +38,24 @@
     <script src="{{ 'details-disclosure.js' | asset_url }}" defer="defer"></script>
     <script src="{{ 'details-modal.js' | asset_url }}" defer="defer"></script>
     <script src="{{ 'search-form.js' | asset_url }}" defer="defer"></script>
+    {%- comment -%} Blank counts as on: a setting added in code reads as blank until Theme settings are next saved. {%- endcomment -%}
+    {%- if settings.soft_navigation != false -%}
+      <script src="{{ 'duet-soft-nav.js' | asset_url }}" defer="defer"></script>
+    {%- endif -%}
+
+    {%- if settings.garden_motif -%}
+      <script src="{{ 'garden-kit.js' | asset_url }}" defer="defer"></script>
+      {%- if settings.garden_follow_scheme -%}
+        <script>
+          // The flower colors a visitor picked on the garden splash carry through the store.
+          // A rough hue for each theme in sections/garden-splash.liquid, for the drawn garden motifs.
+          try {
+            var gardenHue = { camo: 80, 'cotton-candy': 300, circus: 20, neon: 290, tropical: 30 }[localStorage.getItem('garden-splash-scheme')];
+            if (gardenHue) document.documentElement.style.setProperty('--garden-hue', gardenHue + 'deg');
+          } catch (e) {}
+        </script>
+      {%- endif -%}
+    {%- endif -%}
 
     {%- if settings.animations_reveal_on_scroll -%}
       <script src="{{ 'animations.js' | asset_url }}" defer="defer"></script>
@@ -104,6 +122,8 @@
       }
 
       :root {
+        /* How milky the fogged glass over the flower world is (component-garden-world.css). */
+        --gw-veil: {{ settings.garden_world_veil | default: 30 | divided_by: 100.0 }};
         --font-body-family: {{ settings.type_body_font.family }}, {{ settings.type_body_font.fallback_families }};
         --font-body-style: {{ settings.type_body_font.style }};
         --font-body-weight: {{ settings.type_body_font.weight }};
@@ -260,6 +280,10 @@
     {% endstyle %}
 
     {{ 'base.css' | asset_url | stylesheet_tag }}
+    {% render 'duet-mono-font' %}
+    {%- if settings.garden_motif -%}
+      {{ 'garden-kit.css' | asset_url | stylesheet_tag }}
+    {%- endif -%}
     <link rel="stylesheet" href="{{ 'component-cart-items.css' | asset_url }}" media="print" onload="this.media='all'">
 
     {%- if settings.cart_type == 'drawer' -%}
@@ -304,7 +328,28 @@
       elsif template.name == 'page' and template.suffix == 'garden-splash'
         assign hide_store_chrome = true
       endif
+
+      # The garden shop page (the default collection template) brings its own
+      # minimal header, so the store header and footer are left out there too.
+      assign hide_header_footer = hide_store_chrome
+      if template.name == 'collection' and template.suffix == blank
+        assign hide_header_footer = true
+      endif
+
+      # The flower world behind every page except the splash pages. A page
+      # with its own Garden background section (the shop page) keeps that
+      # one: the world steps aside in garden-splash.js.
+      assign show_garden_world = false
+      # A setting added in code reads as blank until Theme settings are next
+      # saved, so blank counts as on: only an explicit "off" turns these off.
+      if settings.garden_world != false and hide_store_chrome == false and template.name != 'password' and template.name != 'gift_card'
+        assign show_garden_world = true
+      endif
     -%}
+
+    {%- if show_garden_world -%}
+      {{ 'component-garden-world.css' | asset_url | stylesheet_tag }}
+    {%- endif -%}
 
     {%- if hide_store_chrome -%}
       <script>
@@ -356,7 +401,7 @@
     </script>
   </head>
 
-  <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
+  <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.garden_motif and settings.garden_cart_bloom %} garden-cart-motif{% endif %}{% if hide_header_footer %} duet-header-overlay{% endif %}{% if show_garden_world %} has-garden-world garden-world-sections--{{ settings.garden_world_sections | default: 'translucent' }}{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
     {%- if hide_store_chrome -%}
       <script>
         if (window.navigation && typeof window.navigation.addEventListener === 'function') {
@@ -374,25 +419,35 @@
         }
       </script>
     {%- endif -%}
-    {%- unless hide_store_chrome -%}
-      <a class="skip-to-content-link button visually-hidden" href="#MainContent">
-        {{ 'accessibility.skip_to_text' | t }}
-      </a>
+    {%- comment -%}
+      The header is the same on every page (sections/duet-header.liquid in the
+      header group); on the splash and garden shop pages it floats over the garden.
+    {%- endcomment -%}
+    <a class="skip-to-content-link button visually-hidden" href="#MainContent">
+      {{ 'accessibility.skip_to_text' | t }}
+    </a>
 
-      {%- if settings.cart_type == 'drawer' -%}
-        {%- render 'cart-drawer' -%}
-      {%- endif -%}
+    {%- if settings.cart_type == 'drawer' -%}
+      {%- render 'cart-drawer' -%}
+    {%- endif -%}
 
-      {% sections 'header-group' %}
-    {%- endunless -%}
+    {% sections 'header-group' %}
 
     <main id="MainContent" class="content-for-layout focus-none" role="main" tabindex="-1">
       {{ content_for_layout }}
     </main>
 
-    {%- unless hide_store_chrome -%}
+    {%- unless hide_header_footer -%}
       {% sections 'footer-group' %}
     {%- endunless -%}
+
+    {%- if show_garden_world -%}
+      {%- render 'garden-world' -%}
+    {%- endif -%}
+
+    {%- if settings.garden_game != false -%}
+      {%- render 'pollen-dream-launcher' -%}
+    {%- endif -%}
 
     <ul hidden>
       <li id="a11y-refresh-page-message">{{ 'accessibility.refresh_page' | t }}</li>

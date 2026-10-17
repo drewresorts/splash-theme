@@ -90,6 +90,7 @@
         --inputs-shadow-blur-radius: {{ settings.inputs_shadow_blur }}px;
       }
     {% endstyle %}
+    {% render 'duet-mono-font' %}
 
     {%- unless settings.type_body_font.system? -%}
       {% comment %}theme-check-disable AssetPreload{% endcomment %}

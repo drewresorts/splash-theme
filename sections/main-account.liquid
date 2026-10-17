@@ -9,6 +9,10 @@
   endif
 -%}
 
+{%- capture certificates -%}
+  {%- render 'authenticity-certificates', orders: customer.orders -%}
+{%- endcapture -%}
+
 {%- style -%}
   .section-{{ section.id }}-padding {
     padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
@@ -56,6 +60,9 @@
     <a class="customer__account-nav-link" href="{{ routes.account_url }}#order-history">
       {{ 'customer.orders.title' | t }}
     </a>
+    {%- if certificates != blank -%}
+      <a class="customer__account-nav-link" href="{{ routes.account_url }}#certificates">Certificates</a>
+    {%- endif -%}
     <a class="customer__account-nav-link" href="{{ routes.account_addresses_url }}">
       {{ 'customer.account.view_addresses' | t -}}
       <span class="customer__account-nav-count">({{ customer.addresses_count }})</span>
@@ -71,6 +78,8 @@
       </a>
     {%- endif -%}
   </nav>
+
+  {{ certificates }}
 
   <div class="customer__account-grid">
     <div id="order-history" class="customer__account-orders" tabindex="-1">

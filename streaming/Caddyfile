@@ -1,4 +1,4 @@
-stream.example.com {
+{$STREAM_DOMAIN} {
 	encode zstd gzip
 
 	@hls path /cam/* /cam.m3u8
@@ -20,5 +20,12 @@ stream.example.com {
 			roll_size 50mb
 			roll_keep 5
 		}
+	}
+}
+
+# The shop wall relay. Server-sent events must not be buffered.
+{$WALL_DOMAIN} {
+	reverse_proxy localhost:8787 {
+		flush_interval -1
 	}
 }

@@ -9,6 +9,8 @@
  */
 {
   "current": {
+    "garden_world_logo": "shopify://shop_images/spellout-black.png",
+    "garden_world_logo_mobile": "shopify://shop_images/duet_web_menu_star.png",
     "logo_width": 90,
     "type_header_font": "assistant_n4",
     "heading_scale": 100,
