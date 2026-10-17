@@ -46,11 +46,44 @@
  * backgrounds inside the page content (the header and footer stay solid).
  */
 body.garden-world-sections--translucent #MainContent .gradient {
-  background: rgba(var(--color-background), 0.78);
+  background: rgba(var(--color-background), 0.92);
 }
 
 body.garden-world-sections--clear #MainContent .gradient {
   background: transparent;
+}
+
+/*
+ * After a seamless page change from the splash (assets/duet-soft-nav.js),
+ * the splash itself stays behind the new page in place of the world: only
+ * its flowers show, under the same wash of page color, and it takes no
+ * clicks.
+ */
+body.has-splash-behind [data-soft-keep] {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  margin: 0;
+  pointer-events: none;
+}
+
+body.has-splash-behind [data-soft-keep] garden-splash {
+  height: 100%;
+  min-height: 0;
+}
+
+body.has-splash-behind [data-soft-keep] garden-splash > :not([data-garden-canvas]),
+body.has-splash-behind [data-soft-keep] > :not(garden-splash) {
+  display: none !important;
+}
+
+body.has-splash-behind [data-soft-keep]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(var(--color-background, 255, 255, 255));
+  opacity: var(--gw-veil, 0.7);
+  pointer-events: none;
 }
 
 /* The whole page is already a garden: no strip above the footer. */

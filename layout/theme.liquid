@@ -38,6 +38,10 @@
     <script src="{{ 'details-disclosure.js' | asset_url }}" defer="defer"></script>
     <script src="{{ 'details-modal.js' | asset_url }}" defer="defer"></script>
     <script src="{{ 'search-form.js' | asset_url }}" defer="defer"></script>
+    {%- comment -%} Blank counts as on: a setting added in code reads as blank until Theme settings are next saved. {%- endcomment -%}
+    {%- if settings.soft_navigation != false -%}
+      <script src="{{ 'duet-soft-nav.js' | asset_url }}" defer="defer"></script>
+    {%- endif -%}
 
     {%- if settings.garden_motif -%}
       <script src="{{ 'garden-kit.js' | asset_url }}" defer="defer"></script>

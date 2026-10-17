@@ -37,6 +37,10 @@ import { SCHEMES } from './duet-schemes.js';
 
 const TAU = Math.PI * 2;
 
+/* What the world behind other pages copies from the splash (dataset keys). */
+const LOOK_KEY = 'duet-garden-look';
+const LOOK = ['palette', 'foliageColor', 'centerColor', 'centerAccent', 'soilColor', 'density', 'flowerLogo', 'flowerLogoMobile', 'weather', 'season', 'hemisphere'];
+
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const range = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
@@ -478,6 +482,7 @@ function isReload() {
 
 class GardenSplash extends HTMLElement {
   connectedCallback() {
+    this.shareLook();
     this.canvas = this.querySelector('[data-garden-canvas]');
     this.overlay = this.querySelector('[data-garden-overlay]');
     if (!this.canvas || !this.overlay) return;
@@ -492,6 +497,46 @@ class GardenSplash extends HTMLElement {
     } catch (e) {
       this.fail(e);
     }
+  }
+
+  /*
+   * The flowers behind other pages match the splash: the splash keeps its
+   * look (colors, logo shapes, density, weather) for the browser, and the
+   * world behind other pages takes it on before it starts. Until the
+   * splash has been seen, the world uses its own settings (Theme settings
+   * → Garden motif).
+   */
+  shareLook() {
+    const d = this.dataset;
+    try {
+      if (!d.mode) {
+        const look = {};
+        for (const k of LOOK) if (d[k] !== undefined) look[k] = d[k];
+        localStorage.setItem(LOOK_KEY, JSON.stringify(look));
+      } else if (d.mode === 'world') {
+        const look = JSON.parse(localStorage.getItem(LOOK_KEY) || 'null');
+        if (look) for (const k of LOOK) if (typeof look[k] === 'string') d[k] = look[k];
+      }
+    } catch (e) {
+      // No storage (private browsing): each keeps its own settings.
+    }
+  }
+
+  /*
+   * The splash kept running behind another page after a seamless page
+   * change (assets/duet-soft-nav.js): it takes no part in the page, any
+   * night sky or zoom is put away, and it stays as the page's backdrop.
+   */
+  setBehind(on) {
+    this.behind = !!on;
+    if (this.behind) {
+      if (this.night) this.endNight();
+      if (this.view) this.resetView(true);
+      this.inspected = null;
+      if (this.pointer) Object.assign(this.pointer, { active: false, down: false });
+      if (this.toggleNav && this.classList.contains('is-nav-open')) this.toggleNav(false);
+    }
+    this.start();
   }
 
   /*
@@ -693,7 +738,7 @@ class GardenSplash extends HTMLElement {
     // Either way it sits behind a page: no overlay, no inspecting, fewer frames.
     this.backdrop = this.background || this.world;
     // Weather and light follow the real season on the splash, unless turned off or fixed to one.
-    this.weatherOn = !this.backdrop && d.weather !== 'false';
+    this.weatherOn = !this.background && d.weather !== 'false';
     this.seasonSetting = d.season || 'auto';
     this.south = d.hemisphere === 'south';
     this.skySetting = d.sky || 'auto';

@@ -1535,10 +1535,17 @@
         "default": true
       },
       {
+        "type": "checkbox",
+        "id": "soft_navigation",
+        "label": "Seamless page changes",
+        "default": true,
+        "info": "Pages open over the flowers without reloading, so the splash keeps running behind them. The cart, checkout and account pages still open normally. Shopify's own analytics counts only the first page of each visit while this is on."
+      },
+      {
         "type": "image_picker",
         "id": "garden_world_logo",
         "label": "Logo shape",
-        "info": "Use the same image as the garden splash's Logo shape, so the flowers form the same logo on every page. Leave blank for the Duet wordmark."
+        "info": "For visitors who haven't seen the splash yet; once they have, the flowers copy the splash's own look. Use the same image as the garden splash's Logo shape. Leave blank for the Duet wordmark."
       },
       {
         "type": "image_picker",
@@ -1579,7 +1586,7 @@
         "max": 90,
         "step": 5,
         "unit": "%",
-        "default": 55,
+        "default": 70,
         "info": "Washes the page color over the flowers so text and products stand out."
       },
       {
