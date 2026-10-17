@@ -347,14 +347,22 @@ const PETALS = {
  * specks. alpha(u, v) is 0..1 over the square; dither > 0 cuts it into that
  * many steps with a 4x4 ordered dither, the PS1 way.
  */
-function alphaTexture(n, alpha, dither) {
+function alphaTexture(n, alpha, dither, shade) {
   const data = new Uint8Array(n * n * 4);
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      let a = clamp(alpha((x + 0.5) / n, (y + 0.5) / n), 0, 1);
-      if (dither) a = Math.floor(a * dither + BAYER4[(y & 3) * 4 + (x & 3)] / 16) / dither;
+      const u = (x + 0.5) / n;
+      const v = (y + 0.5) / n;
+      const b = BAYER4[(y & 3) * 4 + (x & 3)] / 16;
+      let a = clamp(alpha(u, v), 0, 1);
+      if (dither) a = Math.floor(a * dither + b) / dither;
       const i = (y * n + x) * 4;
-      data[i] = data[i + 1] = data[i + 2] = 255;
+      // Shading, if any, is stepped with the same dither (in 6 steps per channel).
+      const c = shade ? shade(u, v) : null;
+      for (let k = 0; k < 3; k++) {
+        const ch = c ? clamp(c[k], 0, 1) : 1;
+        data[i + k] = Math.round((dither ? Math.floor(ch * 6 + b) / 6 : ch) * 255);
+      }
       data[i + 3] = Math.round(clamp(a, 0, 1) * 255);
     }
   }
@@ -1113,8 +1121,7 @@ class GardenSplash extends HTMLElement {
    */
   bindEgg() {
     if (this.logoTrigger) {
-      // On the logo, one tap still opens the menu, a moment later; quick
-      // repeated taps are the hidden game instead, and never open the menu.
+      // Taps on the asterisk count toward the hidden game.
       this.logoTrigger.addEventListener(
         'click',
         (e) => {
@@ -1123,7 +1130,11 @@ class GardenSplash extends HTMLElement {
           e.stopImmediatePropagation();
           this.eggTap(e.clientX, e.clientY);
           clearTimeout(this.eggMenuTimer);
-          if (this.egg && this.egg.taps === 1) {
+          // When the logo has an asterisk of its own, it belongs to the game:
+          // the rest of the logo opens the menu. A logo that is only the
+          // asterisk still opens the menu on a single tap.
+          const ownAsterisk = this.flowers.some((f) => f.star);
+          if (!ownAsterisk && this.egg && this.egg.taps === 1) {
             this.eggMenuTimer = window.setTimeout(() => {
               if (!this.egg || this.egg.taps !== 1) return;
               this.egg.taps = 0;
@@ -2394,7 +2405,27 @@ class GardenSplash extends HTMLElement {
       }
       return 1 - clear;
     };
-    return this.ps1 ? alphaTexture(24, alpha, 4) : alphaTexture(64, alpha, 0);
+    // Shading for some body, seen from below with the sun to one side: the
+    // puff is treated as a heap whose height is its density; slopes facing
+    // the light are bright, the far slopes, the underside and the folds
+    // between bumps fall into a blue-grey shadow. (v runs up the sprite.)
+    const light = [-0.5, 0.55, 0.67];
+    const lit = [1, 1, 1];
+    const dark = [0.5, 0.56, 0.74];
+    const e = 1 / 48;
+    const height = (u, v) => smooth(clamp(alpha(u, v) * 1.25, 0, 1));
+    const shade = (u, v) => {
+      const dx = (height(u + e, v) - height(u - e, v)) / (2 * e);
+      const dy = (height(u, v + e) - height(u, v - e)) / (2 * e);
+      const nx = -dx * 0.35;
+      const ny = -dy * 0.35;
+      const len = Math.hypot(nx, ny, 1);
+      const diffuse = Math.max(0, (nx * light[0] + ny * light[1] + light[2]) / len);
+      // Lower and thinner parts sit in more shadow.
+      const k = clamp(-0.05 + diffuse * 0.85 + (v - 0.5) * 0.5 + (height(u, v) - 0.5) * 0.3, 0, 1);
+      return mix(dark, lit, k);
+    };
+    return this.ps1 ? alphaTexture(24, alpha, 4, shade) : alphaTexture(64, alpha, 0, shade);
   }
 
   /* A round glow: bright in the middle, fading to nothing at the edge. */
@@ -2602,7 +2633,7 @@ class GardenSplash extends HTMLElement {
 
     // By day, things live in the clouds: eyes that push out of a puff, look
     // about, and sink back in. Their lids are cloud, so closed they vanish into it.
-    const peekR = this.base * S * 2.2;
+    const peekR = this.base * S * 0.85;
     const peekers = time.clouds
       ? [0, 1, 2, 3].map(() => {
           const e = skyEye(peekR, mix(cloudShade, cloudLit, 0.75), mix(this.heroColor, [40, 40, 60], 0.2));
@@ -3025,6 +3056,27 @@ class GardenSplash extends HTMLElement {
     if (n.dir < 0) sky.encounter = null;
   }
 
+  /*
+   * Two fingers swiped across the flowers: up starts the hidden game, down
+   * lies back to look at the sky. In the sky, swiping up gets back up.
+   */
+  twoFingerSwipe(dir) {
+    if (this.classList.contains('is-nav-open') || !this.arranged || this.failed) return;
+    this.gestured = true;
+    if (this.night) {
+      if (dir === 'up' && this.night.dir > 0) this.toggleNight();
+      return;
+    }
+    if (dir === 'down') {
+      this.toggleNight();
+      return;
+    }
+    if (this.eggEnabled()) {
+      if (this.egg) this.egg.taps = 0;
+      window.dispatchEvent(new CustomEvent('duet:egg', { detail: { garden: this } }));
+    }
+  }
+
   /* ---------------- zooming in the sky ---------------- */
 
   /* Lying on the bed, looking up, and not on the way in or out. */
@@ -3426,7 +3478,7 @@ class GardenSplash extends HTMLElement {
           const [a, b] = [...pts.values()];
           const mx = (a.x + b.x) / 2;
           const my = (a.y + b.y) / 2;
-          g = { mode: 'pinch', d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoomNow(), w: anchor(mx, my), mx, my };
+          g = { mode: 'pinch', d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoomNow(), w: anchor(mx, my), mx, my, t0: e.timeStamp };
           endGrowth();
         } else if (pts.size === 1) {
           g = { mode: null, id: e.pointerId, sx: x, sy: y, lx: x, ly: y };
@@ -3454,10 +3506,18 @@ class GardenSplash extends HTMLElement {
         const [x, y] = local(e);
         pt.x = x;
         pt.y = y;
-        if (g.mode === 'pinch' && pts.size >= 2) {
+        if ((g.mode === 'pinch' || g.mode === 'swipe') && pts.size >= 2) {
           const [a, b] = [...pts.values()];
           const d = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
-          zoomAt((g.z0 * d) / g.d0, g.w, (a.x + b.x) / 2, (a.y + b.y) / 2);
+          const my = (a.y + b.y) / 2;
+          // Two fingers moving up or down together, still the same distance
+          // apart, are a swipe, not a pinch: the zoom goes back to where it was.
+          if (g.mode === 'pinch' && Math.abs(d / g.d0 - 1) < 0.15 && Math.abs(my - g.my) > 45) {
+            g.mode = 'swipe';
+            zoomAt(g.z0, g.w, g.mx, g.my);
+          }
+          g.dy = my - g.my;
+          if (g.mode === 'pinch') zoomAt((g.z0 * d) / g.d0, g.w, (a.x + b.x) / 2, (a.y + b.y) / 2);
         } else if (g.mode === 'hold' && e.pointerId === g.id) {
           // Slide up to zoom in, down to zoom out, around the point first held.
           zoomAt(g.z0 * Math.exp((g.hy - y) * 0.012), g.w, g.hx, g.hy);
@@ -3491,6 +3551,11 @@ class GardenSplash extends HTMLElement {
     const up = (e) => {
       if (!pts.delete(e.pointerId)) return;
       clearTimeout(holdTimer);
+      if (g && g.mode === 'swipe') {
+        const quick = e.timeStamp - g.t0 < 1200;
+        if (quick && Math.abs(g.dy) > 70) this.twoFingerSwipe(g.dy < 0 ? 'up' : 'down');
+        g.mode = 'done';
+      }
       // Lifting one finger of a pinch doesn't start a pan with the other.
       if (pts.size === 0) g = null;
       else if (g) g.mode = 'done';
