@@ -2925,7 +2925,7 @@ class GardenSplash extends HTMLElement {
       group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, puffs, logoPuffs, cloudMat, fpos: new Float32Array(logo.length * 3), field, fieldPts, drift, driftPts, glows, shoot,
       heaps, planes: this.buildPlanes(group, disposables, atlas, tex, time, D), nextPlane: this.elapsed + 9 + Math.random() * 10,
       birds: this.buildBirds(group, disposables, time), nextBirds: this.elapsed + 7 + Math.random() * 6,
-      peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 6 + Math.random() * 6,
+      peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 5 + Math.random() * 15,
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
     };
   }
@@ -3503,10 +3503,10 @@ class GardenSplash extends HTMLElement {
   }
 
   /*
-   * Lights in the night sky. One, or a few in formation, fade in and hang
-   * there; then they move in ways nothing with weight could: instant stops,
-   * right-angle jumps, one breaking off and snapping back. In the end they
-   * shoot off into the distance in a smear of light and are gone.
+   * Lights in the night sky, easy to miss. One (now and then two) blinks on
+   * somewhere at random, faint and small, maybe makes one instant
+   * right-angle jump, and almost as soon as it has been noticed shoots off
+   * into the distance in a smear of light and is gone.
    */
   nightLights(t, dt, show, p) {
     const sky = this.sky;
@@ -3517,17 +3517,17 @@ class GardenSplash extends HTMLElement {
       return new THREE.Vector3(sky.eye.x + nx * sky.viewW * 0.5 * k, sky.eye.y - ny * sky.viewH * 0.5 * k, sky.eye.z + depth);
     };
     if (!sky.encounter && n.dir > 0 && p >= 1 && n.since > 4 && t > sky.nextEncounter) {
-      const count = Math.random() < 0.5 ? 1 : Math.random() < 0.6 ? 3 : 2;
-      // A route of sudden hops between points, each held for a moment.
+      const count = Math.random() < 0.8 ? 1 : 2;
+      // Anywhere in view; at most one sudden hop before it leaves.
       const hops = [];
-      const x0 = (Math.random() - 0.5) * 1.2;
-      const y0 = (Math.random() < 0.5 ? 0.55 : -0.55) + (Math.random() - 0.5) * 0.3;
+      const x0 = (Math.random() - 0.5) * 1.6;
+      const y0 = (Math.random() - 0.5) * 1.5;
       let x = x0;
       let y = y0;
-      const moves = 3 + ((Math.random() * 3) | 0);
-      let time0 = 1.6;
+      const moves = Math.random() < 0.5 ? 0 : 1;
+      let time0 = 0.25;
       for (let i = 0; i < moves; i++) {
-        const hold = 0.5 + Math.random() * 1.6;
+        const hold = 0.4 + Math.random() * 0.8;
         // Mostly straight across or straight up and down: right angles.
         if (Math.random() < 0.5) x = clamp(x + (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.5), -0.85, 0.85);
         else y = clamp(y + (Math.random() < 0.5 ? -1 : 1) * (0.2 + Math.random() * 0.4), -0.8, 0.8);
@@ -3537,8 +3537,9 @@ class GardenSplash extends HTMLElement {
       const a = Math.random() * TAU;
       sky.encounter = {
         t0: t, hops, start: [x0, y0],
-        exitAt: time0 + 0.8 + Math.random(), exitDir: [Math.cos(a), Math.sin(a)],
-        formation: [0, 1, 2].slice(0, count).map((i) => ({ dx: (i - (count - 1) / 2) * 0.06, dy: (i % 2) * 0.05, rogue: i === 2 && Math.random() < 0.7 })),
+        exitAt: time0 + 0.35 + Math.random() * 0.9, exitDir: [Math.cos(a), Math.sin(a)],
+        glow: 0.55 + Math.random() * 0.45,
+        formation: [0, 1].slice(0, count).map((i) => ({ dx: (i - (count - 1) / 2) * 0.05, dy: (i % 2) * 0.04, rogue: false })),
         hue: Math.random() < 0.5 ? [150, 255, 214] : [170, 200, 255],
       };
     }
@@ -3566,17 +3567,17 @@ class GardenSplash extends HTMLElement {
       // The rogue breaks away to one side for a while, then snaps back into place.
       let bx = f.dx;
       let by = f.dy;
-      if (f.rogue && age > enc.hops[0].at + 0.3 && age < enc.exitAt - 1.2) bx += Math.sin(age * 1.7) > 0.4 ? 0.22 : 0;
+      if (f.rogue && enc.hops.length && age > enc.hops[0].at + 0.3 && age < enc.exitAt - 1.2) bx += Math.sin(age * 1.7) > 0.4 ? 0.22 : 0;
       // Hanging still, but never quite still.
       const jit = 0.004;
       x += bx + Math.sin(t * 13 + i * 2) * jit;
       y += by + Math.cos(t * 11 + i * 3) * jit;
       let depth = plane;
-      let fade = smooth(range(age, 0, 1.4));
+      let fade = smooth(range(age, 0, 0.22)) * enc.glow;
       const out = age - enc.exitAt;
       if (out > 0) {
         // Gone: off into the distance faster than the eye can follow.
-        const k = out / 0.55;
+        const k = out / 0.4;
         depth = plane * (1 + k * k * 9);
         x += enc.exitDir[0] * k * k * 1.6;
         y += enc.exitDir[1] * k * k * 1.6;
@@ -3591,14 +3592,14 @@ class GardenSplash extends HTMLElement {
       o.halo.position.copy(pos);
       o.core.position.copy(pos);
       // A wide faint aura that breathes, a bright halo, a hard white core.
-      o.aura.scale.setScalar(150 * px * (1 + 0.25 * Math.sin(t * 2.3 + i)));
-      o.halo.scale.setScalar(64 * px * pulse);
-      o.core.scale.setScalar(18 * px);
+      o.aura.scale.setScalar(80 * px * (1 + 0.25 * Math.sin(t * 2.3 + i)));
+      o.halo.scale.setScalar(34 * px * pulse);
+      o.core.scale.setScalar(10 * px);
       o.aura.material.color.copy(toColor(enc.hue));
       o.halo.material.color.copy(toColor(enc.hue));
-      o.aura.material.opacity = 0.22 * fade * show;
-      o.halo.material.opacity = 0.8 * fade * show;
-      o.core.material.opacity = fade * show;
+      o.aura.material.opacity = 0.1 * fade * show;
+      o.halo.material.opacity = 0.55 * fade * show;
+      o.core.material.opacity = 0.9 * fade * show;
       o.aura.visible = o.halo.visible = o.core.visible = fade > 0.01;
       // A smear behind it while it moves fast; none while it hangs still.
       const prev = o.trail[1];
@@ -3609,14 +3610,14 @@ class GardenSplash extends HTMLElement {
         g.visible = !!q && smear > 0.02 && fade > 0.01;
         if (!g.visible) return;
         g.position.copy(q);
-        g.scale.setScalar(46 * px * (1 - k / 9));
+        g.scale.setScalar(26 * px * (1 - k / 9));
         g.material.color.copy(toColor(enc.hue));
-        g.material.opacity = 0.5 * smear * fade * show * (1 - k / 7);
+        g.material.opacity = 0.35 * smear * fade * show * (1 - k / 7);
       });
     });
-    if (enc && t - enc.t0 > enc.exitAt + 0.7) {
+    if (enc && t - enc.t0 > enc.exitAt + 0.5) {
       sky.encounter = null;
-      sky.nextEncounter = t + 14 + Math.random() * 22;
+      sky.nextEncounter = t + 8 + Math.random() * 30;
     }
     if (n.dir < 0) sky.encounter = null;
   }
