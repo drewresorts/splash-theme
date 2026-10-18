@@ -1,0 +1,25 @@
+{%- comment -%}
+  One typeface across the whole store: the monospace used in the Duet
+  header. Overrides the theme's font settings (Theme settings → Typography
+  no longer changes the typeface, only sizes) and every section's own font.
+  Rendered by the layouts, after base.css.
+{%- endcomment -%}
+<style>
+  :root {
+    --duet-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-body-family: var(--duet-mono);
+    --font-body-style: normal;
+    --font-body-weight: 400;
+    --font-body-weight-bold: 700;
+    --font-heading-family: var(--duet-mono);
+    --font-heading-style: normal;
+    --font-heading-weight: 400;
+  }
+
+  body,
+  body *,
+  body *::before,
+  body *::after {
+    font-family: var(--duet-mono) !important;
+  }
+</style>

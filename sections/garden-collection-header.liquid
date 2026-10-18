@@ -1,0 +1,180 @@
+{%- comment -%}
+  Shop page header in the splash page's style: a small monospace trail,
+  the collection title and count, quick links to the other collections,
+  and a bed of flowers that grows in underneath.
+{%- endcomment -%}
+{%- liquid
+  assign links = section.settings.collection_links
+  assign trail = section.settings.trail_label | default: 'Shop'
+  assign bed_seed = collection.id | modulo: 20 | plus: 1
+-%}
+
+<div class="garden-collection-header color-{{ section.settings.color_scheme }} gradient">
+  <div class="page-width garden-collection-header__inner">
+    <p class="garden-label garden-collection-header__trail">
+      {{ trail | escape }} <span aria-hidden="true">/</span> {{ collection.title | escape }}
+      <span class="garden-collection-header__count">
+        {{- 'products.facets.product_count_simple' | t: count: collection.products_count -}}
+      </span>
+    </p>
+    <h1 class="garden-collection-header__title h1">{{ collection.title | escape }}</h1>
+
+    {%- if section.settings.show_description and collection.description != blank -%}
+      <div class="garden-collection-header__description rte">{{ collection.description }}</div>
+    {%- endif -%}
+
+    {%- if links != blank and links.links.size > 0 -%}
+      <nav class="garden-collection-header__links" aria-label="{{ links.title | escape }}">
+        <ul class="garden-chips" role="list">
+          {%- for link in links.links -%}
+            <li>
+              <a
+                href="{{ link.url }}"
+                class="garden-chip garden-label"
+                {% if link.current or link.url == collection.url %}
+                  aria-current="page"
+                {% endif %}
+              >
+                {{- link.title | escape -}}
+              </a>
+            </li>
+          {%- endfor -%}
+        </ul>
+      </nav>
+    {%- endif -%}
+  </div>
+
+  {%- if section.settings.show_bed -%}
+    {% render 'garden-bed',
+      count: section.settings.flower_count,
+      height: section.settings.bed_height,
+      seed: bed_seed
+    %}
+  {%- endif -%}
+</div>
+
+{% stylesheet %}
+  .garden-collection-header__inner {
+    padding-top: 3.2rem;
+    padding-bottom: 1.6rem;
+  }
+
+  .garden-collection-header__trail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.8rem;
+    opacity: 0.75;
+  }
+
+  .garden-collection-header__count::before {
+    content: '·';
+    margin-right: 0.8rem;
+  }
+
+  .garden-collection-header__title {
+    margin: 0.8rem 0 0;
+  }
+
+  .garden-collection-header__description {
+    max-width: 64rem;
+    margin-top: 1.2rem;
+  }
+
+  .garden-chips {
+    display: flex;
+    gap: 0.8rem;
+    margin: 2rem 0 0;
+    padding: 0 0 0.4rem;
+    list-style: none;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .garden-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .garden-chip {
+    display: block;
+    padding: 0.9rem 1.4rem;
+    border: 1px solid rgba(var(--color-foreground), 0.35);
+    color: rgb(var(--color-foreground));
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .garden-chip:hover {
+    border-color: rgb(var(--color-foreground));
+  }
+
+  .garden-chip[aria-current='page'] {
+    border-color: rgb(var(--color-foreground));
+    background: rgb(var(--color-foreground));
+    color: rgb(var(--color-background));
+  }
+
+  @media screen and (min-width: 750px) {
+    .garden-collection-header__inner {
+      padding-top: 4.8rem;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Garden collection header",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "trail_label",
+      "label": "Trail label",
+      "default": "Shop"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_description",
+      "label": "Show collection description",
+      "default": true
+    },
+    {
+      "type": "link_list",
+      "id": "collection_links",
+      "label": "Collection links",
+      "info": "Quick links shown under the title, so shoppers can move between collections without opening the menu. The current collection is highlighted."
+    },
+    {
+      "type": "checkbox",
+      "id": "show_bed",
+      "label": "Show flower bed",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "flower_count",
+      "label": "Flowers",
+      "min": 4,
+      "max": 40,
+      "step": 1,
+      "default": 22
+    },
+    {
+      "type": "range",
+      "id": "bed_height",
+      "label": "Flower bed height",
+      "min": 32,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 72
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:sections.all.colors.label",
+      "default": "scheme-1"
+    }
+  ]
+}
+{% endschema %}

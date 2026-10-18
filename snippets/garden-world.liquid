@@ -1,0 +1,63 @@
+{%- comment -%}
+  The flower world behind every page that doesn't bring its own garden:
+  the splash's flowers already formed into the logo, fixed to the screen
+  behind the page's content, with the same slow drift of camera and light
+  as the splash once it settles. Each page of a visit shares the same seed
+  (sessionStorage), so it is the same composition everywhere and the
+  opening never replays on ordinary navigation.
+
+  The 3D code loads only once the page itself has finished loading, and not
+  at all for visitors who ask to save data. Rendered by layout/theme.liquid.
+{%- endcomment -%}
+{%- liquid
+  assign flower_logo_url = ''
+  if settings.garden_world_logo != blank
+    assign flower_logo_url = settings.garden_world_logo | image_url: width: 900
+  endif
+  assign flower_logo_mobile_url = ''
+  if settings.garden_world_logo_mobile != blank
+    assign flower_logo_mobile_url = settings.garden_world_logo_mobile | image_url: width: 900
+  endif
+-%}
+<garden-splash
+  class="garden-world"
+  data-mode="world"
+  data-palette="{{ '["#A62749","#66A4C8","#191F6B","#B9E5FB","#F04E62","#B9E5FB"]' | escape }}"
+  data-foliage-color="#66A4C8"
+  data-center-color="#F04E62"
+  data-center-accent="#A62749"
+  data-soil-color="#FFFFFF"
+  data-duration="5"
+  data-density="{{ settings.garden_world_density | default: 'overgrown' }}"
+  {% if settings.garden_follow_scheme != false %}data-follow-scheme="true"{% endif %}
+  {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
+  {% if flower_logo_mobile_url != blank %}data-flower-logo-mobile="{{ flower_logo_mobile_url }}"{% endif %}
+  aria-hidden="true"
+>
+  <canvas class="garden-world__canvas" data-garden-canvas></canvas>
+  <canvas class="garden-world__overlay" data-garden-overlay></canvas>
+</garden-splash>
+
+<script type="module">
+  (function () {
+    var world = document.querySelector('.garden-world');
+    if (!world) return;
+    // A page with its own garden (the splash, the shop's background) keeps it: one garden per page.
+    var others = document.querySelectorAll('garden-splash:not(.garden-world)');
+    var saveData = navigator.connection && navigator.connection.saveData;
+    if (others.length || saveData) {
+      world.remove();
+      document.body.classList.remove('has-garden-world');
+      return;
+    }
+    var load = function () {
+      import({{ 'garden-splash.js' | asset_url | json }});
+    };
+    var idle = function () {
+      if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 2000 });
+      else setTimeout(load, 200);
+    };
+    if (document.readyState === 'complete') idle();
+    else window.addEventListener('load', idle, { once: true });
+  })();
+</script>

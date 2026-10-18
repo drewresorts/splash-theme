@@ -1,0 +1,27 @@
+{%- comment -%}
+  The shop wall: nothing but the projected picture, for the computer that
+  feeds the projector (templates/page.wall.json). No header, footer or
+  flower world, and kept out of search results.
+{%- endcomment -%}
+<!doctype html>
+<html lang="{{ request.locale.iso_code }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{{ page_title }} &ndash; {{ shop.name }}</title>
+    {{ content_for_header }}
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+    </style>
+  </head>
+  <body>
+    {{ content_for_layout }}
+  </body>
+</html>

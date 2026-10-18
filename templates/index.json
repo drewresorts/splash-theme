@@ -9,13 +9,85 @@
  */
 {
   "sections": {
+    "home_header": {
+      "type": "duet-header",
+      "blocks": {
+        "search": {
+          "type": "search",
+          "disabled": true,
+          "settings": {
+            "show": true,
+            "position": "left_3"
+          }
+        },
+        "menu": {
+          "type": "menu",
+          "settings": {
+            "style": "text",
+            "label": "Menu",
+            "show": true,
+            "position": "right"
+          }
+        },
+        "logo": {
+          "type": "logo",
+          "settings": {
+            "logo": "shopify://shop_images/spellout-black.png",
+            "show": true,
+            "position": "left"
+          }
+        },
+        "account": {
+          "type": "account",
+          "disabled": true,
+          "settings": {
+            "show": true,
+            "position": "left"
+          }
+        },
+        "cart": {
+          "type": "cart",
+          "disabled": true,
+          "settings": {
+            "show": true,
+            "position": "left_2"
+          }
+        }
+      },
+      "block_order": [
+        "search",
+        "menu",
+        "logo",
+        "account",
+        "cart"
+      ],
+      "settings": {
+        "home_own_header": true,
+        "menu": "main-menu",
+        "background": "transparent",
+        "ink_color": "#191f6b",
+        "bar_color": "#ffffff",
+        "panel_color": "#ffffff",
+        "logo_width": 140,
+        "logo_width_mobile": 140,
+        "game_name": "Pollen Dream",
+        "game_access": "secret"
+      }
+    },
     "garden_splash_duet": {
       "type": "garden-splash",
       "settings": {
-        "logo": "shopify://shop_images/duet-monogram-3d-spin-slow.gif",
-        "logo_size": 30,
+        "logo_position": "none",
+        "flower_logo": "shopify://shop_images/spellout-black.png",
+        "flower_logo_mobile": "shopify://shop_images/duet_web_menu_star.png",
+        "logo_width": 120,
         "menu": "main-menu",
         "logo_link": "",
+        "menu_style": "image",
+        "menu_label": "Menu",
+        "menu_close_label": "Close",
+        "menu_image_width": 200,
+        "show_schemes": true,
         "center_color": "#f04e62",
         "center_accent_color": "#a62749",
         "color_1": "#a62749",
@@ -27,13 +99,18 @@
         "foliage_color": "#66a4c8",
         "soil_color": "#ffffff",
         "bloom_duration": 4,
-        "density": "overgrown",
-        "hint_text": "Press + drag to grow  /  Tap to make them blink",
-        "show_replant": true
+        "density": "packed",
+        "graphics_style": "ps1",
+        "weather": true,
+        "season": "auto",
+        "hemisphere": "north",
+        "sky": "auto",
+        "hint_text": ""
       }
     }
   },
   "order": [
+    "home_header",
     "garden_splash_duet"
   ]
 }

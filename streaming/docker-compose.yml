@@ -8,6 +8,28 @@ services:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
     environment:
       MTX_LOGLEVEL: info
+      MTX_PATHS_CAM_PUBLISHUSER: "${PUBLISH_USER:-publisher}"
+      MTX_PATHS_CAM_PUBLISHPASS: "${PUBLISH_PASS:-changeme}"
+
+  # The shop wall's relay (wall-relay/server.mjs): passes visitors' changes
+  # from the blog page's hidden remote to the wall. Settings come from .env.
+  wall-relay:
+    image: node:22-alpine
+    container_name: wall-relay
+    restart: unless-stopped
+    network_mode: host
+    working_dir: /app
+    command: ["node", "server.mjs"]
+    volumes:
+      - ./wall-relay:/app:ro
+    environment:
+      PORT: "8787"
+      ALLOWED_ORIGINS: "${WALL_ALLOWED_ORIGINS:-}"
+      ADMIN_TOKEN: "${WALL_ADMIN_PASSWORD:-}"
+      OPEN_HOURS: "${WALL_OPEN_HOURS:-}"
+      SHOP_TIMEZONE: "${WALL_TIMEZONE:-UTC}"
+      COOLDOWN_SECONDS: "${WALL_COOLDOWN_SECONDS:-20}"
+      CHANGE_MINUTES: "${WALL_CHANGE_MINUTES:-4}"
 
   caddy:
     image: caddy:2
@@ -15,11 +37,15 @@ services:
     restart: unless-stopped
     depends_on:
       - mediamtx
+      - wall-relay
     network_mode: host
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    environment:
+      STREAM_DOMAIN: "${STREAM_DOMAIN:-stream.example.com}"
+      WALL_DOMAIN: "${WALL_DOMAIN:-wall.example.com}"
 
 volumes:
   caddy_data:

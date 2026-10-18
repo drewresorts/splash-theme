@@ -1,0 +1,438 @@
+/*
+ * The shop wall (assets/duet-wall.js), on the projector page and in the
+ * blog page's hidden remote.
+ */
+.duet-wall {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: #fff;
+}
+
+.duet-wall__video,
+.duet-wall__canvas,
+.duet-wall__over {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* With effects, the video only feeds the picture and the canvas shows it. */
+.duet-wall__video {
+  object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.duet-wall__over {
+  visibility: hidden;
+  image-rendering: pixelated;
+}
+
+/* Without WebGL (or a video host that forbids it): the plain video, weather drawn over it. */
+.duet-wall[data-css] .duet-wall__video {
+  opacity: 1;
+}
+
+.duet-wall[data-css] .duet-wall__canvas {
+  display: none;
+}
+
+.duet-wall[data-css] .duet-wall__over {
+  visibility: visible;
+}
+
+.duet-wall__note {
+  position: absolute;
+  left: 3vmin;
+  bottom: 3vmin;
+  margin: 0;
+  padding: 0.6em 0.9em;
+  background: rgba(255, 255, 255, 0.86);
+  color: #191f6b;
+  font: 1.6vmin/1.3 ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(0.6em);
+  transition: opacity 0.6s, transform 0.6s;
+  pointer-events: none;
+}
+
+.duet-wall__note.is-shown {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- The projector page ---------- */
+
+.duet-wall-page {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+.duet-wall-page .duet-wall {
+  position: absolute;
+  inset: 0;
+  cursor: none;
+}
+
+.duet-wall-page .duet-wall.is-pointing {
+  cursor: pointer;
+}
+
+.duet-wall-page__hint {
+  position: absolute;
+  top: 2vmin;
+  right: 2vmin;
+  z-index: 2;
+  margin: 0;
+  padding: 0.5em 0.8em;
+  background: rgba(255, 255, 255, 0.86);
+  color: #191f6b;
+  font: 12px/1.3 ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+
+.duet-wall-page:fullscreen .duet-wall-page__hint,
+.duet-wall-page__hint.is-gone {
+  opacity: 0;
+}
+
+.duet-wall-page__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 2rem;
+  color: #fff;
+  font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace;
+  text-align: center;
+}
+
+/* ---------- The hidden remote (blog page) ---------- */
+
+/* The way in: press and hold the title and a beam of light grows from it. */
+.wall-remote-trigger {
+  position: relative;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.wall-remote-trigger::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 0;
+  height: 0;
+  border-left: 0 solid transparent;
+  border-right: 0 solid transparent;
+  border-top: 0 solid rgba(255, 236, 170, 0);
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: all 0.25s ease-out;
+}
+
+.wall-remote-trigger.is-charging::after {
+  border-left-width: 9rem;
+  border-right-width: 9rem;
+  border-top-width: 14rem;
+  border-top-color: rgba(255, 236, 170, 0.45);
+  filter: blur(6px);
+  transition: all 1.3s cubic-bezier(0.3, 0, 0.6, 1);
+}
+
+.wall-remote-trigger.is-lit {
+  text-shadow: 0 0 12px rgba(255, 220, 120, 0.9);
+}
+
+html.wall-remote-open,
+html.wall-remote-open body {
+  overflow: hidden;
+}
+
+.wall-remote {
+  --wr-ink: #191f6b;
+  --wr-hero: #f04e62;
+  --wr-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  position: fixed;
+  inset: 0;
+  z-index: 2147482000;
+  display: grid;
+  place-items: center;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(6px);
+  color: var(--wr-ink);
+  font-family: var(--wr-mono);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.wall-remote[hidden] {
+  display: none;
+}
+
+.wall-remote.is-open {
+  opacity: 1;
+}
+
+.wall-remote__panel {
+  display: grid;
+  gap: 14px;
+  width: min(720px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 22px;
+  border: 1px solid currentColor;
+  background: #fff;
+  box-shadow: 4px 4px 0 var(--wr-hero), -4px -4px 0 #66a4c8;
+  transform: translateY(12px) scale(0.98);
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.wall-remote.is-open .wall-remote__panel {
+  transform: none;
+}
+
+.wall-remote__panel:focus {
+  outline: none;
+}
+
+.wall-remote__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wall-remote__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.wall-remote__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9aa0b8;
+}
+
+.wall-remote[data-state='live'] .wall-remote__dot {
+  background: var(--wr-hero);
+  animation: wall-remote-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes wall-remote-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.wall-remote__title {
+  margin: 0;
+  color: inherit;
+  font-family: inherit;
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  text-shadow: 2px 0 rgba(240, 78, 98, 0.55), -2px 0 rgba(102, 164, 200, 0.55);
+}
+
+.wall-remote__close {
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.wall-remote__lead {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wall-remote__lead p {
+  margin: 0;
+}
+
+.wall-remote__view {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border: 1px solid currentColor;
+  background: #f4f4f8;
+}
+
+.wall-remote__wall {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.wall-remote__view-hint {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 1;
+  margin: 0;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.wall-remote.is-disabled .wall-remote__view-hint {
+  display: none;
+}
+
+.wall-remote__wait {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--wr-hero);
+}
+
+.wall-remote__controls {
+  display: grid;
+  gap: 12px;
+}
+
+.wall-remote__group {
+  min-width: 0;
+  margin: 0;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid currentColor;
+}
+
+.wall-remote__group legend {
+  padding: 0 8px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.wall-remote__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.wall-remote__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.wall-remote__chip[aria-pressed='true'] {
+  background: var(--wr-ink);
+  color: #fff;
+}
+
+.wall-remote__chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.wall-remote__chip:focus-visible,
+.wall-remote__close:focus-visible {
+  outline: 2px solid var(--wr-hero);
+  outline-offset: 2px;
+}
+
+.wall-remote__swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: conic-gradient(#f04e62 0 33%, #66a4c8 0 67%, #191f6b 0);
+}
+
+.wall-remote__swatch[data-scheme='camo'] {
+  background: radial-gradient(40% 30% at 25% 30%, #2f3524 98%, transparent), radial-gradient(35% 28% at 72% 65%, #6b4f2e 98%, transparent), #78866b;
+}
+
+.wall-remote__swatch[data-scheme='cotton-candy'] {
+  background: conic-gradient(#ff9ec7, #8fcbf2, #bfa0f2, #9ee0c6, #ff9ec7);
+}
+
+.wall-remote__swatch[data-scheme='circus'] {
+  background: repeating-conic-gradient(#e1251b 0 30deg, #f4ecd8 0 60deg);
+}
+
+.wall-remote__swatch[data-scheme='neon'] {
+  background: radial-gradient(circle, #ff2bd6 0 35%, #1b1b3a 40% 60%, #39ff14 65%);
+}
+
+.wall-remote__swatch[data-scheme='tropical'] {
+  background: repeating-linear-gradient(135deg, #ff6f61 0 3px, #ffb000 0 6px, #00a6a6 0 9px);
+}
+
+.wall-remote__swatch[data-scheme='noir'] {
+  background: linear-gradient(135deg, #111 50%, #a8a8a8 50%);
+}
+
+.wall-remote__fine {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+@media (max-width: 749px) {
+  .wall-remote__panel {
+    padding: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wall-remote,
+  .wall-remote__panel,
+  .wall-remote-trigger.is-charging::after {
+    transition: none;
+  }
+
+  .wall-remote[data-state='live'] .wall-remote__dot {
+    animation: none;
+  }
+}

@@ -1,0 +1,167 @@
+/*
+ * Certificates of authenticity in the customer account
+ * (snippets/authenticity-certificates.liquid).
+ */
+
+.authenticity {
+  margin: 4rem 0;
+}
+
+.authenticity__heading {
+  margin: 0 0 0.8rem;
+}
+
+.authenticity__intro {
+  max-width: 64rem;
+  margin: 0 0 2.4rem;
+  color: rgba(var(--color-foreground), 0.75);
+}
+
+.authenticity__list {
+  display: grid;
+  gap: 1.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media screen and (min-width: 990px) {
+  .authenticity__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.authenticity-card {
+  display: grid;
+  grid-template-columns: 9.6rem minmax(0, 1fr);
+  gap: 1.6rem;
+  padding: 1.6rem;
+  border: 1px solid rgba(var(--color-foreground), 0.2);
+}
+
+.authenticity-card__media img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.authenticity-card__label,
+.authenticity-card__facts dt,
+.authenticity-card__status {
+  font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.authenticity-card__label {
+  margin: 0;
+  opacity: 0.7;
+}
+
+.authenticity-card__title {
+  margin: 0.4rem 0 1.2rem;
+  font-size: 1.8rem;
+}
+
+.authenticity-card__title span {
+  opacity: 0.7;
+  font-size: 1.4rem;
+}
+
+.authenticity-card__facts {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1.2rem;
+}
+
+.authenticity-card__facts div {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.authenticity-card__facts dt {
+  opacity: 0.6;
+  padding-top: 0.2rem;
+}
+
+.authenticity-card__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.authenticity-card__status {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0;
+}
+
+.authenticity-card__dot {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.authenticity-card--minting .authenticity-card__dot,
+.authenticity-card--transferring .authenticity-card__dot {
+  animation: authenticity-pulse 1.4s ease-in-out infinite;
+}
+
+.authenticity-card--ready .authenticity-card__status,
+.authenticity-card--in_wallet .authenticity-card__status {
+  color: #1d7a4f;
+}
+
+.authenticity-card--revoked {
+  opacity: 0.6;
+}
+
+.authenticity-card__note {
+  margin: 0.8rem 0 0;
+  font-size: 1.3rem;
+  color: rgba(var(--color-foreground), 0.75);
+}
+
+.authenticity-card__action {
+  display: inline-block;
+  margin-top: 1.2rem;
+  padding: 0.9rem 1.4rem;
+  border: 1px solid rgb(var(--color-foreground));
+  color: rgb(var(--color-foreground));
+  font-size: 1.3rem;
+  text-decoration: none;
+}
+
+.authenticity-card__action:hover {
+  background: rgb(var(--color-foreground));
+  color: rgb(var(--color-background));
+}
+
+@keyframes authenticity-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media screen and (max-width: 749px) {
+  .authenticity-card {
+    grid-template-columns: 7.2rem minmax(0, 1fr);
+  }
+
+  .authenticity-card__facts div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .authenticity-card--minting .authenticity-card__dot,
+.authenticity-card--transferring .authenticity-card__dot {
+    animation: none;
+  }
+}
