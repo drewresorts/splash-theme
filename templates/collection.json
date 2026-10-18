@@ -23,9 +23,9 @@
         "menu_label": "Menu",
         "menu_close_label": "Close",
         "menu_image": "shopify://shop_images/duet_web_menu_star.png",
-        "menu_image_width": 48,
+        "menu_image_width": 104,
         "ink_color": "#000000",
-        "page_color": "#FFFFFF",
+        "page_color": "#ffffff",
         "columns_desktop": 3,
         "columns_mobile": "1"
       }
