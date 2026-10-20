@@ -62,17 +62,17 @@
       "name": "Garden background",
       "settings": {
         "arrangement": "logo",
-        "density": "lush",
-        "wave_speed": 10,
+        "density": "packed",
+        "wave_speed": 9,
         "grow_in": false,
         "veil": 80,
-        "page_color": "#FFFFFF",
-        "color_1": "#A62749",
-        "color_2": "#66A4C8",
-        "color_3": "#191F6B",
-        "color_4": "#B9E5FB",
-        "color_5": "#F04E62",
-        "foliage_color": "#66A4C8"
+        "page_color": "#ffffff",
+        "color_1": "#a62749",
+        "color_2": "#66a4c8",
+        "color_3": "#191f6b",
+        "color_4": "#b9e5fb",
+        "color_5": "#f04e62",
+        "foliage_color": "#66a4c8"
       }
     }
   },
