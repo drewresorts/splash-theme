@@ -101,10 +101,10 @@
         "bloom_duration": 4,
         "density": "packed",
         "graphics_style": "ps1",
-        "weather": false,
+        "weather": true,
         "season": "auto",
         "hemisphere": "north",
-        "sky": "day",
+        "sky": "auto",
         "hint_text": ""
       }
     }
