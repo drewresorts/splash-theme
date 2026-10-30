@@ -11,7 +11,7 @@
  * into the shape of the logo. Some flowers open an eyeball that turns in its
  * socket to follow the pointer. Visitors can switch the color scheme.
  *
- * Interaction is utilitarian: crosshair and coordinate readout, hover or
+ * Interaction is utilitarian: an ordinary pointer and a coordinate readout, hover or
  * tap to inspect, press and drag to speed up growth, tap to recolor a
  * flower (nearby eyes blink). Once arranged, the logo itself opens the menu.
  * The splash can be zoomed into, with no controls shown: scroll or pinch on
@@ -4915,33 +4915,6 @@ class GardenSplash extends HTMLElement {
     g.clearRect(0, 0, this.overlay.width, this.overlay.height);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const ink = this.ink;
-    const ptr = this.pointer;
-
-    // Crosshair across the field at the pointer.
-    if (ptr.active && !this.classList.contains('is-nav-open')) {
-      g.strokeStyle = rgba(ink, 0.25);
-      g.lineWidth = 1;
-      g.beginPath();
-      const px = Math.round(ptr.x) + 0.5;
-      const py = Math.round(ptr.y) + 0.5;
-      g.moveTo(px, 0);
-      g.lineTo(px, py - 10);
-      g.moveTo(px, py + 10);
-      g.lineTo(px, this.h);
-      g.moveTo(0, py);
-      g.lineTo(px - 10, py);
-      g.moveTo(px + 10, py);
-      g.lineTo(this.w, py);
-      g.stroke();
-      if (ptr.down) {
-        g.setLineDash([3, 4]);
-        g.strokeStyle = rgba(ink, 0.6);
-        g.beginPath();
-        g.arc(ptr.x, ptr.y, this.base * 2.4, 0, TAU);
-        g.stroke();
-        g.setLineDash([]);
-      }
-    }
 
     // Bracket and readout on the inspected specimen.
     const f = this.inspected;
