@@ -58,11 +58,12 @@
   <canvas class="garden-splash__canvas" data-garden-canvas aria-hidden="true"></canvas>
   <canvas class="garden-splash__overlay" data-garden-overlay aria-hidden="true"></canvas>
 
+  {%- comment -%}
+    Once the flowers have formed the logo, the logo itself opens the menu.
+    garden-splash.js sizes this button to the logo and shows it then. With
+    no menu it is there only to catch taps on the asterisk (the hidden game).
+  {%- endcomment -%}
   {%- if has_menu -%}
-    {%- comment -%}
-      Once the flowers have formed the logo, the logo itself opens the menu.
-      garden-splash.js sizes this button to the logo and shows it then.
-    {%- endcomment -%}
     <button
       type="button"
       class="garden-splash__logo-trigger"
@@ -74,6 +75,8 @@
       aria-label="{{ shop.name | escape }}: {{ menu_label | escape }}"
       hidden
     ></button>
+  {%- else -%}
+    <button type="button" class="garden-splash__logo-trigger" data-garden-logo-trigger data-garden-ui tabindex="-1" aria-hidden="true" hidden></button>
   {%- endif -%}
 
   {%- capture logo_img -%}
