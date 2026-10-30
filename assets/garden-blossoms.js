@@ -7,7 +7,7 @@
  * sways with the wind like the rest of the bed.
  *
  * The camera comes in on the first blossom as the page opens, with its
- * neighbors in view at the sides. Tapping one of them (or the arrows, the
+ * neighbors in view at the sides. Tapping one of them (or the
  * arrow keys, or a sideways swipe) glides the camera over to it; tapping
  * the blossom in focus opens its product page.
  *
