@@ -1,9 +1,10 @@
 /*
  * The shop as a flower bed (sections/garden-shop.liquid, Products as:
  * blossoms). Each product grows as a tall plant of its own among the
- * logo's flowers: a stem rises, a bud swells and its petals fall open to
- * unveil the product's main image (or its 3D model) at the heart of the
- * flower, held there and swaying with the wind like the rest of the bed.
+ * logo's flowers: a stem rises, a bud swells and its petals fall open,
+ * and the product rises out of the flower's heart to float over it: its
+ * main image cut out from its background, or its 3D model. The whole plant
+ * sways with the wind like the rest of the bed.
  *
  * The camera comes in on the first blossom as the page opens, with its
  * neighbors in view at the sides. Tapping one of them (or the arrows, the
@@ -18,7 +19,7 @@ const GROW = 2.6; // seconds from seed to open blossom
 const STAGGER = 0.35; // seconds between one plant starting and the next
 
 export function attach(garden, G) {
-  const { THREE, FLOOR_Z, clamp, lerp, range, smooth, mix, tone, toColor, mulberry32 } = G;
+  const { THREE, FLOOR_Z, clamp, lerp, range, smooth, tone, toColor, mulberry32 } = G;
   const data = garden.querySelector('[data-blossom-products]');
   let products = [];
   try {
@@ -41,13 +42,12 @@ export function attach(garden, G) {
   garden.scene.add(group);
   const disposables = [];
   const rng = mulberry32((garden.seed || 1) ^ 0x5eed);
-  const loader = new THREE.TextureLoader();
-  loader.setCrossOrigin('anonymous');
 
-  // Shared shapes: petals and leaves from the bed's own set, the image on a disc in a thin ring.
-  const disc = new THREE.CircleGeometry(1, 48);
-  const ring = new THREE.TorusGeometry(1, 0.045, 4, 48);
-  disposables.push(disc, ring);
+  // Shared shapes: petals, leaves and stamens from the bed's own set; a card for the cut-out image; a soft round shadow.
+  const card = new THREE.PlaneGeometry(1, 1);
+  const blot = new THREE.CircleGeometry(1, 24);
+  const shadowTex = softDot(THREE);
+  disposables.push(card, blot, shadowTex);
   const plastic = (color, opts) => {
     const m = garden.makeMaterial(Object.assign({ color: toColor(color) }, opts));
     disposables.push(m);
@@ -55,7 +55,8 @@ export function attach(garden, G) {
   };
   const stemMat = plastic(tone(garden.foliage, -0.3), {});
   const leafMat = plastic(garden.foliage, { side: THREE.DoubleSide });
-  const ringMat = plastic(garden.heroAccent, { shininess: 30 });
+  const stamenMat = plastic(garden.heroAccent, { shininess: 30 });
+  const heartMat = plastic(garden.heroColor, { shininess: 24 });
 
   const plants = products.map((p, i) => {
     const plant = new THREE.Group();
@@ -77,7 +78,7 @@ export function attach(garden, G) {
     const outer = garden.palette[i % garden.palette.length];
     const inner = garden.palette[(i + 2) % garden.palette.length];
     const petals = [];
-    // Each ring stands round the image's edge (r0, in blossom radii), so the open petals frame it.
+    // Each ring grows from close round the heart (r0, in blossom radii).
     const ringOf = (n, color, len, wid, z, closed, open, turn, r0) => {
       const mat = plastic(color, { side: THREE.DoubleSide, shininess: 16 });
       for (let k = 0; k < n; k++) {
@@ -88,43 +89,46 @@ export function attach(garden, G) {
         petals.push(m);
       }
     };
-    ringOf(10, tone(outer, -0.08), 1.0, 0.75, -1.5, 1.3, -0.1, 0, 0.92);
-    ringOf(10, inner, 0.7, 0.55, -0.5, 1.45, 0.08, Math.PI / 10, 0.9);
+    ringOf(10, tone(outer, -0.08), 1.75, 0.8, -1.5, 1.3, -0.1, 0, 0.14);
+    ringOf(10, inner, 1.25, 0.6, -0.5, 1.45, 0.12, Math.PI / 10, 0.12);
 
-    // The product's image, unveiled from the center as the petals open.
-    const imageMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
-    disposables.push(imageMat);
-    const face = new THREE.Mesh(disc, imageMat);
-    // Just above the petals' base (the head is scaled to the blossom's radius).
-    face.position.z = 0.06;
-    head.add(face);
-    const frame = new THREE.Mesh(ring, ringMat);
-    frame.position.z = 0.07;
-    head.add(frame);
-    if (p.image) {
-      loader.load(
-        p.image,
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          // Cover the disc: the middle of the picture, never stretched.
-          const a = tex.image.width / tex.image.height || 1;
-          if (a > 1) {
-            tex.repeat.set(1 / a, 1);
-            tex.offset.set((1 - 1 / a) / 2, 0);
-          } else {
-            tex.repeat.set(1, a);
-            tex.offset.set(0, (1 - a) / 2);
-          }
-          imageMat.map = tex;
-          imageMat.needsUpdate = true;
-          disposables.push(tex);
-        },
-        undefined,
-        () => {}
-      );
+    // The heart of the flower: a dome of stamens round a center, no gap for the ground to show through.
+    const stamens = [];
+    const heart = new THREE.Mesh(garden.geometries.ball, heartMat);
+    head.add(heart);
+    for (let k = 0; k < 14; k++) {
+      const m = new THREE.Mesh(garden.geometries.ball, stamenMat);
+      const ring2 = k < 5 ? 0.16 : 0.32;
+      const a = (k / (k < 5 ? 5 : 9)) * Math.PI * 2 + (k < 5 ? 0 : 0.3);
+      m.userData = { x: Math.cos(a) * ring2, y: Math.sin(a) * ring2, z: k < 5 ? 0.22 : 0.14 };
+      head.add(m);
+      stamens.push(m);
     }
 
-    return { p, i, plant, head, stem, leaves, petals, face, frame, imageMat, startAt: 0, bx: 0, by: 0, vx: 0, vy: 0, ph: rng() * Math.PI * 2 };
+    // The product itself, its photo cut out from its background, hanging in the air over the heart.
+    const imageMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, alphaTest: 0.02, side: THREE.DoubleSide, depthWrite: false });
+    disposables.push(imageMat);
+    const face = new THREE.Mesh(card, imageMat);
+    face.visible = false;
+    face.renderOrder = 2;
+    head.add(face);
+    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, map: shadowTex, transparent: true, opacity: 0, depthWrite: false });
+    disposables.push(shadowMat);
+    const shadow = new THREE.Mesh(blot, shadowMat);
+    shadow.renderOrder = 1;
+    head.add(shadow);
+    const pl = { p, i, plant, head, stem, leaves, petals, heart, stamens, face, shadow, imageMat, shadowMat, aspect: 1, startAt: 0, bx: 0, by: 0, vx: 0, vy: 0, ph: rng() * Math.PI * 2 };
+    if (p.image) cutOut(p.image).then((cut) => {
+      if (!cut) return;
+      const tex = new THREE.CanvasTexture(cut);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      disposables.push(tex);
+      imageMat.map = tex;
+      imageMat.needsUpdate = true;
+      pl.aspect = cut.width / cut.height;
+      face.visible = !pl.model;
+    });
+    return pl;
   });
 
   // The camera moves through the garden's own view (zoom and center), which it may not have made yet.
@@ -162,16 +166,14 @@ export function attach(garden, G) {
           o.material = Array.isArray(o.material) ? o.material.map(restyle) : restyle(o.material);
           disposables.push(o.geometry);
         });
-        // About as wide as the image it replaces, resting on the flower's heart, its front to the camera.
+        // About as big as the flower's heart and petals, floating over it, its front to the camera.
         const holder = new THREE.Group();
         holder.add(model);
-        pl.modelK = 1.6 / Math.max(size.x, size.y, size.z, 1e-6);
-        holder.position.z = 0.1 + (size.z * pl.modelK) / 2;
+        pl.modelK = 1.45 / Math.max(size.x, size.y, size.z, 1e-6);
+        pl.modelLift = (size.z * pl.modelK) / 2;
         pl.head.add(holder);
         pl.model = holder;
-        pl.imageMat.map = null;
-        pl.imageMat.color.copy(toColor(mix(garden.soil, [255, 255, 255], 0.6)));
-        pl.imageMat.needsUpdate = true;
+        pl.face.visible = false;
       })
       .catch((e) => console.warn('garden blossoms: 3D model', pl.p.model, e));
   }
@@ -361,22 +363,43 @@ export function attach(garden, G) {
         const u = m.userData;
         const e = smooth(range(openP, u.delay, u.delay + 0.75));
         // Standing closed around each other as a bud, then falling open.
-        // Closed, the bases draw in to a tight bud; open, they ring the image.
+        // Closed, the bases draw in to a tight bud; open, they spread from round the heart.
         const r0 = u.r0 * lerp(0.35, 1, e);
         m.position.set(Math.cos(u.yaw) * r0, Math.sin(u.yaw) * r0, u.z * 0.05);
         m.rotation.set(0, -lerp(u.closed, u.open, e), u.yaw);
         m.scale.set(u.len * g, u.wid * g, u.wid * g);
       });
-      // The image grows out from the heart of the flower and comes up to full strength.
+      // The heart fills in as the petals part.
+      const hs = Math.max(1e-3, smooth(range(openP, 0.1, 0.7)));
+      pl.heart.position.set(0, 0, 0.1);
+      pl.heart.scale.set(0.22 * hs, 0.22 * hs, 0.16 * hs);
+      pl.stamens.forEach((m, k) => {
+        const u = m.userData;
+        const ss = Math.max(1e-3, smooth(range(openP, 0.2 + k * 0.02, 0.8)));
+        m.position.set(u.x * ss, u.y * ss, u.z);
+        m.scale.setScalar(0.075 * ss);
+      });
+
+      // The product rises out of the heart as it opens and hangs there, bobbing a little, its shadow on the petals.
+      const lift = reveal * (0.75 + 0.07 * Math.sin(t * 1.3 + pl.ph));
       const s = Math.max(1e-3, reveal);
-      pl.face.scale.set(s, s, 1);
+      const span = 1.55; // its longer side, in blossom radii
+      const fw = pl.aspect >= 1 ? span : span * pl.aspect;
+      const fh = pl.aspect >= 1 ? span / pl.aspect : span;
+      pl.face.position.set(0, 0, 0.3 + lift);
+      pl.face.scale.set(fw * s, fh * s, 1);
+      pl.face.rotation.z = 0.04 * Math.sin(t * 0.8 + pl.ph);
       pl.imageMat.opacity = reveal;
-      pl.frame.scale.set(Math.max(1e-3, reveal * 1.04), Math.max(1e-3, reveal * 1.04), 1);
-      pl.frame.visible = reveal > 0.01;
       if (pl.model) {
-        pl.model.scale.setScalar(pl.modelK * Math.max(1e-3, reveal));
+        pl.model.position.z = 0.3 + lift + pl.modelLift;
+        pl.model.scale.setScalar(pl.modelK * s);
         pl.model.rotation.y = t * 0.45 + pl.ph;
       }
+      const shown = pl.model || pl.face.visible;
+      const sw = (pl.model ? 1.5 : Math.max(fw, fh) * 0.8) * s * (1 - 0.15 * (lift - 0.75));
+      pl.shadow.position.set(0.08 * lift, -0.08 * lift, 0.26);
+      pl.shadow.scale.set(sw * 0.62, sw * 0.5, 1);
+      pl.shadowMat.opacity = shown ? 0.28 * reveal : 0;
     }
     // The page's own label waits for the first blossom to open.
     garden.classList.toggle('is-blossom-open', plants[state.focus].open > 0.6);
@@ -384,4 +407,161 @@ export function attach(garden, G) {
 
   garden.blossomKit = { plants, focus, dispose: () => disposables.forEach((d) => d.dispose && d.dispose()) };
   garden.start();
+}
+
+/* A soft round shadow: dark in the middle, fading to nothing at the edge. */
+function softDot(THREE) {
+  const n = 64;
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const d = Math.hypot(x - n / 2 + 0.5, y - n / 2 + 0.5) / (n / 2);
+      const a = Math.max(0, 1 - d);
+      const i = (y * n + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 255;
+      data[i + 3] = Math.round(255 * a * a);
+    }
+  }
+  const tex = new THREE.DataTexture(data, n, n);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/*
+ * The product photo without its background: a picture that already has a
+ * transparent background is used as it is; otherwise the plain backdrop it
+ * was shot on (the color at its edges) is taken away from the outside in,
+ * so white parts inside the product itself stay. Trimmed to the product.
+ * Resolves to a canvas, or null if the picture can't be read.
+ */
+function cutOut(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        resolve(removeBackdrop(img));
+      } catch (e) {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+function removeBackdrop(img) {
+  const max = 640;
+  const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * k));
+  const h = Math.max(1, Math.round(img.naturalHeight * k));
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0, w, h);
+  const im = g.getImageData(0, 0, w, h);
+  const px = im.data;
+  const at = (x, y) => (y * w + x) * 4;
+
+  // Already cut out: transparent round the edges.
+  let clear = 0;
+  let edge = 0;
+  const border = [];
+  for (let x = 0; x < w; x++) border.push([x, 0], [x, h - 1]);
+  for (let y = 1; y < h - 1; y++) border.push([0, y], [w - 1, y]);
+  for (const [x, y] of border) {
+    edge++;
+    if (px[at(x, y) + 3] < 128) clear++;
+  }
+  if (clear / edge < 0.5) {
+    // The backdrop's color: the most common color round the edges.
+    const counts = new Map();
+    for (const [x, y] of border) {
+      const i = at(x, y);
+      const key = ((px[i] >> 3) << 10) | ((px[i + 1] >> 3) << 5) | (px[i + 2] >> 3);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    let best = 0;
+    let bestN = -1;
+    for (const [key, n] of counts) {
+      if (n > bestN) {
+        best = key;
+        bestN = n;
+      }
+    }
+    const br = ((best >> 10) & 31) * 8 + 4;
+    const bg = ((best >> 5) & 31) * 8 + 4;
+    const bb = (best & 31) * 8 + 4;
+    const near = (i, tol) => Math.abs(px[i] - br) + Math.abs(px[i + 1] - bg) + Math.abs(px[i + 2] - bb) < tol;
+
+    // Flood in from every edge pixel of the backdrop's color.
+    const seen = new Uint8Array(w * h);
+    const stack = [];
+    for (const [x, y] of border) {
+      const j = y * w + x;
+      if (!seen[j] && near(j * 4, 60)) {
+        seen[j] = 1;
+        stack.push(j);
+      }
+    }
+    while (stack.length) {
+      const j = stack.pop();
+      const x = j % w;
+      const y = (j / w) | 0;
+      const step = (nx, ny) => {
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) return;
+        const n = ny * w + nx;
+        if (seen[n] || !near(n * 4, 60)) return;
+        seen[n] = 1;
+        stack.push(n);
+      };
+      step(x + 1, y);
+      step(x - 1, y);
+      step(x, y + 1);
+      step(x, y - 1);
+    }
+    // Clear the backdrop; soften the product's edge where it meets it.
+    for (let j = 0; j < w * h; j++) {
+      if (seen[j]) {
+        px[j * 4 + 3] = 0;
+        continue;
+      }
+      const x = j % w;
+      const y = (j / w) | 0;
+      let n = 0;
+      if (x > 0 && seen[j - 1]) n++;
+      if (x < w - 1 && seen[j + 1]) n++;
+      if (y > 0 && seen[j - w]) n++;
+      if (y < h - 1 && seen[j + w]) n++;
+      if (n) px[j * 4 + 3] = Math.round(px[j * 4 + 3] * (1 - n * 0.2));
+    }
+    g.putImageData(im, 0, 0);
+  }
+
+  // Trimmed to the product, with a little room.
+  let x0 = w;
+  let y0 = h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (px[at(x, y) + 3] < 24) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < x0) return null;
+  const pad = 2;
+  x0 = Math.max(0, x0 - pad);
+  y0 = Math.max(0, y0 - pad);
+  x1 = Math.min(w - 1, x1 + pad);
+  y1 = Math.min(h - 1, y1 + pad);
+  const out = document.createElement('canvas');
+  out.width = x1 - x0 + 1;
+  out.height = y1 - y0 + 1;
+  out.getContext('2d').drawImage(c, x0, y0, out.width, out.height, 0, 0, out.width, out.height);
+  return out;
 }
