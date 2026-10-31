@@ -3002,9 +3002,9 @@ class GardenSplash extends HTMLElement {
   /*
    * The moon, in its real phase for today: lit from the right as it waxes
    * and from the left as it wanes (the other way round in the southern
-   * hemisphere), the dark part faintly there by earthshine. Up in a
-   * corner of the sky away from the logo, drawn in chunky pixels like
-   * everything else, with a soft glow that grows toward full.
+   * hemisphere), the dark part in deep shadow that fades into the sky at
+   * its edge. Up in a corner of the sky away from the logo, drawn in chunky
+   * pixels like everything else, with a faint glow that grows toward full.
    */
   buildMoon(group, disposables, glow, eye, D, viewW, viewH) {
     const { age, lit } = lunarPhase(new Date());
@@ -3050,11 +3050,13 @@ class GardenSplash extends HTMLElement {
           if (r2 > 1.0) discard;
           vec3 nrm = vec3(p, sqrt(1.0 - r2));
           vec3 sun = vec3(uMirror * sin(uTheta), 0.0, -cos(uTheta));
-          float lit = smoothstep(-0.04, 0.06, dot(nrm, sun));
+          float lit = smoothstep(-0.07, 0.07, dot(nrm, sun));
           float surf = texture2D(uTex, q).r;
           vec3 day = vec3(0.96, 0.95, 0.88) * (0.55 + 0.55 * surf);
-          vec3 earth = vec3(0.12, 0.14, 0.24) * (0.6 + 0.5 * surf);
-          gl_FragColor = vec4(mix(earth, day, lit), uAlpha * mix(0.5, 1.0, lit));
+          // The shadowed side: all but black, and fading out toward its rim into the sky behind.
+          vec3 shade = vec3(0.02, 0.025, 0.06) * (0.7 + 0.3 * surf);
+          float rim = 1.0 - smoothstep(0.35, 1.0, sqrt(r2));
+          gl_FragColor = vec4(mix(shade, day, lit), uAlpha * mix(0.6 * rim, 1.0, lit));
         }`,
       transparent: true,
       depthWrite: false,
@@ -3080,7 +3082,7 @@ class GardenSplash extends HTMLElement {
     const halo = new THREE.Sprite(haloMat);
     halo.position.copy(pos);
     halo.position.z += 1;
-    halo.scale.setScalar(r * 6);
+    halo.scale.setScalar(r * 4.5);
     halo.renderOrder = -2;
     group.add(halo);
     return { disc, halo, mat, lit };
@@ -3238,7 +3240,7 @@ class GardenSplash extends HTMLElement {
     fc.needsUpdate = true;
     if (sky.moon) {
       sky.moon.mat.uniforms.uAlpha.value = show * stars;
-      sky.moon.halo.material.opacity = show * stars * (0.12 + 0.3 * sky.moon.lit);
+      sky.moon.halo.material.opacity = show * stars * (0.04 + 0.1 * sky.moon.lit);
     }
     // Clouds drift slowly across, coming round again on the other side.
     if (sky.driftPts) {
