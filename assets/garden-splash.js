@@ -2450,7 +2450,7 @@ class GardenSplash extends HTMLElement {
       const done = path;
       path = null;
       this.trace = null;
-      if (e.type === 'pointerup' && !this.night && e.timeStamp - done.t0 < 7000 && this.tracedD(done.pts)) {
+      if (e.type === 'pointerup' && !this.night && e.timeStamp - done.t0 < 7000 && this.tracedD(done.pts, e.pointerType !== 'mouse')) {
         this.pointer.down = false;
         this.gestured = true;
         this.toggleNight();
@@ -2468,7 +2468,7 @@ class GardenSplash extends HTMLElement {
    * Where the logo's d is on screen: the first letter of the flowers (the
    * asterisk aside), found as the first run of flowers from the left
    * before a gap. With no letters (a logo that is only the asterisk, as on
-   * phones), the whole logo.
+   * phones: anything not much wider than tall), the whole logo.
    */
   letterD() {
     const key = `${this.w}x${this.h}:${this.flowers.length}`;
@@ -2476,7 +2476,8 @@ class GardenSplash extends HTMLElement {
     const pts = this.flowers.filter((f) => !f.star).map((f) => f.dest);
     const b = this.logoBox || { x: 0, y: 0, w: this.w, h: this.h };
     let box = { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
-    if (pts.length > 6) {
+    const word = b.w > b.h * 1.8;
+    if (word && pts.length > 6) {
       const bin = Math.max(4, (this.base || 20) * 0.6);
       const x0 = Math.min(...pts.map((p) => p[0]));
       const cols = new Set(pts.map((p) => Math.floor((p[0] - x0) / bin)));
@@ -2501,18 +2502,28 @@ class GardenSplash extends HTMLElement {
    * bowl either way round). The shapes are compared as 32 evenly spaced
    * points, each stretched to fill a square.
    */
-  tracedD(pts) {
-    if (!pts || pts.length < 12) return false;
+  tracedD(pts, touch) {
+    if (!pts || pts.length < 10) return false;
     const box = this.letterD();
-    const inside = pts.filter(([x, y]) => x >= box.x0 && x <= box.x1 && y >= box.y0 && y <= box.y1).length;
-    if (inside < pts.length * 0.7) return false;
+    // A finger is broad and the letter small on a phone: room around it, and a looser match.
+    const pad = touch ? Math.min(this.w, this.h) * 0.08 : 0;
+    const inside = pts.filter(([x, y]) => x >= box.x0 - pad && x <= box.x1 + pad && y >= box.y0 - pad && y <= box.y1 + pad).length;
+    if (inside < pts.length * (touch ? 0.6 : 0.7)) return false;
     const xs = pts.map((p) => p[0]);
     const ys = pts.map((p) => p[1]);
     const w = Math.max(...xs) - Math.min(...xs);
     const h = Math.max(...ys) - Math.min(...ys);
-    if (h < (box.y1 - box.y0) * 0.35 || h < w * 0.9) return false;
+    if (h < (box.y1 - box.y0) * (touch ? 0.3 : 0.35) || h < w * (touch ? 0.8 : 0.9)) return false;
     const shape = normalizeStroke(pts);
-    return D_STROKES.some((tpl) => strokeDistance(shape, tpl) < 0.17);
+    return D_STROKES.some((tpl) => strokeDistance(shape, tpl) < (touch ? 0.2 : 0.17));
+  }
+
+  /* Whether a screen point is over the logo's d (where a traced d counts), with a finger's margin. */
+  overLetterD(x, y) {
+    if (!this.arranged || this.night) return false;
+    const box = this.letterD();
+    const pad = Math.min(this.w, this.h) * 0.08;
+    return x >= box.x0 - pad && x <= box.x1 + pad && y >= box.y0 - pad && y <= box.y1 + pad;
   }
 
   toggleNight() {
@@ -5061,6 +5072,8 @@ class GardenSplash extends HTMLElement {
           if (e.pointerType !== 'mouse') {
             holdTimer = window.setTimeout(() => {
               if (!g || g.mode !== null || g.id !== e.pointerId) return;
+              // A finger resting on the d before tracing it is not asking to zoom.
+              if (this.overLetterD(g.sx, g.sy)) return;
               g.mode = 'hold';
               g.z0 = zoomNow();
               g.w = anchor(g.lx, g.ly);
