@@ -2994,7 +2994,7 @@ class GardenSplash extends HTMLElement {
       heaps, planes: this.buildPlanes(group, disposables, atlas, tex, time, D), nextPlane: this.elapsed + 9 + Math.random() * 10,
       birds: this.buildBirds(group, disposables, time), nextBirds: this.elapsed + 7 + Math.random() * 6,
       peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 5 + Math.random() * 15,
-      moon: time.light < 0.6 ? this.buildMoon(group, disposables, tex, eye, D, viewW, viewH, skyEye) : null,
+      moon: time.light < 0.6 ? this.buildMoon(group, disposables, tex, eye, D, viewW, viewH) : null,
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
     };
   }
@@ -3008,7 +3008,7 @@ class GardenSplash extends HTMLElement {
    * seas, pale crater rims). Up in a corner of the sky away from the logo,
    * with a faint glow that grows toward full.
    */
-  buildMoon(group, disposables, glow, eye, D, viewW, viewH, skyEye) {
+  buildMoon(group, disposables, glow, eye, D, viewW, viewH) {
     const { age, lit } = lunarPhase(new Date());
     const theta = (age / SYNODIC) * TAU;
     // Upper left of the view, behind the logo's stars and in front of the far field.
@@ -3023,6 +3023,8 @@ class GardenSplash extends HTMLElement {
     const toViewer = eye.clone().sub(at).normalize();
     const away = toViewer.clone().negate();
     const right = new THREE.Vector3(1, 0, 0).addScaledVector(away, -away.x).normalize();
+    const screenRight = right.clone();
+    const screenUp = new THREE.Vector3(0, -1, 0).addScaledVector(away, away.y).normalize();
     const sun = right.multiplyScalar((this.south ? -1 : 1) * Math.sin(theta)).addScaledVector(away, Math.cos(theta)).normalize();
     const rng = mulberry32(1969);
     const dir = () => {
@@ -3031,9 +3033,13 @@ class GardenSplash extends HTMLElement {
     };
     const seas = Array.from({ length: 6 }, () => [dir(), 0.25 + rng() * 0.3]);
     const craters = Array.from({ length: 14 }, () => [dir(), 0.08 + rng() * 0.12]);
-    const geo = new THREE.IcosahedronGeometry(1, 3).toNonIndexed();
+    // Facets small enough for a round iris, still plainly faceted.
+    const geo = new THREE.IcosahedronGeometry(1, 9).toNonIndexed();
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 4);
+    // For the eye: how lit each facet is, and which way it faces (its center).
+    const litOf = new Float32Array(pos.count);
+    const midOf = new Float32Array(pos.count * 3);
     const a = new THREE.Vector3();
     const b = new THREE.Vector3();
     const c = new THREE.Vector3();
@@ -3064,10 +3070,44 @@ class GardenSplash extends HTMLElement {
         const o = (i + v) * 4;
         for (let ch = 0; ch < 3; ch++) colors[o + ch] = lerp(shade[ch], day[ch], light);
         colors[o + 3] = alpha;
+        litOf[i + v] = light;
+        midOf.set([mid.x, mid.y, mid.z], (i + v) * 3);
       }
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+    geo.setAttribute('aLit', new THREE.BufferAttribute(litOf, 1));
+    geo.setAttribute('aMid', new THREE.BufferAttribute(midOf, 3));
+
+    /*
+     * The moon is the eye: an iris and pupil on its own surface, facet by
+     * facet, wherever uGaze points. Lit like the ground under it, so in
+     * the shadowed part the iris goes dark with the rest, and only the
+     * bright part shows it plainly.
+     */
+    const iris = mix(this.heroColor, [40, 40, 60], 0.2);
+    const eyeUniforms = { uGaze: { value: toViewer.clone().negate() }, uEye: { value: 0 }, uIris: { value: new THREE.Color().setRGB(iris[0] / 255, iris[1] / 255, iris[2] / 255) } };
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    mat.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, eyeUniforms);
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', 'attribute float aLit;\nattribute vec3 aMid;\nvarying float vLit;\nvarying vec3 vMid;\nvoid main() {')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLit = aLit;\n  vMid = aMid;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', 'uniform vec3 uGaze;\nuniform float uEye;\nuniform vec3 uIris;\nvarying float vLit;\nvarying vec3 vMid;\nvoid main() {')
+        .replace(
+          '#include <color_fragment>',
+          [
+            '#include <color_fragment>',
+            '  float ang = acos(clamp(dot(normalize(vMid), uGaze), -1.0, 1.0));',
+            // Iris with a dark outer ring, a black pupil, and a pale glint up and to the left.
+            '  vec3 ring = uIris * 0.35;',
+            '  vec3 eyeCol = ang < 0.16 ? vec3(0.02) : ang < 0.34 ? uIris : ang < 0.4 ? ring : diffuseColor.rgb;',
+            '  float inEye = step(ang, 0.4) * uEye;',
+            '  vec3 shadeCol = vec3(0.02, 0.025, 0.06);',
+            '  diffuseColor.rgb = mix(diffuseColor.rgb, mix(shadeCol, eyeCol, vLit), inEye);',
+          ].join('\n')
+        );
+    };
     disposables.push(geo, mat);
     const disc = new THREE.Mesh(geo, mat);
     // The wide view stretches a ball near its edge outward from the middle. Squeezed back across the
@@ -3092,51 +3132,61 @@ class GardenSplash extends HTMLElement {
     halo.scale.setScalar(r * 4.5);
     halo.renderOrder = -2;
     group.add(halo);
-    // Now and then the moon is an eye: the same eyeball as the sky's others, lids the moon's own grey.
-    const watcher = skyEye(r, [214, 212, 196], mix(this.heroColor, [40, 40, 60], 0.2));
-    watcher.group.matrixAutoUpdate = false;
-    watcher.group.matrix.copy(squeeze).multiply(new THREE.Matrix4().makeRotationX(Math.PI));
-    watcher.group.visible = false;
-    // The moon fades over the eye (its shut lids solid, so no iris shows through), drawn on top of it.
-    mat.depthTest = false;
-    return { disc, halo, mat, lit, watcher, at, eyeAt: -1, nextEye: this.elapsed + 12 + Math.random() * 14, look: new THREE.Vector3() };
+    const frame = { toViewer, right: screenRight, up: screenUp };
+    return { disc, halo, mat, lit, eye: eyeUniforms, frame, eyeAt: -1, nextEye: this.elapsed + 12 + Math.random() * 14 };
   }
 
   /*
-   * Every minute or so the moon turns into an eye: it fades into an eyeball
-   * with its lids shut, the lids open and it looks down at the one lying
-   * below, glances away and back, blinks, shuts and fades back into the
-   * moon. Not with reduced motion, and only with the sky in view.
+   * Every minute or so the moon is an eye: a pupil rolls round from the far
+   * side, over the edge, to look straight down at the one lying below;
+   * glances about, and rolls away round the other side. It starts and ends
+   * out of sight on the back of the moon, so nothing pops in or out.
+   * Not with reduced motion, and only with the sky in view.
    */
   moonEye(t, show) {
     const m = this.sky.moon;
-    const w = m.watcher;
+    const u = m.eye;
     if (m.eyeAt < 0) {
-      w.group.visible = false;
-      if (t < m.nextEye || show < 0.95 || this.reduced) return 0;
+      u.uEye.value = 0;
+      if (t < m.nextEye || show < 0.95 || this.reduced) return;
       m.eyeAt = t;
-      m.dartAt = 1.9 + Math.random() * 1.2;
-      m.dart = new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 0);
-      w.nextBlink = t + 2.4;
+      const { toViewer, right, up } = m.frame;
+      const side = (sx, sy) => right.clone().multiplyScalar(sx).addScaledVector(up, sy).normalize();
+      const enter = Math.random() * Math.PI * 2;
+      const leave = enter + Math.PI * (0.6 + Math.random() * 0.8);
+      const glance = () => side(Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.55).add(toViewer).normalize();
+      // The path, as [time, direction]: from the back, over the edge, to the front; a few glances; away round the other side.
+      const edgeIn = side(Math.cos(enter), Math.sin(enter));
+      const edgeOut = side(Math.cos(leave), Math.sin(leave));
+      m.path = [
+        [0, edgeIn.clone().sub(toViewer).normalize()],
+        [0.7, edgeIn],
+        [1.5, toViewer.clone()],
+        [2.4, toViewer.clone()],
+        [2.55, glance()],
+        [3.3, glance()],
+        [3.45, glance()],
+        [4.2, toViewer.clone()],
+        [4.8, toViewer.clone()],
+        [5.6, edgeOut],
+        [6.3, edgeOut.clone().sub(toViewer).normalize()],
+      ];
     }
     const a = t - m.eyeAt;
-    if (a > 6) {
+    const path = m.path;
+    if (a >= path[path.length - 1][0]) {
       m.eyeAt = -1;
       m.nextEye = t + 45 + Math.random() * 45;
-      w.group.visible = false;
-      return 0;
+      u.uEye.value = 0;
+      return;
     }
-    // Moon to eye and back: a crossfade either side; the lids open once it is an eye and shut before it goes.
-    const mixIn = smooth(range(a, 0, 0.8)) * (1 - smooth(range(a, 5.2, 6)));
-    const open = smooth(range(a, 0.8, 1.3)) * (1 - smooth(range(a, 4.6, 5.1)));
-    w.group.visible = mixIn > 0.01;
-    this.lids(w, open, t);
-    // Looking down at the viewer, with one glance off to the side.
-    const sky = this.sky;
-    m.look.copy(sky.eye);
-    if (a > m.dartAt && a < m.dartAt + 0.9) m.look.add(m.dart.clone().multiplyScalar(sky.viewW * 0.6));
-    w.ball.lookAt(m.look);
-    return mixIn;
+    let k = 0;
+    while (k < path.length - 2 && a > path[k + 1][0]) k++;
+    const [t0, from] = path[k];
+    const [t1, to] = path[k + 1];
+    const e = smooth(clamp((a - t0) / Math.max(1e-3, t1 - t0), 0, 1));
+    u.uGaze.value.copy(from).lerp(to, e).normalize();
+    u.uEye.value = 1;
   }
 
   /* Turning over, lying there, and turning back. */
@@ -3290,8 +3340,8 @@ class GardenSplash extends HTMLElement {
     });
     fc.needsUpdate = true;
     if (sky.moon) {
-      const asEye = this.moonEye(t, show * stars);
-      sky.moon.mat.opacity = show * stars * (1 - asEye);
+      this.moonEye(t, show * stars);
+      sky.moon.mat.opacity = show * stars;
       sky.moon.halo.material.opacity = show * stars * (0.04 + 0.1 * sky.moon.lit);
     }
     // Clouds drift slowly across, coming round again on the other side.
