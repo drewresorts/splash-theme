@@ -2056,6 +2056,7 @@ class GardenSplash extends HTMLElement {
     if (!this.background) this.drift(t, dt);
     if (this.blossomUpdate) this.blossomUpdate(t, dt);
     if (this.weatherOn) this.updateWeather(t, dt);
+    this.brushStep(dt);
     if (this.arranged && !this.background && !this.reduced) {
       // At night no gusts come, but heads still swinging come to rest.
       if (!this.night) this.blow(t);
@@ -5160,12 +5161,53 @@ class GardenSplash extends HTMLElement {
    * swings back past upright and rocks to rest. Lighter (smaller) flowers
    * rock faster. push(f) is the wind on the flower, -1..1 along x.
    */
+  /*
+   * The pointer brushing through the bed: where it is and how fast it is
+   * moving (screen pixels a second, smoothed), while a mouse moves over the
+   * splash or a finger drags across it. Nothing behind other pages, in the
+   * night sky, with the menu open, or with reduced motion.
+   */
+  brushStep(dt) {
+    const ptr = this.pointer;
+    const on = dt > 0 && ptr.active && !this.backdrop && !this.night && !this.reduced && !this.classList.contains('is-nav-open');
+    if (!on) {
+      this.brush = null;
+      this.brushLast = null;
+      return;
+    }
+    const last = this.brushLast;
+    this.brushLast = { x: ptr.x, y: ptr.y };
+    if (!last) return;
+    const k = 1 - Math.exp(-dt * 18);
+    const b = this.brush || (this.brush = { vx: 0, vy: 0 });
+    b.x = ptr.x;
+    b.y = ptr.y;
+    b.vx = lerp(b.vx, (ptr.x - last.x) / dt, k);
+    b.vy = lerp(b.vy, (ptr.y - last.y) / dt, k);
+  }
+
+  /* How hard the brushing pointer shoves this flower's head (radians a second squared, toward +x and +y), or 0. */
+  brushPush(f) {
+    const b = this.brush;
+    if (!b || f.sx === undefined || (Math.abs(b.vx) < 20 && Math.abs(b.vy) < 20)) return null;
+    const reach = Math.max(70, (f.sr || 0) * 3);
+    const d = Math.hypot(f.sx - b.x, f.sy - b.y);
+    if (d >= reach) return null;
+    const w = (1 - d / reach) ** 2 * 0.075;
+    // Screen y runs down; the bed's y runs up the screen.
+    return [b.vx * w, -b.vy * w];
+  }
+
   sway(dt, push) {
     if (!dt) return;
     const LEAN = 0.42;
     for (const f of this.flowers) {
       const wind = push(f);
-      if (!wind && !f.bx && !f.bvx && !f.by && !f.bvy) continue;
+      // A brushing pointer shoves the head the way it is moving; the spring brings it back.
+      const shove = this.brushPush(f);
+      if (!wind && !shove && !f.bx && !f.bvx && !f.by && !f.bvy) continue;
+      const ax = shove ? shove[0] : 0;
+      const ay = shove ? shove[1] : 0;
       if (f.spring === undefined) {
         const r = (((Math.sin(f.id * 12.9898) * 43758.5453) % 1) + 1) % 1;
         f.spring = 26 + 30 * r;
@@ -5180,12 +5222,12 @@ class GardenSplash extends HTMLElement {
       const n = Math.ceil(dt / 0.02);
       const h = dt / n;
       for (let i = 0; i < n; i++) {
-        f.bvx = (f.bvx || 0) + (K * (tx - (f.bx || 0)) - C * (f.bvx || 0)) * h;
-        f.bvy = (f.bvy || 0) + (K * (ty - (f.by || 0)) - C * (f.bvy || 0)) * h;
-        f.bx = (f.bx || 0) + f.bvx * h;
-        f.by = (f.by || 0) + f.bvy * h;
+        f.bvx = (f.bvx || 0) + (K * (tx - (f.bx || 0)) - C * (f.bvx || 0) + ax) * h;
+        f.bvy = (f.bvy || 0) + (K * (ty - (f.by || 0)) - C * (f.bvy || 0) + ay) * h;
+        f.bx = clamp((f.bx || 0) + f.bvx * h, -0.9, 0.9);
+        f.by = clamp((f.by || 0) + f.bvy * h, -0.9, 0.9);
       }
-      if (!wind && Math.abs(f.bx) < 2e-4 && Math.abs(f.by) < 2e-4 && Math.abs(f.bvx) < 2e-3 && Math.abs(f.bvy) < 2e-3) {
+      if (!wind && !shove && Math.abs(f.bx) < 2e-4 && Math.abs(f.by) < 2e-4 && Math.abs(f.bvx) < 2e-3 && Math.abs(f.bvy) < 2e-3) {
         f.bx = f.by = f.bvx = f.bvy = 0;
       }
       f.shown = -1;

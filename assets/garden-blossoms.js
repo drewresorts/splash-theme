@@ -345,11 +345,16 @@ export function attach(garden, G) {
       const idle = 0.035 * Math.sin(t * 0.9 + pl.ph) + 0.02 * Math.sin(t * 1.7 + pl.ph * 2);
       const tx = push * 0.16 + idle;
       const ty = 0.025 * Math.sin(t * 0.7 + pl.ph * 1.3);
-      // A damped spring, like the flowers' heads.
-      pl.vx += ((tx - pl.bx) * 30 - pl.vx * 5) * dt;
-      pl.vy += ((ty - pl.by) * 30 - pl.vy * 5) * dt;
-      pl.bx += pl.vx * dt;
-      pl.by += pl.vy * dt;
+      // A damped spring, like the flowers' heads; a pointer brushing past shoves it the way it moves.
+      let shove = null;
+      if (garden.brush && garden.brushPush && pl.open > 0.3) {
+        const at = onScreen(pl);
+        shove = garden.brushPush({ sx: at.x, sy: at.y, sr: at.r * 0.6 });
+      }
+      pl.vx += ((tx - pl.bx) * 30 - pl.vx * 5 + (shove ? shove[0] * 0.6 : 0)) * dt;
+      pl.vy += ((ty - pl.by) * 30 - pl.vy * 5 + (shove ? shove[1] * 0.6 : 0)) * dt;
+      pl.bx = clamp(pl.bx + pl.vx * dt, -0.5, 0.5);
+      pl.by = clamp(pl.by + pl.vy * dt, -0.5, 0.5);
       pl.plant.rotation.set(-pl.by * stemP, pl.bx * stemP, 0);
 
       const height = Math.max(0.01, Zh * stemP);
