@@ -3141,6 +3141,7 @@ class GardenSplash extends HTMLElement {
       group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, puffs, logoPuffs, cloudMat, fpos: new Float32Array(logo.length * 3), field, fieldPts, drift, driftPts, glows, shoot,
       heaps, planes: this.buildPlanes(group, disposables, atlas, tex, time, D), nextPlane: this.elapsed + 9 + Math.random() * 10,
       birds: this.buildBirds(group, disposables, time), nextBirds: this.elapsed + 7 + Math.random() * 6,
+      blimp: this.buildBlimp(group, disposables, tex, time), nextBlimp: this.elapsed + 25 + Math.random() * 35,
       peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 5 + Math.random() * 15,
       moon: time.light < 0.6 ? this.buildMoon(group, disposables, tex, eye, D, viewW, viewH) : null,
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
@@ -3545,6 +3546,7 @@ class GardenSplash extends HTMLElement {
     }
     this.flyPlanes(t, dt, show, p);
     this.flyBirds(t, dt, show, p);
+    this.flyBlimp(t, dt, show, p);
     sky.glows.forEach((g) => (g.material.opacity = dark));
 
     // Now and then a shooting star, like the bees by day.
@@ -3608,6 +3610,112 @@ class GardenSplash extends HTMLElement {
     const ap = open * b;
     e.top.rotation.x = -1.05 * ap;
     e.bottom.rotation.x = 0.7 * ap;
+  }
+
+  /*
+   * A blimp, rarely: a silver airship drifting slowly across below the
+   * clouds, the logo spelled out in bulbs on the side turned down to the
+   * viewer, like the one in Scarface. The bulbs are the logo's own flower
+   * positions, so the sign always matches the logo; they chase like a
+   * marquee and now and then all flash at once. Bright at night, dimmer by
+   * day. Built at unit size (2 long, nose along +x) and scaled when it flies.
+   */
+  buildBlimp(group, disposables, glow, time) {
+    const box = this.logoBox;
+    if (!box || !this.flowers.length) return null;
+    const holder = new THREE.Group();
+    holder.visible = false;
+    group.add(holder);
+    // The body turns to face its way; the sign underneath never mirrors, so it always reads.
+    const body = new THREE.Group();
+    holder.add(body);
+    // Silver, glowing a little of its own so it reads against the sky (the sky's light is faint).
+    const silver = time.dark ? [70, 76, 96] : mix([200, 204, 216], [230, 190, 180], time.warm * 0.4);
+    const skin = this.makeMaterial({ color: toColor(silver), emissive: toColor(tone(silver, -0.45)), shininess: 40, specular: 0x666666 });
+    const trim = this.makeMaterial({ color: toColor(tone(silver, -0.3)), emissive: toColor(tone(silver, -0.7)) });
+    const envelopeGeo = new THREE.SphereGeometry(1, 16, 8);
+    const finGeo = new THREE.BoxGeometry(0.3, 0.02, 0.22);
+    const gondolaGeo = new THREE.BoxGeometry(0.18, 0.08, 0.06);
+    disposables.push(skin, trim, envelopeGeo, finGeo, gondolaGeo);
+    const envelope = new THREE.Mesh(envelopeGeo, skin);
+    envelope.scale.set(1, 0.3, 0.3);
+    body.add(envelope);
+    // Four tail fins: two flat to the sides, two up and down.
+    for (const [y, z, flat] of [[0, 0.24, false], [0, -0.24, false], [0.24, 0, true], [-0.24, 0, true]]) {
+      const fin = new THREE.Mesh(finGeo, trim);
+      fin.position.set(-0.86, y, z);
+      if (flat) fin.rotation.x = Math.PI / 2;
+      body.add(fin);
+    }
+    const gondola = new THREE.Mesh(gondolaGeo, trim);
+    // Up toward the nose, clear of the sign.
+    gondola.position.set(0.72, 0, -0.22);
+    body.add(gondola);
+
+    // The sign: one bulb for each flower of the logo, laid on the underside.
+    const aspect = box.w / Math.max(1, box.h);
+    const pw = Math.min(1.15, 0.42 * aspect);
+    const ph = pw / aspect;
+    const pos = [];
+    const bulbs = [];
+    for (const f of this.flowers) {
+      const u = (f.dest[0] - box.x) / box.w - 0.5;
+      const v = (f.dest[1] - box.y) / box.h - 0.5;
+      const x = u * pw;
+      const y = v * ph;
+      const z = -0.3 * Math.sqrt(Math.max(0.02, 1 - x * x - (y / 0.3) ** 2)) - 0.012;
+      pos.push(x, y, z);
+      bulbs.push(u);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(pos.length), 3));
+    const mat = new THREE.PointsMaterial({ size: 5.5, sizeAttenuation: false, map: glow, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    disposables.push(geo, mat);
+    const sign = new THREE.Points(geo, mat);
+    sign.frustumCulled = false;
+    sign.renderOrder = 2;
+    holder.add(sign);
+    return { holder, body, sign, bulbs, active: null, bright: time.dark ? 1 : 0.55 };
+  }
+
+  flyBlimp(t, dt, show, p) {
+    const sky = this.sky;
+    const B = sky.blimp;
+    const n = this.night;
+    if (!B) return;
+    const depth = sky.D * 0.62;
+    const k = depth / sky.D;
+    if (!B.active && !this.reduced && n.dir > 0 && p >= 1 && t > sky.nextBlimp) {
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      const reach = sky.viewW * k * 0.85;
+      B.active = { x: sky.eye.x - dir * reach, y: sky.eye.y + (Math.random() - 0.5) * sky.viewH * k * 0.5, dir, speed: (reach * 2) / (45 + Math.random() * 20), reach, ph: Math.random() * TAU };
+    }
+    const A = B.active;
+    B.holder.visible = !!A && show > 0.05;
+    if (!A) return;
+    A.x += A.dir * A.speed * dt;
+    if ((A.x - sky.eye.x) * A.dir > A.reach) {
+      B.active = null;
+      B.holder.visible = false;
+      sky.nextBlimp = t + 120 + Math.random() * 120;
+      return;
+    }
+    // About a quarter of the view long, bobbing a little as it goes.
+    const half = sky.viewW * k * 0.14;
+    B.holder.position.set(A.x, A.y + Math.sin(t * 0.4 + A.ph) * half * 0.04, sky.eye.z + depth + Math.sin(t * 0.3 + A.ph) * half * 0.05);
+    B.holder.scale.setScalar(half);
+    B.body.scale.x = A.dir;
+    B.holder.rotation.z = Math.sin(t * 0.25 + A.ph) * 0.03;
+    // The sign: a chase running along it, and every so often the whole thing flashing.
+    const col = B.sign.geometry.attributes.color;
+    const flash = (t + A.ph) % 9 < 1.2 ? (Math.floor((t + A.ph) * 6) % 2 ? 1.25 : 0.25) : 0;
+    B.bulbs.forEach((u, i) => {
+      const chase = flash || 0.55 + 0.45 * Math.max(0, Math.sin((u * 10 - t * 5) * 1.0));
+      const b = Math.min(1, chase * B.bright * show) * 0.95;
+      col.setXYZ(i, b, b * 0.74, b * 0.3);
+    });
+    col.needsUpdate = true;
   }
 
   /*
