@@ -3715,9 +3715,10 @@ class GardenSplash extends HTMLElement {
           d.rotation.z = c.rot + Math.atan2(h.ty - h.cy, h.tx - hx) * 0.25 * pull;
         }
         if (!this.reduced && n.dir > 0) {
-          this.skyFloat(c, d.position.x, d.position.y, d.position.z, dt);
+          // World units per screen pixel at this cloud's depth.
+          const per = ((sky.viewW / this.w) * ((d.position.z - sky.eye.z) / sky.D)) / (this.skyView ? this.skyView.z : 1);
+          this.skyFloat(c, d.position.x, d.position.y, d.position.z, dt, (r * c.sq[0] * stretch) / per);
           if (c.ox || c.oy) {
-            const per = ((sky.viewW / this.w) * ((d.position.z - sky.eye.z) / sky.D)) / (this.skyView ? this.skyView.z : 1);
             d.position.x += c.ox * per;
             d.position.y += c.oy * per;
           }
@@ -5673,7 +5674,7 @@ class GardenSplash extends HTMLElement {
    * into place over a few seconds. Its offset is kept in screen pixels
    * (ox, oy) and returned the same way.
    */
-  skyFloat(o, x, y, z, dt) {
+  skyFloat(o, x, y, z, dt, size = 0) {
     const b = this.brush;
     const burst = this.skyBurst;
     // Every star its own: how much it takes the push, which way it veers, how fast it comes home.
@@ -5692,7 +5693,8 @@ class GardenSplash extends HTMLElement {
       const v = this.tmp.set(x, y, z).project(this.camera);
       const sx = (v.x * 0.5 + 0.5) * this.w;
       const sy = (-v.y * 0.5 + 0.5) * this.h;
-      const reach = Math.min(this.w, this.h) * 0.14;
+      // Reached from its edge, not its middle: a big puff of cloud is touched anywhere on it.
+      const reach = Math.min(this.w, this.h) * 0.14 + size;
       if (v.z < 1 && dragging) {
         const dx = sx - b.x;
         const dy = sy - b.y;
