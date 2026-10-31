@@ -3407,9 +3407,19 @@ class GardenSplash extends HTMLElement {
         x += Math.sin(t * 0.35 + s.ph) * unit * k;
         y += Math.cos(t * 0.27 + s.ph * 1.3) * unit * 0.6 * k;
       }
+      const z = lerp(s.from.z, s.to.z, k) - lift;
+      // Pushed about by the pointer, floating back into the logo.
+      if (!this.reduced && n.dir > 0) {
+        this.skyFloat(s, x, y, z, dt);
+        if (s.ox || s.oy) {
+          const per = ((sky.viewW / this.w) * ((z - sky.eye.z) / sky.D)) / (this.skyView ? this.skyView.z : 1);
+          x += s.ox * per;
+          y += s.oy * per;
+        }
+      }
       fp[s.i * 3] = x;
       fp[s.i * 3 + 1] = y;
-      fp[s.i * 3 + 2] = lerp(s.from.z, s.to.z, k) - lift;
+      fp[s.i * 3 + 2] = z;
       s.k = k;
     }
     if (sky.logoPts) {
@@ -3494,6 +3504,14 @@ class GardenSplash extends HTMLElement {
           stretch = 1 + Math.sin(Math.PI * clamp(prog * 1.2, 0, 1)) * 0.6;
           r = Math.max(1e-3, c.r * (1 - smooth(clamp((prog - 0.15) * 1.6, 0, 1))));
           d.rotation.z = c.rot + Math.atan2(h.ty - h.cy, h.tx - hx) * 0.25 * pull;
+        }
+        if (!this.reduced && n.dir > 0) {
+          this.skyFloat(c, d.position.x, d.position.y, d.position.z, dt);
+          if (c.ox || c.oy) {
+            const per = ((sky.viewW / this.w) * ((d.position.z - sky.eye.z) / sky.D)) / (this.skyView ? this.skyView.z : 1);
+            d.position.x += c.ox * per;
+            d.position.y += c.oy * per;
+          }
         }
         d.scale.set(r * c.sq[0] * stretch, r * c.sq[1], r * c.sq[2]);
         d.updateMatrix();
@@ -5162,14 +5180,48 @@ class GardenSplash extends HTMLElement {
    * rock faster. push(f) is the wind on the flower, -1..1 along x.
    */
   /*
-   * The pointer brushing through the bed: where it is and how fast it is
-   * moving (screen pixels a second, smoothed), while a mouse moves over the
-   * splash or a finger drags across it. Nothing behind other pages, in the
-   * night sky, with the menu open, or with reduced motion.
+   * Something in the sky (a star or a puff of the logo, a drifting cloud)
+   * given a lazy shove by the pointer brushing past: it floats off the way
+   * the pointer moved, as if weightless, and a very soft spring eases it
+   * back into place over a few seconds. Its offset is kept in screen pixels
+   * (ox, oy) and returned the same way.
+   */
+  skyFloat(o, x, y, z, dt) {
+    const b = this.brush;
+    let ax = 0;
+    let ay = 0;
+    if (b && (Math.abs(b.vx) > 20 || Math.abs(b.vy) > 20)) {
+      const v = this.tmp.set(x, y, z).project(this.camera);
+      const sx = (v.x * 0.5 + 0.5) * this.w;
+      const sy = (-v.y * 0.5 + 0.5) * this.h;
+      const d = Math.hypot(sx - b.x, sy - b.y);
+      const reach = Math.min(this.w, this.h) * 0.14;
+      if (v.z < 1 && d < reach) {
+        const w = (1 - d / reach) ** 2 * 1.4;
+        ax = b.vx * w;
+        ay = b.vy * w;
+      }
+    }
+    if (!ax && !ay && !o.ox && !o.oy && !o.fx && !o.fy) return;
+    // Hardly any drag and a soft pull home: a slow, floating return.
+    const K = 1.4;
+    const C = 1.3;
+    o.fx = (o.fx || 0) + (ax - K * (o.ox || 0) - C * (o.fx || 0)) * dt;
+    o.fy = (o.fy || 0) + (ay - K * (o.oy || 0) - C * (o.fy || 0)) * dt;
+    o.ox = (o.ox || 0) + o.fx * dt;
+    o.oy = (o.oy || 0) + o.fy * dt;
+    if (!ax && !ay && Math.abs(o.ox) < 0.05 && Math.abs(o.oy) < 0.05 && Math.abs(o.fx) < 0.05 && Math.abs(o.fy) < 0.05) o.ox = o.oy = o.fx = o.fy = 0;
+  }
+
+  /*
+   * The pointer brushing through the bed (or across the sky): where it is
+   * and how fast it is moving (screen pixels a second, smoothed), while a
+   * mouse moves over the splash or a finger drags across it. Nothing behind
+   * other pages, with the menu open, or with reduced motion.
    */
   brushStep(dt) {
     const ptr = this.pointer;
-    const on = dt > 0 && ptr.active && !this.backdrop && !this.night && !this.reduced && !this.classList.contains('is-nav-open');
+    const on = dt > 0 && ptr.active && !this.backdrop && !this.reduced && !this.classList.contains('is-nav-open');
     if (!on) {
       this.brush = null;
       this.brushLast = null;
@@ -5189,7 +5241,7 @@ class GardenSplash extends HTMLElement {
   /* How hard the brushing pointer shoves this flower's head (radians a second squared, toward +x and +y), or 0. */
   brushPush(f) {
     const b = this.brush;
-    if (!b || f.sx === undefined || (Math.abs(b.vx) < 20 && Math.abs(b.vy) < 20)) return null;
+    if (!b || this.night || f.sx === undefined || (Math.abs(b.vx) < 20 && Math.abs(b.vy) < 20)) return null;
     const reach = Math.max(70, (f.sr || 0) * 3);
     const d = Math.hypot(f.sx - b.x, f.sy - b.y);
     if (d >= reach) return null;
