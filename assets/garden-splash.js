@@ -112,6 +112,51 @@ function lunarPhase(date) {
   return { age, lit: (1 - Math.cos((age / SYNODIC) * Math.PI * 2)) / 2 };
 }
 
+/*
+ * Where the sun and the moon are in the sky (altitude above the horizon and
+ * azimuth from north through east, in degrees) at a moment, for a place.
+ * The usual low-precision formulas: within a degree or so, plenty for a sky
+ * drawn in big pixels.
+ */
+const RAD = Math.PI / 180;
+function daysSince2000(date) {
+  return date.getTime() / 86400000 + 2440587.5 - 2451545.0;
+}
+function horizontal(ra, dec, d, lat, lon) {
+  // Local sidereal time, then the hour angle.
+  const lst = (280.46061837 + 360.98564736629 * d + lon) % 360;
+  const H = (lst - ra) * RAD;
+  const phi = lat * RAD;
+  const dl = dec * RAD;
+  const alt = Math.asin(Math.sin(phi) * Math.sin(dl) + Math.cos(phi) * Math.cos(dl) * Math.cos(H));
+  const az = Math.atan2(-Math.sin(H), Math.tan(dl) * Math.cos(phi) - Math.sin(phi) * Math.cos(H));
+  return { alt: alt / RAD, az: ((az / RAD) + 360) % 360 };
+}
+function equatorial(lambda, beta, d) {
+  const e = (23.439 - 0.0000004 * d) * RAD;
+  const l = lambda * RAD;
+  const b = beta * RAD;
+  const ra = Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l)) / RAD;
+  const dec = Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l)) / RAD;
+  return { ra, dec };
+}
+function sunPosition(date, lat, lon) {
+  const d = daysSince2000(date);
+  const g = (357.529 + 0.98560028 * d) * RAD;
+  const q = 280.459 + 0.98564736 * d;
+  const L = q + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g);
+  const { ra, dec } = equatorial(L, 0, d);
+  return horizontal(ra, dec, d, lat, lon);
+}
+function moonPosition(date, lat, lon) {
+  const d = daysSince2000(date);
+  const L = 218.316 + 13.176396 * d;
+  const M = (134.963 + 13.064993 * d) * RAD;
+  const F = (93.272 + 13.22935 * d) * RAD;
+  const { ra, dec } = equatorial(L + 6.289 * Math.sin(M), 5.128 * Math.sin(F), d);
+  return horizontal(ra, dec, d, lat, lon);
+}
+
 /* What the world behind other pages copies from the splash (dataset keys). */
 const LOOK_KEY = 'duet-garden-look';
 const LOOK = ['palette', 'foliageColor', 'centerColor', 'centerAccent', 'soilColor', 'density', 'flowerLogo', 'flowerLogoMobile', 'weather', 'season', 'hemisphere'];
@@ -2923,8 +2968,9 @@ class GardenSplash extends HTMLElement {
           const d = rb * (0.9 + Math.random() * 0.6);
           add(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.8, rb * 0.1, rb * (0.5 + Math.random() * 0.3), [1.2, 1, 0.5]);
         }
-        const h = { cx, cy, z, rx: rb * 1.4, ry: rb * 1.1, speed: far ? 0.55 : 1, first, last: drift.length, source };
+        const h = { cx, cy, z, rx: rb * 1.4, ry: rb * 1.1, speed: far ? 0.55 : 1, first, last: drift.length, source, far, scale: 0.5 * unit * depth };
         heaps.push(h);
+        for (let i = first; i < drift.length; i++) drift[i].cloud = h;
         // A source cloud's own lobes melt away as it becomes the logo.
         if (source) for (let i = first; i < drift.length; i++) drift[i].heap = h;
       };
@@ -3145,9 +3191,139 @@ class GardenSplash extends HTMLElement {
       banner: time.dark ? null : this.buildBanner(group, disposables),
       nextBlimp: this.elapsed + 25 + Math.random() * 35,
       peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 5 + Math.random() * 15,
-      moon: time.light < 0.6 ? this.buildMoon(group, disposables, tex, eye, D, viewW, viewH) : null,
+      ...this.buildSunAndMoon(group, disposables, tex, eye, D, viewW, viewH, time),
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
     };
+  }
+
+  /*
+   * A cloud that has drifted off one side and comes back on the other is a
+   * new cloud: a fresh size, a fresh spread of lobes round a big one (some
+   * of its lobes left out), a new height in the sky. A cloud the logo came
+   * out of becomes an ordinary one.
+   */
+  reshapeCloud(h, sky) {
+    const big = (h.far ? clamp(this.w * 0.065, 30, 90) * (0.7 + Math.random() * 0.5) : clamp(this.w * 0.085, 34, 120) * (0.6 + Math.random() * 0.7)) * (h.source ? 1.2 : 1);
+    const rb = big * h.scale;
+    h.cy = sky.eye.y + (Math.random() - 0.5) * sky.viewH * (h.far ? 2.4 : 1.7);
+    h.rx = rb * 1.4;
+    h.ry = rb * 1.1;
+    h.source = false;
+    const along = Math.random() * TAU;
+    for (let i = h.first; i < h.last; i++) {
+      const c = sky.drift[i];
+      c.heap = null;
+      c.rot = Math.random() * TAU;
+      if (i === h.first) {
+        c.p.set(h.cx, h.cy, h.z);
+        c.r = rb * (1.05 + Math.random() * 0.2);
+        c.sq = [1.2 + Math.random() * 0.3, 0.95 + Math.random() * 0.2, 0.45 + Math.random() * 0.1];
+        continue;
+      }
+      // Some lobes left out, so clouds differ in how many they have, not only where.
+      if (Math.random() < 0.25) {
+        c.r = 1e-3;
+        continue;
+      }
+      const a = along + (i % 2 ? Math.PI : 0) + (Math.random() - 0.5) * 1.8;
+      const d = rb * (0.8 + Math.random() * 0.8);
+      c.p.set(h.cx + Math.cos(a) * d, h.cy + Math.sin(a) * d * (0.6 + Math.random() * 0.4), h.z + rb * 0.1);
+      c.r = rb * (0.4 + Math.random() * 0.45);
+      c.sq = [1 + Math.random() * 0.4, 0.9 + Math.random() * 0.2, 0.45 + Math.random() * 0.1];
+    }
+  }
+
+  /* A ball's placement off to the side in the wide sky view, squeezed back across the line of sight so it reads round. */
+  roundAt(eye, at) {
+    const away = at.clone().sub(eye).normalize();
+    const outward = new THREE.Vector3(at.x - eye.x, at.y - eye.y, 0).addScaledVector(away, -(at.x - eye.x) * away.x - (at.y - eye.y) * away.y);
+    if (outward.lengthSq() < 1e-8) return new THREE.Matrix4().makeTranslation(at.x, at.y, at.z);
+    outward.normalize();
+    const across = new THREE.Vector3().crossVectors(away, outward);
+    const basis = new THREE.Matrix4().makeBasis(outward, across, away);
+    return new THREE.Matrix4()
+      .makeTranslation(at.x, at.y, at.z)
+      .multiply(basis)
+      .multiply(new THREE.Matrix4().makeScale(Math.max(0.45, away.z), 1, 1))
+      .multiply(basis.clone().transpose());
+  }
+
+  /* A point of the sky view from a place (nx, ny in half view heights from the middle; ny up), at depth k. */
+  skyPoint(place, eye, D, viewH, k) {
+    return new THREE.Vector3(eye.x + place.nx * viewH * 0.5 * k, eye.y - place.ny * viewH * 0.5 * k, eye.z + D * k);
+  }
+
+  /*
+   * Where something at altitude alt and azimuth az (degrees; az from north
+   * through east) is in the sky view. Lying on your back with your head to
+   * the north and looking straight up: the zenith in the middle, north up,
+   * east to the left, the horizon a little beyond the edges of the view.
+   * Null below the horizon.
+   */
+  skyPlace(alt, az) {
+    if (alt < -1) return null;
+    const rad = Math.PI / 180;
+    const rn = ((90 - alt) / 90) * 1.25;
+    return { nx: -Math.sin(az * rad) * rn, ny: Math.cos(az * rad) * rn };
+  }
+
+  /*
+   * The sun and the moon where they really are now, for the visitor (their
+   * longitude guessed from their time zone, latitude from the hemisphere
+   * setting), or, with the sky set to a fixed time of day, where they would
+   * be at such a time. Each only when above the horizon.
+   */
+  buildSunAndMoon(group, disposables, glow, eye, D, viewW, viewH, time) {
+    let sunAt;
+    let moonAt;
+    const fixed = this.skySetting !== 'auto';
+    if (!fixed) {
+      const now = new Date();
+      const lat = this.south ? -33 : 40;
+      const lon = -now.getTimezoneOffset() / 4;
+      const sp = sunPosition(now, lat, lon);
+      const mp = moonPosition(now, lat, lon);
+      sunAt = this.skyPlace(sp.alt, sp.az);
+      moonAt = this.skyPlace(mp.alt, mp.az);
+    } else {
+      const s = this.south ? 180 : 0;
+      sunAt = { day: this.skyPlace(58, 160 + s), sunrise: this.skyPlace(5, 95), sunset: this.skyPlace(5, 265) }[this.skySetting] || null;
+      moonAt = this.skySetting === 'night' ? this.skyPlace(52, 140 + s) : null;
+    }
+    // The moon only where it can be seen against the sky: not in a bright day sky's glare near the sun.
+    const moon = moonAt ? this.buildMoon(group, disposables, glow, eye, D, viewW, viewH, moonAt) : null;
+    const sun = sunAt && (time.light > 0.05 || time.warm > 0.05) ? this.buildSun(group, disposables, glow, eye, D, viewW, viewH, sunAt, time) : null;
+    return { moon, sun };
+  }
+
+  /* The sun: a low-poly ball of light, with a glow and a wide soft wash round it, warmer low in the sky. */
+  buildSun(group, disposables, glow, eye, D, viewW, viewH, place, time) {
+    const k = 1.42;
+    const r = Math.min(viewW, viewH) * 0.045 * k;
+    const at = this.skyPoint(place, eye, D, viewH, k);
+    const color = mix([255, 246, 214], [255, 170, 96], time.warm);
+    const geo = new THREE.IcosahedronGeometry(1, 1);
+    const mat = new THREE.MeshBasicMaterial({ color: toColor(color), transparent: true, opacity: 0, depthWrite: false, fog: false });
+    disposables.push(geo, mat);
+    const ball = new THREE.Mesh(geo, mat);
+    ball.matrixAutoUpdate = false;
+    ball.matrix.copy(this.roundAt(eye, at)).multiply(new THREE.Matrix4().makeScale(r, r, r));
+    ball.renderOrder = -2;
+    group.add(ball);
+    const sprite = (scale, tint) => {
+      const m = new THREE.SpriteMaterial({ map: glow, color: toColor(tint), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+      disposables.push(m);
+      const sp = new THREE.Sprite(m);
+      sp.position.copy(at);
+      sp.position.z += 1;
+      sp.scale.setScalar(r * scale);
+      sp.renderOrder = -2;
+      group.add(sp);
+      return sp;
+    };
+    const halo = sprite(5, mix(color, [255, 255, 255], 0.3));
+    const wash = sprite(16, color);
+    return { ball, mat, halo, wash };
   }
 
   /*
@@ -3159,16 +3335,14 @@ class GardenSplash extends HTMLElement {
    * seas, pale crater rims). Up in a corner of the sky away from the logo,
    * with a faint glow that grows toward full.
    */
-  buildMoon(group, disposables, glow, eye, D, viewW, viewH) {
+  buildMoon(group, disposables, glow, eye, D, viewW, viewH, place) {
     const { age, lit } = lunarPhase(new Date());
     const theta = (age / SYNODIC) * TAU;
-    // Upper left of the view, behind the logo's stars and in front of the far field.
+    // Where it is in the sky (see skyPlace), behind the logo's stars and in front of the far field.
     const k = 1.2;
     const wide = viewW > viewH;
-    const nx = wide ? -0.62 : -0.5;
-    const ny = wide ? 0.62 : 0.72;
     const r = Math.min(viewW, viewH) * (wide ? 0.06 : 0.09) * k;
-    const at = new THREE.Vector3(eye.x + nx * viewW * 0.5 * k, eye.y - ny * viewH * 0.5 * k, eye.z + D * k);
+    const at = this.skyPoint(place, eye, D, viewH, k);
     // Lit as the viewer lying below sees it: the sun is behind the moon at new, behind the viewer at full,
     // and off to screen right (+x) as it waxes.
     const toViewer = eye.clone().sub(at).normalize();
@@ -3236,7 +3410,7 @@ class GardenSplash extends HTMLElement {
      * bright part shows it plainly.
      */
     const iris = mix(this.heroColor, [40, 40, 60], 0.2);
-    const eyeUniforms = { uGaze: { value: toViewer.clone().negate() }, uEye: { value: 0 }, uIris: { value: new THREE.Color().setRGB(iris[0] / 255, iris[1] / 255, iris[2] / 255) } };
+    const eyeUniforms = { uGaze: { value: toViewer.clone().negate() }, uEye: { value: 0 }, uIris: { value: new THREE.Color().setRGB(iris[0] / 255, iris[1] / 255, iris[2] / 255) }, uShadow: { value: 1 } };
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false });
     mat.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, eyeUniforms);
@@ -3244,7 +3418,7 @@ class GardenSplash extends HTMLElement {
         .replace('void main() {', 'attribute float aLit;\nattribute vec3 aMid;\nvarying float vLit;\nvarying vec3 vMid;\nvoid main() {')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLit = aLit;\n  vMid = aMid;');
       shader.fragmentShader = shader.fragmentShader
-        .replace('void main() {', 'uniform vec3 uGaze;\nuniform float uEye;\nuniform vec3 uIris;\nvarying float vLit;\nvarying vec3 vMid;\nvoid main() {')
+.replace('void main() {', 'uniform vec3 uGaze;\nuniform float uEye;\nuniform vec3 uIris;\nuniform float uShadow;\nvarying float vLit;\nvarying vec3 vMid;\nvoid main() {')
         .replace(
           '#include <color_fragment>',
           [
@@ -3256,21 +3430,14 @@ class GardenSplash extends HTMLElement {
             '  float inEye = step(ang, 0.4) * uEye;',
             '  vec3 shadeCol = vec3(0.02, 0.025, 0.06);',
             '  diffuseColor.rgb = mix(diffuseColor.rgb, mix(shadeCol, eyeCol, vLit), inEye);',
+            // By day the shadowed part is simply not there: only the lit part shows against the blue.
+            '  diffuseColor.a *= mix(uShadow, 1.0, vLit);',
           ].join('\n')
         );
     };
     disposables.push(geo, mat);
     const disc = new THREE.Mesh(geo, mat);
-    // The wide view stretches a ball near its edge outward from the middle. Squeezed back across the
-    // line of sight, along that outward direction, by the cosine of how far off center it is, it reads round.
-    const outward = new THREE.Vector3(at.x - eye.x, at.y - eye.y, 0).addScaledVector(away, -(at.x - eye.x) * away.x - (at.y - eye.y) * away.y).normalize();
-    const across = new THREE.Vector3().crossVectors(away, outward);
-    const basis = new THREE.Matrix4().makeBasis(outward, across, away);
-    const squeeze = new THREE.Matrix4()
-      .makeTranslation(at.x, at.y, at.z)
-      .multiply(basis)
-      .multiply(new THREE.Matrix4().makeScale(Math.max(0.45, away.z), 1, 1))
-      .multiply(basis.clone().transpose());
+    const squeeze = this.roundAt(eye, at);
     disc.matrixAutoUpdate = false;
     disc.matrix.copy(squeeze).multiply(new THREE.Matrix4().makeScale(r, r, r));
     disc.renderOrder = -1;
@@ -3509,13 +3676,28 @@ class GardenSplash extends HTMLElement {
     fc.needsUpdate = true;
     if (sky.moon) {
       this.moonEye(t, show * stars);
-      sky.moon.mat.opacity = show * stars;
+      // By day a pale moon, its shadowed side gone; at night the full thing.
+      sky.moon.mat.opacity = show * Math.max(stars, 0.6 * time.light);
+      sky.moon.eye.uShadow.value = stars;
       sky.moon.halo.material.opacity = show * stars * (0.04 + 0.1 * sky.moon.lit);
     }
-    // Clouds drift slowly across, coming round again on the other side.
+    if (sky.sun) {
+      const up = show * clamp(time.light * 1.4 + time.warm, 0, 1);
+      sky.sun.mat.opacity = up;
+      sky.sun.halo.material.opacity = up * 0.55;
+      sky.sun.wash.material.opacity = up * 0.22;
+    }
+    // Clouds drift slowly across; each that goes off one side comes back on the other as a new cloud.
     if (sky.driftPts) {
+      for (const h of sky.heaps) {
+        const hx = driftX(h.cx, h.speed);
+        if (h.wx !== undefined && hx < h.wx - span * 0.5) this.reshapeCloud(h, sky);
+        h.wx = hx;
+      }
       sky.drift.forEach((c) => {
-        c.x = driftX(c.p.x, c.speed);
+        // A cloud's lobes move as one with it, so it wraps round whole.
+        const H = c.cloud;
+        c.x = H ? driftX(H.cx, H.speed) + (c.p.x - H.cx) : driftX(c.p.x, c.speed);
         d.position.set(c.x, c.p.y, c.p.z);
         d.rotation.set(0, 0, c.rot);
         let r = c.r;
