@@ -37,6 +37,19 @@ import { SCHEMES } from './duet-schemes.js';
 
 const TAU = Math.PI * 2;
 
+/*
+ * The moon's age in days since the last new moon, and how much of its disc
+ * is lit (0 new, 1 full), from a known new moon (6 January 2000, 18:14 UTC)
+ * and the mean length of a lunar month. Close enough to the real phase to
+ * the hour.
+ */
+const SYNODIC = 29.530588853;
+function lunarPhase(date) {
+  const days = (date.getTime() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000;
+  const age = ((days % SYNODIC) + SYNODIC) % SYNODIC;
+  return { age, lit: (1 - Math.cos((age / SYNODIC) * Math.PI * 2)) / 2 };
+}
+
 /* What the world behind other pages copies from the splash (dataset keys). */
 const LOOK_KEY = 'duet-garden-look';
 const LOOK = ['palette', 'foliageColor', 'centerColor', 'centerAccent', 'soilColor', 'density', 'flowerLogo', 'flowerLogoMobile', 'weather', 'season', 'hemisphere'];
@@ -2981,8 +2994,96 @@ class GardenSplash extends HTMLElement {
       heaps, planes: this.buildPlanes(group, disposables, atlas, tex, time, D), nextPlane: this.elapsed + 9 + Math.random() * 10,
       birds: this.buildBirds(group, disposables, time), nextBirds: this.elapsed + 7 + Math.random() * 6,
       peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 5 + Math.random() * 15,
+      moon: time.light < 0.6 ? this.buildMoon(group, disposables, tex, eye, D, viewW, viewH) : null,
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
     };
+  }
+
+  /*
+   * The moon, in its real phase for today: lit from the right as it waxes
+   * and from the left as it wanes (the other way round in the southern
+   * hemisphere), the dark part faintly there by earthshine. Up in a
+   * corner of the sky away from the logo, drawn in chunky pixels like
+   * everything else, with a soft glow that grows toward full.
+   */
+  buildMoon(group, disposables, glow, eye, D, viewW, viewH) {
+    const { age, lit } = lunarPhase(new Date());
+    const theta = (age / SYNODIC) * TAU;
+    // A grey ball of maria and craters, 48 texels across.
+    const n = 48;
+    const rng = mulberry32(1969);
+    const seas = Array.from({ length: 6 }, () => [0.25 + rng() * 0.5, 0.25 + rng() * 0.5, 0.08 + rng() * 0.14]);
+    const craters = Array.from({ length: 22 }, () => [rng(), rng(), 0.02 + rng() * 0.05]);
+    const data = new Uint8Array(n * n * 4);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const u = (x + 0.5) / n;
+        const v = (y + 0.5) / n;
+        let g = 0.78 + (rng() - 0.5) * 0.08;
+        for (const [cx, cy, r] of seas) if (Math.hypot(u - cx, v - cy) < r) g -= 0.16;
+        for (const [cx, cy, r] of craters) {
+          const d = Math.hypot(u - cx, v - cy) / r;
+          if (d < 0.75) g -= 0.1;
+          else if (d < 1) g += 0.08;
+        }
+        const i = (y * n + x) * 4;
+        data[i] = data[i + 1] = data[i + 2] = Math.round(clamp(g, 0, 1) * 255);
+        data[i + 3] = 255;
+      }
+    }
+    const tex = new THREE.DataTexture(data, n, n);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.needsUpdate = true;
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uTex: { value: tex }, uTheta: { value: theta }, uMirror: { value: this.south ? -1 : 1 }, uAlpha: { value: 0 } },
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `
+        uniform sampler2D uTex;
+        uniform float uTheta, uMirror, uAlpha;
+        varying vec2 vUv;
+        void main() {
+          // Chunky pixels: the disc is 40 across.
+          vec2 q = (floor(vUv * 40.0) + 0.5) / 40.0;
+          vec2 p = q * 2.0 - 1.0;
+          float r2 = dot(p, p);
+          if (r2 > 1.0) discard;
+          vec3 nrm = vec3(p, sqrt(1.0 - r2));
+          vec3 sun = vec3(uMirror * sin(uTheta), 0.0, -cos(uTheta));
+          float lit = smoothstep(-0.04, 0.06, dot(nrm, sun));
+          float surf = texture2D(uTex, q).r;
+          vec3 day = vec3(0.96, 0.95, 0.88) * (0.55 + 0.55 * surf);
+          vec3 earth = vec3(0.12, 0.14, 0.24) * (0.6 + 0.5 * surf);
+          gl_FragColor = vec4(mix(earth, day, lit), uAlpha * mix(0.5, 1.0, lit));
+        }`,
+      transparent: true,
+      depthWrite: false,
+      fog: false,
+    });
+    disposables.push(tex, mat);
+    // Upper left of the view, behind the logo's stars and in front of the far field.
+    const k = 1.2;
+    const wide = viewW > viewH;
+    const nx = wide ? -0.62 : -0.5;
+    const ny = wide ? 0.62 : 0.72;
+    const r = Math.min(viewW, viewH) * (wide ? 0.06 : 0.09) * k;
+    const pos = new THREE.Vector3(eye.x + nx * viewW * 0.5 * k, eye.y - ny * viewH * 0.5 * k, eye.z + D * k);
+    const disc = new THREE.Mesh(new THREE.PlaneGeometry(2 * r, 2 * r), mat);
+    disposables.push(disc.geometry);
+    // Turned over to face down at the viewer lying below; screen right stays +x.
+    disc.rotation.x = Math.PI;
+    disc.position.copy(pos);
+    disc.renderOrder = -1;
+    group.add(disc);
+    const haloMat = new THREE.SpriteMaterial({ map: glow, color: toColor([220, 230, 255]), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    disposables.push(haloMat);
+    const halo = new THREE.Sprite(haloMat);
+    halo.position.copy(pos);
+    halo.position.z += 1;
+    halo.scale.setScalar(r * 6);
+    halo.renderOrder = -2;
+    group.add(halo);
+    return { disc, halo, mat, lit };
   }
 
   /* Turning over, lying there, and turning back. */
@@ -3135,6 +3236,10 @@ class GardenSplash extends HTMLElement {
       fc.setXYZ(i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
     });
     fc.needsUpdate = true;
+    if (sky.moon) {
+      sky.moon.mat.uniforms.uAlpha.value = show * stars;
+      sky.moon.halo.material.opacity = show * stars * (0.12 + 0.3 * sky.moon.lit);
+    }
     // Clouds drift slowly across, coming round again on the other side.
     if (sky.driftPts) {
       sky.drift.forEach((c) => {
