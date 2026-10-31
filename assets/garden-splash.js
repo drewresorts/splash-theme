@@ -5181,7 +5181,8 @@ class GardenSplash extends HTMLElement {
    */
   /*
    * Something in the sky (a star or a puff of the logo, a drifting cloud)
-   * given a lazy shove by the pointer brushing past: it floats off the way
+   * given a lazy shove by the pointer dragging past (mouse button held, or
+   * a finger on the screen): it floats off the way
    * the pointer moved, as if weightless, and a very soft spring eases it
    * back into place over a few seconds. Its offset is kept in screen pixels
    * (ox, oy) and returned the same way.
@@ -5190,7 +5191,8 @@ class GardenSplash extends HTMLElement {
     const b = this.brush;
     let ax = 0;
     let ay = 0;
-    if (b && (Math.abs(b.vx) > 20 || Math.abs(b.vy) > 20)) {
+    // Only while pressed: the mouse button held, or a finger on the screen.
+    if (b && this.pointer.down && (Math.abs(b.vx) > 20 || Math.abs(b.vy) > 20)) {
       const v = this.tmp.set(x, y, z).project(this.camera);
       const sx = (v.x * 0.5 + 0.5) * this.w;
       const sy = (-v.y * 0.5 + 0.5) * this.h;
