@@ -3003,85 +3003,91 @@ class GardenSplash extends HTMLElement {
    * The moon, in its real phase for today: lit from the right as it waxes
    * and from the left as it wanes (the other way round in the southern
    * hemisphere), the dark part in deep shadow that fades into the sky at
-   * its edge. Up in a corner of the sky away from the logo, drawn in chunky
-   * pixels like everything else, with a faint glow that grows toward full.
+   * its edge. A low-poly ball like the clouds: each flat facet takes one
+   * shade, from the sun's angle and the grey of the ground there (darker
+   * seas, pale crater rims). Up in a corner of the sky away from the logo,
+   * with a faint glow that grows toward full.
    */
   buildMoon(group, disposables, glow, eye, D, viewW, viewH) {
     const { age, lit } = lunarPhase(new Date());
     const theta = (age / SYNODIC) * TAU;
-    // A grey ball of maria and craters, 48 texels across.
-    const n = 48;
-    const rng = mulberry32(1969);
-    const seas = Array.from({ length: 6 }, () => [0.25 + rng() * 0.5, 0.25 + rng() * 0.5, 0.08 + rng() * 0.14]);
-    const craters = Array.from({ length: 22 }, () => [rng(), rng(), 0.02 + rng() * 0.05]);
-    const data = new Uint8Array(n * n * 4);
-    for (let y = 0; y < n; y++) {
-      for (let x = 0; x < n; x++) {
-        const u = (x + 0.5) / n;
-        const v = (y + 0.5) / n;
-        let g = 0.78 + (rng() - 0.5) * 0.08;
-        for (const [cx, cy, r] of seas) if (Math.hypot(u - cx, v - cy) < r) g -= 0.16;
-        for (const [cx, cy, r] of craters) {
-          const d = Math.hypot(u - cx, v - cy) / r;
-          if (d < 0.75) g -= 0.1;
-          else if (d < 1) g += 0.08;
-        }
-        const i = (y * n + x) * 4;
-        data[i] = data[i + 1] = data[i + 2] = Math.round(clamp(g, 0, 1) * 255);
-        data[i + 3] = 255;
-      }
-    }
-    const tex = new THREE.DataTexture(data, n, n);
-    tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.NearestFilter;
-    tex.needsUpdate = true;
-    const mat = new THREE.ShaderMaterial({
-      uniforms: { uTex: { value: tex }, uTheta: { value: theta }, uMirror: { value: this.south ? -1 : 1 }, uAlpha: { value: 0 } },
-      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `
-        uniform sampler2D uTex;
-        uniform float uTheta, uMirror, uAlpha;
-        varying vec2 vUv;
-        void main() {
-          // Chunky pixels: the disc is 40 across.
-          vec2 q = (floor(vUv * 40.0) + 0.5) / 40.0;
-          vec2 p = q * 2.0 - 1.0;
-          float r2 = dot(p, p);
-          if (r2 > 1.0) discard;
-          vec3 nrm = vec3(p, sqrt(1.0 - r2));
-          vec3 sun = vec3(uMirror * sin(uTheta), 0.0, -cos(uTheta));
-          float lit = smoothstep(-0.07, 0.07, dot(nrm, sun));
-          float surf = texture2D(uTex, q).r;
-          vec3 day = vec3(0.96, 0.95, 0.88) * (0.55 + 0.55 * surf);
-          // The shadowed side: all but black, and fading out toward its rim into the sky behind.
-          vec3 shade = vec3(0.02, 0.025, 0.06) * (0.7 + 0.3 * surf);
-          float rim = 1.0 - smoothstep(0.35, 1.0, sqrt(r2));
-          gl_FragColor = vec4(mix(shade, day, lit), uAlpha * mix(0.6 * rim, 1.0, lit));
-        }`,
-      transparent: true,
-      depthWrite: false,
-      fog: false,
-    });
-    disposables.push(tex, mat);
     // Upper left of the view, behind the logo's stars and in front of the far field.
     const k = 1.2;
     const wide = viewW > viewH;
     const nx = wide ? -0.62 : -0.5;
     const ny = wide ? 0.62 : 0.72;
     const r = Math.min(viewW, viewH) * (wide ? 0.06 : 0.09) * k;
-    const pos = new THREE.Vector3(eye.x + nx * viewW * 0.5 * k, eye.y - ny * viewH * 0.5 * k, eye.z + D * k);
-    const disc = new THREE.Mesh(new THREE.PlaneGeometry(2 * r, 2 * r), mat);
-    disposables.push(disc.geometry);
-    // Turned over to face down at the viewer lying below; screen right stays +x.
-    disc.rotation.x = Math.PI;
-    disc.position.copy(pos);
+    const at = new THREE.Vector3(eye.x + nx * viewW * 0.5 * k, eye.y - ny * viewH * 0.5 * k, eye.z + D * k);
+    // Lit as the viewer lying below sees it: the sun is behind the moon at new, behind the viewer at full,
+    // and off to screen right (+x) as it waxes.
+    const toViewer = eye.clone().sub(at).normalize();
+    const away = toViewer.clone().negate();
+    const right = new THREE.Vector3(1, 0, 0).addScaledVector(away, -away.x).normalize();
+    const sun = right.multiplyScalar((this.south ? -1 : 1) * Math.sin(theta)).addScaledVector(away, Math.cos(theta)).normalize();
+    const rng = mulberry32(1969);
+    const dir = () => {
+      const d = new THREE.Vector3(rng() - 0.5, rng() - 0.5, rng() - 0.5).normalize();
+      return d.dot(toViewer) < 0.2 ? d.addScaledVector(toViewer, 1.2).normalize() : d;
+    };
+    const seas = Array.from({ length: 6 }, () => [dir(), 0.25 + rng() * 0.3]);
+    const craters = Array.from({ length: 14 }, () => [dir(), 0.08 + rng() * 0.12]);
+    const geo = new THREE.IcosahedronGeometry(1, 3).toNonIndexed();
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 4);
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    const nrm = new THREE.Vector3();
+    const mid = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i += 3) {
+      a.fromBufferAttribute(pos, i);
+      b.fromBufferAttribute(pos, i + 1);
+      c.fromBufferAttribute(pos, i + 2);
+      mid.copy(a).add(b).add(c).normalize();
+      nrm.copy(c).sub(b).cross(a.clone().sub(b)).normalize();
+      if (nrm.dot(mid) < 0) nrm.negate();
+      // The ground: grey, darker in the seas, crater floors dark and rims pale.
+      let g = 0.8 + (rng() - 0.5) * 0.1;
+      for (const [d, r] of seas) if (mid.angleTo(d) < r) g -= 0.15;
+      for (const [d, r] of craters) {
+        const k = mid.angleTo(d) / r;
+        if (k < 0.7) g -= 0.1;
+        else if (k < 1) g += 0.08;
+      }
+      const light = smooth(clamp((nrm.dot(sun) + 0.08) / 0.16, 0, 1));
+      const day = [0.96, 0.95, 0.88].map((v) => v * (0.55 + 0.55 * g));
+      const shade = [0.02, 0.025, 0.06].map((v) => v * (0.7 + 0.3 * g));
+      // In shadow, the facets fade toward the rim, into the sky behind.
+      const facing = clamp(nrm.dot(toViewer), 0, 1);
+      const alpha = lerp(0.6 * smooth(clamp(facing / 0.75, 0, 1)), 1, light);
+      for (let v = 0; v < 3; v++) {
+        const o = (i + v) * 4;
+        for (let ch = 0; ch < 3; ch++) colors[o + ch] = lerp(shade[ch], day[ch], light);
+        colors[o + 3] = alpha;
+      }
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    disposables.push(geo, mat);
+    const disc = new THREE.Mesh(geo, mat);
+    // The wide view stretches a ball near its edge outward from the middle: squeezed back along that line, it reads round.
+    const off = Math.atan2(at.y - eye.y, at.x - eye.x);
+    const squeeze = Math.max(0.5, away.z);
+    const turn = new THREE.Matrix4().makeRotationZ(off);
+    disc.matrixAutoUpdate = false;
+    disc.matrix
+      .makeTranslation(at.x, at.y, at.z)
+      .multiply(turn)
+      .multiply(new THREE.Matrix4().makeScale(squeeze, 1, 1))
+      .multiply(turn.clone().invert())
+      .multiply(new THREE.Matrix4().makeScale(r, r, r));
     disc.renderOrder = -1;
     group.add(disc);
     const haloMat = new THREE.SpriteMaterial({ map: glow, color: toColor([220, 230, 255]), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
     disposables.push(haloMat);
     const halo = new THREE.Sprite(haloMat);
-    halo.position.copy(pos);
-    halo.position.z += 1;
+    halo.position.copy(at);
+    halo.position.z += r * 1.5;
     halo.scale.setScalar(r * 4.5);
     halo.renderOrder = -2;
     group.add(halo);
@@ -3239,7 +3245,7 @@ class GardenSplash extends HTMLElement {
     });
     fc.needsUpdate = true;
     if (sky.moon) {
-      sky.moon.mat.uniforms.uAlpha.value = show * stars;
+      sky.moon.mat.opacity = show * stars;
       sky.moon.halo.material.opacity = show * stars * (0.04 + 0.1 * sky.moon.lit);
     }
     // Clouds drift slowly across, coming round again on the other side.
