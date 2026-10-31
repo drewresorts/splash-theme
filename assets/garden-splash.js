@@ -3009,22 +3009,22 @@ class GardenSplash extends HTMLElement {
     const fp = fieldPts.geometry.attributes.position;
     field.forEach((s, i) => fp.setXYZ(i, s.p.x, s.p.y, s.p.z));
     fp.needsUpdate = true;
-    // The sky itself: a coarse grid of colors, deep ocean blue with patches
-    // of wine and teal, dithered in banded steps the PS1 way.
+    // The sky itself: a coarse grid of colors, all deep navy, with patches a
+    // shade lighter or darker, dithered in banded steps the PS1 way.
     const skyGeo = new THREE.PlaneGeometry(viewW * 2.4, viewH * 2.4, 12, 9);
     const sc = [];
     const sp = skyGeo.attributes.position;
-    const blobs = [this.heroAccent, this.foliage, this.heroColor].map((c) => [c, Math.random() * TAU, 0.2 + Math.random() * 0.25]);
+    const blobs = [[14, 22, 72], [3, 5, 22], [10, 18, 60]].map((c) => [c, Math.random() * TAU, 0.2 + Math.random() * 0.25]);
     // Low sun: warm toward one side of the sky, the side the sun is on.
     const sunA = time.evening ? Math.PI * 0.85 : Math.PI * 0.15;
     for (let i = 0; i < sp.count; i++) {
       const u = sp.getX(i) / (viewW * 1.2);
       const v = sp.getY(i) / (viewH * 1.2);
       const mid = Math.max(0, 1 - Math.hypot(u, v) * 0.9);
-      let c = mix([5, 7, 28], [16, 20, 66], mid);
+      let c = mix([2, 3, 14], [7, 11, 38], mid);
       for (const [tint, a, r] of blobs) {
         const d = Math.hypot(u - Math.cos(a) * 0.45, v - Math.sin(a) * 0.4);
-        c = mix(c, mix(tint, [10, 12, 40], 0.7), Math.max(0, 1 - d / r) * 0.6);
+        c = mix(c, tint, Math.max(0, 1 - d / r) * 0.55);
       }
       // Day: clear blue, paler toward the middle of the view.
       const day = mix([62, 128, 206], [150, 202, 242], mid);
@@ -3359,7 +3359,7 @@ class GardenSplash extends HTMLElement {
     // moonlight at night, sun and blue sky by day, low gold at sunrise and sunset.
     const dark = smooth(range(p, 0.1, 0.8));
     const time = sky.time;
-    const NIGHT = [7, 10, 38];
+    const NIGHT = [3, 4, 18];
     const air = mix(mix(NIGHT, [96, 156, 220], time.light), time.evening ? [214, 120, 140] : [236, 160, 140], time.warm * 0.7);
     this.renderer.setClearColor(toColor(air), dark);
     const day = this.dayLight();
