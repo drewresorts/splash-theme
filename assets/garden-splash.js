@@ -1183,13 +1183,18 @@ class GardenSplash extends HTMLElement {
       const r = this.getBoundingClientRect();
       return [e.clientX - r.left, e.clientY - r.top];
     };
-    const isUi = (e) => e.target instanceof Element && e.target.closest('[data-garden-ui]');
+    // The formed logo is a button over the flowers (it opens the menu): the
+    // pointer over it is still over the bed, so it brushes the flowers.
+    const onLogo = (e) => e.target instanceof Element && !!e.target.closest('[data-garden-logo-trigger]');
+    const isUi = (e) => e.target instanceof Element && e.target.closest('[data-garden-ui]') && !onLogo(e);
 
     const onDown = (e) => {
       if (isUi(e) || this.classList.contains('is-nav-open')) return;
       const [x, y] = local(e);
-      Object.assign(this.pointer, { x, y, active: true, down: true, id: e.pointerId, sx: x, sy: y, st: e.timeStamp, type: e.pointerType });
+      Object.assign(this.pointer, { x, y, active: true, down: true, id: e.pointerId, sx: x, sy: y, st: e.timeStamp, type: e.pointerType, logo: onLogo(e) });
       this.markInteracted();
+      // Not on the logo: holding the pointer there would take the click from its button.
+      if (this.pointer.logo) return;
       try {
         this.setPointerCapture(e.pointerId);
       } catch (err) {
@@ -1214,7 +1219,8 @@ class GardenSplash extends HTMLElement {
       const p = this.pointer;
       if (!p.down || p.id !== e.pointerId) return;
       const [x, y] = local(e);
-      if (!this.gestured && Math.hypot(x - p.sx, y - p.sy) < 14 && e.timeStamp - p.st < 450) this.tap(x, y);
+      // A tap on the logo is its button's (the menu, or the asterisk's game), not a recolor.
+      if (!this.gestured && !p.logo && Math.hypot(x - p.sx, y - p.sy) < 14 && e.timeStamp - p.st < 450) this.tap(x, y);
       p.down = false;
       if (e.pointerType !== 'mouse') p.active = false;
     };
