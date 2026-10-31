@@ -3141,7 +3141,9 @@ class GardenSplash extends HTMLElement {
       group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, puffs, logoPuffs, cloudMat, fpos: new Float32Array(logo.length * 3), field, fieldPts, drift, driftPts, glows, shoot,
       heaps, planes: this.buildPlanes(group, disposables, atlas, tex, time, D), nextPlane: this.elapsed + 9 + Math.random() * 10,
       birds: this.buildBirds(group, disposables, time), nextBirds: this.elapsed + 7 + Math.random() * 6,
-      blimp: this.buildBlimp(group, disposables, tex, time), nextBlimp: this.elapsed + 25 + Math.random() * 35,
+      blimp: time.dark ? this.buildBlimp(group, disposables) : null,
+      banner: time.dark ? null : this.buildBanner(group, disposables),
+      nextBlimp: this.elapsed + 25 + Math.random() * 35,
       peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 5 + Math.random() * 15,
       moon: time.light < 0.6 ? this.buildMoon(group, disposables, tex, eye, D, viewW, viewH) : null,
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
@@ -3547,6 +3549,7 @@ class GardenSplash extends HTMLElement {
     this.flyPlanes(t, dt, show, p);
     this.flyBirds(t, dt, show, p);
     this.flyBlimp(t, dt, show, p);
+    this.flyBanner(t, dt, show, p);
     sky.glows.forEach((g) => (g.material.opacity = dark));
 
     // Now and then a shooting star, like the bees by day.
@@ -3613,24 +3616,46 @@ class GardenSplash extends HTMLElement {
   }
 
   /*
-   * A blimp, rarely: a silver airship drifting slowly across below the
-   * clouds, the logo spelled out in bulbs on the side turned down to the
-   * viewer, like the one in Scarface. The bulbs are the logo's own flower
-   * positions, so the sign always matches the logo; they chase like a
-   * marquee and now and then all flash at once. Bright at night, dimmer by
-   * day. Built at unit size (2 long, nose along +x) and scaled when it flies.
+   * The logo as a grid of cells, for signs: which cells of a cols x rows
+   * grid over the logo's box have a flower of the logo in them.
    */
-  buildBlimp(group, disposables, glow, time) {
+  logoCells(cols, rows) {
+    const box = this.logoBox;
+    const lit = new Uint8Array(cols * rows);
+    for (const f of this.flowers) {
+      const u = (f.dest[0] - box.x) / box.w;
+      const v = (f.dest[1] - box.y) / box.h;
+      const ru = (f.r * 0.85) / box.w;
+      const rv = (f.r * 0.85) / box.h;
+      for (let r = Math.max(0, Math.floor((v - rv) * rows)); r <= Math.min(rows - 1, Math.floor((v + rv) * rows)); r++) {
+        for (let c = Math.max(0, Math.floor((u - ru) * cols)); c <= Math.min(cols - 1, Math.floor((u + ru) * cols)); c++) {
+          const du = ((c + 0.5) / cols - u) / ru;
+          const dv = ((r + 0.5) / rows - v) / rv;
+          if (du * du + dv * dv <= 1) lit[r * cols + c] = 1;
+        }
+      }
+    }
+    return lit;
+  }
+
+  /*
+   * At night, rarely, a blimp: a silver airship drifting slowly across
+   * below the clouds, after the one in Scarface, with a digital screen on
+   * the side turned down to the viewer: the logo in LED pixels scrolling
+   * across it like a ticker. Built at unit size (2 long, nose along +x) and
+   * scaled when it flies.
+   */
+  buildBlimp(group, disposables) {
     const box = this.logoBox;
     if (!box || !this.flowers.length) return null;
     const holder = new THREE.Group();
     holder.visible = false;
     group.add(holder);
-    // The body turns to face its way; the sign underneath never mirrors, so it always reads.
+    // The body turns to face its way; the screen underneath never mirrors, so it always reads.
     const body = new THREE.Group();
     holder.add(body);
-    // Silver, glowing a little of its own so it reads against the sky (the sky's light is faint).
-    const silver = time.dark ? [70, 76, 96] : mix([200, 204, 216], [230, 190, 180], time.warm * 0.4);
+    // Silver, glowing a little of its own so it reads against the dark sky.
+    const silver = [70, 76, 96];
     const skin = this.makeMaterial({ color: toColor(silver), emissive: toColor(tone(silver, -0.45)), shininess: 40, specular: 0x666666 });
     const trim = this.makeMaterial({ color: toColor(tone(silver, -0.3)), emissive: toColor(tone(silver, -0.7)) });
     const envelopeGeo = new THREE.SphereGeometry(1, 16, 8);
@@ -3640,7 +3665,6 @@ class GardenSplash extends HTMLElement {
     const envelope = new THREE.Mesh(envelopeGeo, skin);
     envelope.scale.set(1, 0.3, 0.3);
     body.add(envelope);
-    // Four tail fins: two flat to the sides, two up and down.
     for (const [y, z, flat] of [[0, 0.24, false], [0, -0.24, false], [0.24, 0, true], [-0.24, 0, true]]) {
       const fin = new THREE.Mesh(finGeo, trim);
       fin.position.set(-0.86, y, z);
@@ -3648,35 +3672,54 @@ class GardenSplash extends HTMLElement {
       body.add(fin);
     }
     const gondola = new THREE.Mesh(gondolaGeo, trim);
-    // Up toward the nose, clear of the sign.
+    // Up toward the nose, clear of the screen.
     gondola.position.set(0.72, 0, -0.22);
     body.add(gondola);
 
-    // The sign: one bulb for each flower of the logo, laid on the underside.
+    // The screen: a grid of LEDs, 4:1, the logo's lit cells scrolling through it.
+    const rows = 22;
+    const cols = 88;
+    const logoRows = rows - 6;
     const aspect = box.w / Math.max(1, box.h);
-    const pw = Math.min(1.15, 0.42 * aspect);
-    const ph = pw / aspect;
-    const pos = [];
-    const bulbs = [];
-    for (const f of this.flowers) {
-      const u = (f.dest[0] - box.x) / box.w - 0.5;
-      const v = (f.dest[1] - box.y) / box.h - 0.5;
-      const x = u * pw;
-      const y = v * ph;
-      const z = -0.3 * Math.sqrt(Math.max(0.02, 1 - x * x - (y / 0.3) ** 2)) - 0.012;
-      pos.push(x, y, z);
-      bulbs.push(u);
+    const logoCols = Math.max(8, Math.round(logoRows * aspect * 1.1));
+    const lit = this.logoCells(logoCols, logoRows);
+    // One pass of the ticker: the logo, then dark screen as wide as the screen, so it slides fully through.
+    const strip = logoCols + cols;
+    const px = 4;
+    const canvas = document.createElement('canvas');
+    canvas.width = strip * px;
+    canvas.height = rows * px;
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#06070c';
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < strip; c++) {
+        const lr = r - 3;
+        const on = c < logoCols && lr >= 0 && lr < logoRows && lit[lr * logoCols + c];
+        g.fillStyle = on ? '#eef4ff' : '#161a26';
+        g.fillRect(c * px + 1, r * px + 1, px - 1, px - 1);
+      }
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(pos.length), 3));
-    const mat = new THREE.PointsMaterial({ size: 5.5, sizeAttenuation: false, map: glow, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
-    disposables.push(geo, mat);
-    const sign = new THREE.Points(geo, mat);
-    sign.frustumCulled = false;
-    sign.renderOrder = 2;
-    holder.add(sign);
-    return { holder, body, sign, bulbs, active: null, bright: time.dark ? 1 : 0.55 };
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.LinearFilter;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.set(cols / strip, 1);
+    const screenGeo = new THREE.PlaneGeometry(1.2, 0.3);
+    const frameGeo = new THREE.PlaneGeometry(1.26, 0.36);
+    const screenMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, fog: false });
+    const frameMat = new THREE.MeshBasicMaterial({ color: toColor([14, 15, 22]), side: THREE.DoubleSide, fog: false });
+    disposables.push(tex, screenGeo, frameGeo, screenMat, frameMat);
+    // Flat under the belly, facing down at the viewer. Seen from below, +x is screen right, so it reads as is.
+    const frame = new THREE.Mesh(frameGeo, frameMat);
+    frame.position.z = -0.302;
+    holder.add(frame);
+    const screen = new THREE.Mesh(screenGeo, screenMat);
+    screen.position.z = -0.306;
+    screen.scale.y = -1;
+    holder.add(screen);
+    return { holder, body, tex, strip, cols, active: null };
   }
 
   flyBlimp(t, dt, show, p) {
@@ -3707,15 +3750,141 @@ class GardenSplash extends HTMLElement {
     B.holder.scale.setScalar(half);
     B.body.scale.x = A.dir;
     B.holder.rotation.z = Math.sin(t * 0.25 + A.ph) * 0.03;
-    // The sign: a chase running along it, and every so often the whole thing flashing.
-    const col = B.sign.geometry.attributes.color;
-    const flash = (t + A.ph) % 9 < 1.2 ? (Math.floor((t + A.ph) * 6) % 2 ? 1.25 : 0.25) : 0;
-    B.bulbs.forEach((u, i) => {
-      const chase = flash || 0.55 + 0.45 * Math.max(0, Math.sin((u * 10 - t * 5) * 1.0));
-      const b = Math.min(1, chase * B.bright * show) * 0.95;
-      col.setXYZ(i, b, b * 0.74, b * 0.3);
-    });
-    col.needsUpdate = true;
+    // The ticker: the logo slides in from the right and out to the left, about a screen's width every 3 seconds.
+    B.tex.offset.x = (t * (B.cols / B.strip) / 3) % 1;
+  }
+
+  /*
+   * By day, rarely, a biplane towing a banner: red wings, propeller
+   * spinning, and behind it on a line a long cloth banner printed with the
+   * logo (the logo's flowers as dots), rippling and flapping in the wind,
+   * more the further from the plane. Seen from below; the banner always
+   * reads left to right. Built at unit size (the plane 1 long, nose +x).
+   */
+  buildBanner(group, disposables) {
+    const box = this.logoBox;
+    if (!box || !this.flowers.length) return null;
+    const holder = new THREE.Group();
+    holder.visible = false;
+    group.add(holder);
+    const plane = new THREE.Group();
+    holder.add(plane);
+    const red = [196, 52, 58];
+    const cream = [236, 226, 200];
+    const wingMat = this.makeMaterial({ color: toColor(red), emissive: toColor(tone(red, -0.35)), shininess: 20 });
+    const bodyMat = this.makeMaterial({ color: toColor(cream), emissive: toColor(tone(cream, -0.45)), shininess: 20 });
+    const darkMat = this.makeMaterial({ color: toColor([40, 36, 40]) });
+    const box3 = (x, y, z) => {
+      const geo = new THREE.BoxGeometry(x, y, z);
+      disposables.push(geo);
+      return geo;
+    };
+    disposables.push(wingMat, bodyMat, darkMat);
+    const part = (geo, mat, x, y, z) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      plane.add(m);
+      return m;
+    };
+    part(box3(0.9, 0.11, 0.11), bodyMat, 0, 0, 0); // fuselage
+    part(box3(0.22, 1.1, 0.025), wingMat, 0.16, 0, -0.08); // lower wing, toward the viewer
+    part(box3(0.22, 1.2, 0.025), wingMat, 0.2, 0, 0.12); // upper wing
+    part(box3(0.13, 0.4, 0.02), wingMat, -0.4, 0, 0); // tailplane
+    part(box3(0.13, 0.02, 0.15), wingMat, -0.4, 0, 0.08); // fin
+    for (const y of [-0.38, 0.38]) part(box3(0.02, 0.02, 0.2), darkMat, 0.2, y, 0.02); // struts
+    const prop = part(box3(0.02, 0.32, 0.03), darkMat, 0.47, 0, 0);
+
+    // The banner: cloth printed with the logo, its flowers as dots.
+    const L = 2.4;
+    const H = 0.42;
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = Math.round(512 * (H / L));
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#f7f3e8';
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    // The logo fitted inside the banner with a margin, centered.
+    const fit = Math.min((canvas.width * 0.86) / box.w, (canvas.height * 0.72) / box.h);
+    const ox = (canvas.width - box.w * fit) / 2;
+    const oy = (canvas.height - box.h * fit) / 2;
+    g.fillStyle = '#191f6b';
+    for (const f of this.flowers) {
+      g.beginPath();
+      g.arc(ox + (f.dest[0] - box.x) * fit, oy + (f.dest[1] - box.y) * fit, Math.max(1.2, f.r * fit * 0.75), 0, TAU);
+      g.fill();
+    }
+    g.strokeStyle = '#c9c1ad';
+    g.lineWidth = 3;
+    g.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const clothGeo = new THREE.PlaneGeometry(L, H, 28, 4);
+    // Mostly its own light (the print shows true), with the folds still shaded by the sun.
+    const clothMat = this.makeMaterial({ map: tex, emissiveMap: tex, emissive: toColor([190, 190, 190]), side: THREE.DoubleSide, shininess: 6 });
+    disposables.push(tex, clothGeo, clothMat);
+    const cloth = new THREE.Mesh(clothGeo, clothMat);
+    // Seen from below +x is screen right; flip so the print reads the right way up.
+    cloth.scale.y = -1;
+    holder.add(cloth);
+    const rest = Float32Array.from(clothGeo.attributes.position.array);
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const lineMat = new THREE.LineBasicMaterial({ color: toColor([70, 70, 80]), fog: false });
+    disposables.push(lineGeo, lineMat);
+    const line = new THREE.Line(lineGeo, lineMat);
+    line.frustumCulled = false;
+    holder.add(line);
+    return { holder, plane, prop, cloth, rest, line, L, H, active: null };
+  }
+
+  flyBanner(t, dt, show, p) {
+    const sky = this.sky;
+    const B = sky.banner;
+    const n = this.night;
+    if (!B) return;
+    const depth = sky.D * 0.55;
+    const k = depth / sky.D;
+    if (!B.active && !this.reduced && n.dir > 0 && p >= 1 && t > sky.nextBlimp) {
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      const reach = sky.viewW * k * 1.05;
+      B.active = { x: sky.eye.x - dir * reach, y: sky.eye.y + (Math.random() - 0.5) * sky.viewH * k * 0.55, dir, speed: (reach * 2) / (22 + Math.random() * 8), reach, ph: Math.random() * TAU };
+    }
+    const A = B.active;
+    B.holder.visible = !!A && show > 0.05;
+    if (!A) return;
+    A.x += A.dir * A.speed * dt;
+    if ((A.x - sky.eye.x) * A.dir > A.reach) {
+      B.active = null;
+      B.holder.visible = false;
+      sky.nextBlimp = t + 120 + Math.random() * 120;
+      return;
+    }
+    const size = sky.viewW * k * 0.09;
+    B.holder.position.set(A.x, A.y + Math.sin(t * 0.7 + A.ph) * size * 0.08, sky.eye.z + depth);
+    B.holder.scale.setScalar(size);
+    B.plane.scale.x = A.dir;
+    B.plane.rotation.x = Math.sin(t * 0.9 + A.ph) * 0.12;
+    B.prop.rotation.x = t * 40;
+    // The banner trails behind on its line; the far end flaps hardest.
+    const gap = 0.55;
+    const front = -A.dir * (0.5 + gap);
+    const cx = front - A.dir * (B.L / 2);
+    B.cloth.position.set(cx, 0, 0);
+    const pos = B.cloth.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = B.rest[i * 3];
+      const y = B.rest[i * 3 + 1];
+      // How far along from the end tied to the plane (0) to the loose end (1).
+      const s = A.dir > 0 ? (B.L / 2 - x) / B.L : (x + B.L / 2) / B.L;
+      const wave = Math.sin(s * 11 - t * 9 + A.ph);
+      pos.setXYZ(i, x + A.dir * s * 0.03 * Math.cos(s * 11 - t * 9), y + s * 0.05 * Math.sin(s * 7 - t * 6), (0.02 + s * 0.09) * wave + y * 0.15 * s * Math.cos(s * 9 - t * 8));
+    }
+    pos.needsUpdate = true;
+    B.cloth.geometry.computeVertexNormals();
+    const lp = B.line.geometry.attributes.position;
+    lp.setXYZ(0, -A.dir * 0.48, 0, 0);
+    lp.setXYZ(1, front, 0, 0);
+    lp.needsUpdate = true;
   }
 
   /*
