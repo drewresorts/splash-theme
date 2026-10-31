@@ -2994,7 +2994,7 @@ class GardenSplash extends HTMLElement {
       heaps, planes: this.buildPlanes(group, disposables, atlas, tex, time, D), nextPlane: this.elapsed + 9 + Math.random() * 10,
       birds: this.buildBirds(group, disposables, time), nextBirds: this.elapsed + 7 + Math.random() * 6,
       peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 5 + Math.random() * 15,
-      moon: time.light < 0.6 ? this.buildMoon(group, disposables, tex, eye, D, viewW, viewH) : null,
+      moon: time.light < 0.6 ? this.buildMoon(group, disposables, tex, eye, D, viewW, viewH, skyEye) : null,
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
     };
   }
@@ -3008,7 +3008,7 @@ class GardenSplash extends HTMLElement {
    * seas, pale crater rims). Up in a corner of the sky away from the logo,
    * with a faint glow that grows toward full.
    */
-  buildMoon(group, disposables, glow, eye, D, viewW, viewH) {
+  buildMoon(group, disposables, glow, eye, D, viewW, viewH, skyEye) {
     const { age, lit } = lunarPhase(new Date());
     const theta = (age / SYNODIC) * TAU;
     // Upper left of the view, behind the logo's stars and in front of the far field.
@@ -3070,17 +3070,18 @@ class GardenSplash extends HTMLElement {
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false });
     disposables.push(geo, mat);
     const disc = new THREE.Mesh(geo, mat);
-    // The wide view stretches a ball near its edge outward from the middle: squeezed back along that line, it reads round.
-    const off = Math.atan2(at.y - eye.y, at.x - eye.x);
-    const squeeze = Math.max(0.5, away.z);
-    const turn = new THREE.Matrix4().makeRotationZ(off);
-    disc.matrixAutoUpdate = false;
-    disc.matrix
+    // The wide view stretches a ball near its edge outward from the middle. Squeezed back across the
+    // line of sight, along that outward direction, by the cosine of how far off center it is, it reads round.
+    const outward = new THREE.Vector3(at.x - eye.x, at.y - eye.y, 0).addScaledVector(away, -(at.x - eye.x) * away.x - (at.y - eye.y) * away.y).normalize();
+    const across = new THREE.Vector3().crossVectors(away, outward);
+    const basis = new THREE.Matrix4().makeBasis(outward, across, away);
+    const squeeze = new THREE.Matrix4()
       .makeTranslation(at.x, at.y, at.z)
-      .multiply(turn)
-      .multiply(new THREE.Matrix4().makeScale(squeeze, 1, 1))
-      .multiply(turn.clone().invert())
-      .multiply(new THREE.Matrix4().makeScale(r, r, r));
+      .multiply(basis)
+      .multiply(new THREE.Matrix4().makeScale(Math.max(0.45, away.z), 1, 1))
+      .multiply(basis.clone().transpose());
+    disc.matrixAutoUpdate = false;
+    disc.matrix.copy(squeeze).multiply(new THREE.Matrix4().makeScale(r, r, r));
     disc.renderOrder = -1;
     group.add(disc);
     const haloMat = new THREE.SpriteMaterial({ map: glow, color: toColor([220, 230, 255]), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
@@ -3091,7 +3092,51 @@ class GardenSplash extends HTMLElement {
     halo.scale.setScalar(r * 4.5);
     halo.renderOrder = -2;
     group.add(halo);
-    return { disc, halo, mat, lit };
+    // Now and then the moon is an eye: the same eyeball as the sky's others, lids the moon's own grey.
+    const watcher = skyEye(r, [214, 212, 196], mix(this.heroColor, [40, 40, 60], 0.2));
+    watcher.group.matrixAutoUpdate = false;
+    watcher.group.matrix.copy(squeeze).multiply(new THREE.Matrix4().makeRotationX(Math.PI));
+    watcher.group.visible = false;
+    // The moon fades over the eye (its shut lids solid, so no iris shows through), drawn on top of it.
+    mat.depthTest = false;
+    return { disc, halo, mat, lit, watcher, at, eyeAt: -1, nextEye: this.elapsed + 12 + Math.random() * 14, look: new THREE.Vector3() };
+  }
+
+  /*
+   * Every minute or so the moon turns into an eye: it fades into an eyeball
+   * with its lids shut, the lids open and it looks down at the one lying
+   * below, glances away and back, blinks, shuts and fades back into the
+   * moon. Not with reduced motion, and only with the sky in view.
+   */
+  moonEye(t, show) {
+    const m = this.sky.moon;
+    const w = m.watcher;
+    if (m.eyeAt < 0) {
+      w.group.visible = false;
+      if (t < m.nextEye || show < 0.95 || this.reduced) return 0;
+      m.eyeAt = t;
+      m.dartAt = 1.9 + Math.random() * 1.2;
+      m.dart = new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 0);
+      w.nextBlink = t + 2.4;
+    }
+    const a = t - m.eyeAt;
+    if (a > 6) {
+      m.eyeAt = -1;
+      m.nextEye = t + 45 + Math.random() * 45;
+      w.group.visible = false;
+      return 0;
+    }
+    // Moon to eye and back: a crossfade either side; the lids open once it is an eye and shut before it goes.
+    const mixIn = smooth(range(a, 0, 0.8)) * (1 - smooth(range(a, 5.2, 6)));
+    const open = smooth(range(a, 0.8, 1.3)) * (1 - smooth(range(a, 4.6, 5.1)));
+    w.group.visible = mixIn > 0.01;
+    this.lids(w, open, t);
+    // Looking down at the viewer, with one glance off to the side.
+    const sky = this.sky;
+    m.look.copy(sky.eye);
+    if (a > m.dartAt && a < m.dartAt + 0.9) m.look.add(m.dart.clone().multiplyScalar(sky.viewW * 0.6));
+    w.ball.lookAt(m.look);
+    return mixIn;
   }
 
   /* Turning over, lying there, and turning back. */
@@ -3245,7 +3290,8 @@ class GardenSplash extends HTMLElement {
     });
     fc.needsUpdate = true;
     if (sky.moon) {
-      sky.moon.mat.opacity = show * stars;
+      const asEye = this.moonEye(t, show * stars);
+      sky.moon.mat.opacity = show * stars * (1 - asEye);
       sky.moon.halo.material.opacity = show * stars * (0.04 + 0.1 * sky.moon.lit);
     }
     // Clouds drift slowly across, coming round again on the other side.
