@@ -3397,6 +3397,13 @@ class GardenSplash extends HTMLElement {
     const move = this.reduced ? 0 : t * sky.viewW * 0.006;
     const driftX = (x, speed) => left + ((((x - left + move * speed) % span) + span) % span);
     if (sky.heaps) for (const h of sky.heaps) h.sum = h.n = 0;
+    // A fresh press in the sky (not on its buttons) bursts the stars round it apart, once.
+    const ptr = this.pointer;
+    this.skyBurst = null;
+    if (ptr.down && ptr.st !== this.skyPressAt && n.dir > 0 && p >= 1) {
+      this.skyPressAt = ptr.st;
+      this.skyBurst = { x: ptr.sx, y: ptr.sy };
+    }
     for (const s of sky.logo) {
       // By day, each lobe rides in its big cloud until the cloud flows into the logo.
       const k = this.reduced ? 1 : smooth(smooth(range(since - s.delay, 0, s.source ? 4.2 : 2.8)));
@@ -5188,34 +5195,69 @@ class GardenSplash extends HTMLElement {
   /*
    * Something in the sky (a star or a puff of the logo, a drifting cloud)
    * given a lazy shove by the pointer dragging past (mouse button held, or
-   * a finger on the screen): it floats off the way
-   * the pointer moved, as if weightless, and a very soft spring eases it
-   * back into place over a few seconds. Its offset is kept in screen pixels
+   * a finger on the screen), or burst away from where it is pressed. Each
+   * goes its own way, so they part like loose stars rather than one sheet:
+   * it floats off as if weightless, and a very soft spring eases it back
+   * into place over a few seconds. Its offset is kept in screen pixels
    * (ox, oy) and returned the same way.
    */
   skyFloat(o, x, y, z, dt) {
     const b = this.brush;
+    const burst = this.skyBurst;
+    // Every star its own: how much it takes the push, which way it veers, how fast it comes home.
+    if (o.veer === undefined) {
+      o.veer = (Math.random() - 0.5) * 1.4;
+      o.give = 0.5 + Math.random() * 1.1;
+      o.pull = 0.9 + Math.random() * 1.1;
+    }
     let ax = 0;
     let ay = 0;
+    let kickX = 0;
+    let kickY = 0;
     // Only while pressed: the mouse button held, or a finger on the screen.
-    if (b && this.pointer.down && (Math.abs(b.vx) > 20 || Math.abs(b.vy) > 20)) {
+    const dragging = b && this.pointer.down && (Math.abs(b.vx) > 20 || Math.abs(b.vy) > 20);
+    if (dragging || burst) {
       const v = this.tmp.set(x, y, z).project(this.camera);
       const sx = (v.x * 0.5 + 0.5) * this.w;
       const sy = (-v.y * 0.5 + 0.5) * this.h;
-      const d = Math.hypot(sx - b.x, sy - b.y);
       const reach = Math.min(this.w, this.h) * 0.14;
-      if (v.z < 1 && d < reach) {
-        const w = (1 - d / reach) ** 2 * 1.4;
-        ax = b.vx * w;
-        ay = b.vy * w;
+      if (v.z < 1 && dragging) {
+        const dx = sx - b.x;
+        const dy = sy - b.y;
+        const d = Math.hypot(dx, dy);
+        if (d < reach) {
+          const w = (1 - d / reach) ** 2 * 1.4 * o.give;
+          // The pointer's way, turned a little to this star's own side...
+          const c = Math.cos(o.veer);
+          const sn = Math.sin(o.veer);
+          ax = (b.vx * c - b.vy * sn) * w;
+          ay = (b.vx * sn + b.vy * c) * w;
+          // ...and parted outward from the pointer, so they scatter rather than move as one.
+          const speed = Math.hypot(b.vx, b.vy);
+          ax += (dx / (d || 1)) * speed * w * 0.7;
+          ay += (dy / (d || 1)) * speed * w * 0.7;
+        }
+      }
+      if (v.z < 1 && burst) {
+        // A press: the stars round it burst apart, each off its own way.
+        const dx = sx - burst.x;
+        const dy = sy - burst.y;
+        const d = Math.hypot(dx, dy);
+        const r = reach * 1.2;
+        if (d < r) {
+          const a = Math.atan2(dy, dx) + o.veer * 0.5;
+          const k = (1 - d / r) * 140 * o.give;
+          kickX = Math.cos(a) * k;
+          kickY = Math.sin(a) * k;
+        }
       }
     }
-    if (!ax && !ay && !o.ox && !o.oy && !o.fx && !o.fy) return;
-    // Hardly any drag and a soft pull home: a slow, floating return.
-    const K = 1.4;
-    const C = 1.3;
-    o.fx = (o.fx || 0) + (ax - K * (o.ox || 0) - C * (o.fx || 0)) * dt;
-    o.fy = (o.fy || 0) + (ay - K * (o.oy || 0) - C * (o.fy || 0)) * dt;
+    if (!ax && !ay && !kickX && !kickY && !o.ox && !o.oy && !o.fx && !o.fy) return;
+    // Hardly any drag and a soft pull home, slower or quicker star by star: a floating return.
+    const K = 1.4 * o.pull;
+    const C = 1.3 * Math.sqrt(o.pull);
+    o.fx = (o.fx || 0) + kickX + (ax - K * (o.ox || 0) - C * (o.fx || 0)) * dt;
+    o.fy = (o.fy || 0) + kickY + (ay - K * (o.oy || 0) - C * (o.fy || 0)) * dt;
     o.ox = (o.ox || 0) + o.fx * dt;
     o.oy = (o.oy || 0) + o.fy * dt;
     if (!ax && !ay && Math.abs(o.ox) < 0.05 && Math.abs(o.oy) < 0.05 && Math.abs(o.fx) < 0.05 && Math.abs(o.fy) < 0.05) o.ox = o.oy = o.fx = o.fy = 0;
