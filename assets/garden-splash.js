@@ -17,8 +17,8 @@
  * The splash can be zoomed into, with no controls shown: scroll or pinch on
  * a trackpad, pinch on a touchscreen, or press and hold then slide up/down.
  * Zoomed in, dragging moves around and the render sharpens. Now and then a
- * bee flies through, sometimes landing on a flower for a moment. Drawing a
- * full circle around the logo lies the visitor down on their back in the
+ * bee flies through, sometimes landing on a flower for a moment. Tracing the
+ * letter d over the logo's d lies the visitor down on their back in the
  * flowers, looking up at a night sky whose white stars gather into the logo.
  * The splash's weather follows the real season (see the seasons section).
  *
@@ -36,6 +36,68 @@ import * as THREE from './three.module.min.js';
 import { SCHEMES } from './duet-schemes.js';
 
 const TAU = Math.PI * 2;
+
+/*
+ * The letter d as people write it, in a unit square (y down): the stem on
+ * the right from top to bottom, the bowl to its left in the lower part.
+ * Bowl then stem (up, or up and back down), stem then bowl, and the bowl
+ * drawn either way round.
+ */
+const D_STROKES = (() => {
+  const bowl = (dir) => Array.from({ length: 25 }, (_, i) => {
+    const a = -0.25 + dir * (i / 24) * Math.PI * 2;
+    return [0.52 + 0.4 * Math.cos(a), 0.7 + 0.28 * Math.sin(a)];
+  });
+  const line = (x0, y0, x1, y1, n = 10) => Array.from({ length: n }, (_, i) => [x0 + ((x1 - x0) * i) / (n - 1), y0 + ((y1 - y0) * i) / (n - 1)]);
+  const ways = [];
+  for (const dir of [-1, 1]) {
+    const o = bowl(dir);
+    ways.push(o.concat(line(0.92, 0.7, 0.92, 0)));
+    ways.push(o.concat(line(0.92, 0.7, 0.92, 0), line(0.92, 0, 0.92, 1)));
+    ways.push(line(0.92, 0, 0.92, 1).concat(line(0.92, 1, 0.92, 0.62, 4), o));
+  }
+  return ways.map(normalizeStroke);
+})();
+
+/* A stroke as 32 evenly spaced points, stretched to fill the unit square. */
+function normalizeStroke(pts) {
+  let len = 0;
+  for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  const n = 32;
+  const step = len / (n - 1) || 1;
+  const out = [pts[0].slice()];
+  let acc = 0;
+  let prev = pts[0];
+  for (let i = 1; i < pts.length && out.length < n; i++) {
+    let cur = pts[i];
+    let d = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
+    while (acc + d >= step && out.length < n) {
+      const k = (step - acc) / d;
+      const q = [prev[0] + (cur[0] - prev[0]) * k, prev[1] + (cur[1] - prev[1]) * k];
+      out.push(q);
+      prev = q;
+      d = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
+      acc = 0;
+    }
+    acc += d;
+    prev = cur;
+  }
+  while (out.length < n) out.push(pts[pts.length - 1].slice());
+  const xs = out.map((p) => p[0]);
+  const ys = out.map((p) => p[1]);
+  const x0 = Math.min(...xs);
+  const y0 = Math.min(...ys);
+  const sx = Math.max(...xs) - x0 || 1;
+  const sy = Math.max(...ys) - y0 || 1;
+  return out.map(([x, y]) => [(x - x0) / sx, (y - y0) / sy]);
+}
+
+/* How far apart two normalized strokes are: the mean distance between matching points. */
+function strokeDistance(a, b) {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) sum += Math.hypot(a[i][0] - b[i][0], a[i][1] - b[i][1]);
+  return sum / a.length;
+}
 
 /*
  * The moon's age in days since the last new moon, and how much of its disc
@@ -2319,14 +2381,14 @@ class GardenSplash extends HTMLElement {
   /* ---------------- the night sky ---------------- */
 
   /*
-   * The hidden night: drawing one full circle around the logo (a finger, or
-   * the mouse held down) turns the view over. The camera sinks down onto
+   * The hidden night: tracing the letter d over the flowers of the logo's d
+   * (a finger, or the mouse held down) turns the view over. The camera sinks down onto
    * the bed, just above the flower heads, and tips back until it looks
    * straight up, as if lying on your back on the flowers: only the night
    * sky in view. Up there the white stars, one for each flower, gather
    * into the logo the way the flowers did, among faint
-   * constellations, twinkling, with a shooting star now and then. Another
-   * circle, Escape, or the menu brings the day back.
+   * constellations, twinkling, with a shooting star now and then. A
+   * circle drawn round the middle, Escape, or the menu brings the day back.
    */
   bindNight() {
     let path = null;
@@ -2334,7 +2396,7 @@ class GardenSplash extends HTMLElement {
       'pointerdown',
       (e) => {
         if (this.classList.contains('is-nav-open') || !this.arranged || this.failed) return;
-        path = { id: e.pointerId, a: null, sum: 0, t0: e.timeStamp, n: 0 };
+        path = { id: e.pointerId, a: null, sum: 0, t0: e.timeStamp, n: 0, pts: [] };
       },
       true
     );
@@ -2347,6 +2409,15 @@ class GardenSplash extends HTMLElement {
           return;
         }
         const r = this.getBoundingClientRect();
+        if (!this.night) {
+          // By day, the stroke is kept to read as a letter when the finger lifts.
+          const x = e.clientX - r.left;
+          const y = e.clientY - r.top;
+          const last = path.pts[path.pts.length - 1];
+          if (!last || Math.hypot(x - last[0], y - last[1]) > 3) path.pts.push([x, y]);
+          this.trace = path.pts;
+          return;
+        }
         const b = this.logoBox || { x: 0, y: 0, w: this.w, h: this.h };
         const dx = e.clientX - r.left - (b.x + b.w / 2);
         const dy = e.clientY - r.top - (b.y + b.h / 2);
@@ -2368,7 +2439,15 @@ class GardenSplash extends HTMLElement {
       true
     );
     const end = (e) => {
-      if (path && e.pointerId === path.id) path = null;
+      if (!path || e.pointerId !== path.id) return;
+      const done = path;
+      path = null;
+      this.trace = null;
+      if (e.type === 'pointerup' && !this.night && e.timeStamp - done.t0 < 7000 && this.tracedD(done.pts)) {
+        this.pointer.down = false;
+        this.gestured = true;
+        this.toggleNight();
+      }
     };
     this.addEventListener('pointerup', end, true);
     this.addEventListener('pointercancel', end, true);
@@ -2376,6 +2455,57 @@ class GardenSplash extends HTMLElement {
       if (e.key === 'Escape' && this.night && this.night.dir > 0) this.toggleNight();
     };
     document.addEventListener('keydown', this.onNightKey);
+  }
+
+  /*
+   * Where the logo's d is on screen: the first letter of the flowers (the
+   * asterisk aside), found as the first run of flowers from the left
+   * before a gap. With no letters (a logo that is only the asterisk, as on
+   * phones), the whole logo.
+   */
+  letterD() {
+    const key = `${this.w}x${this.h}:${this.flowers.length}`;
+    if (this.dBox && this.dBox.key === key) return this.dBox;
+    const pts = this.flowers.filter((f) => !f.star).map((f) => f.dest);
+    const b = this.logoBox || { x: 0, y: 0, w: this.w, h: this.h };
+    let box = { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
+    if (pts.length > 6) {
+      const bin = Math.max(4, (this.base || 20) * 0.6);
+      const x0 = Math.min(...pts.map((p) => p[0]));
+      const cols = new Set(pts.map((p) => Math.floor((p[0] - x0) / bin)));
+      let end = 0;
+      while (cols.has(end + 1) || cols.has(end + 2)) end += cols.has(end + 1) ? 1 : 2;
+      let x1 = x0 + (end + 1) * bin;
+      // Letters that run together: take the first quarter of the word.
+      const xmax = Math.max(...pts.map((p) => p[0]));
+      if (x1 - x0 > (xmax - x0) * 0.45) x1 = x0 + (xmax - x0) * 0.25;
+      const inD = pts.filter((p) => p[0] <= x1);
+      box = { x0, x1, y0: Math.min(...inD.map((p) => p[1])), y1: Math.max(...inD.map((p) => p[1])) };
+    }
+    const pad = (this.base || 20) * 0.8;
+    this.dBox = { key, x0: box.x0 - pad, y0: box.y0 - pad, x1: box.x1 + pad, y1: box.y1 + pad };
+    return this.dBox;
+  }
+
+  /*
+   * Whether a stroke is the letter d, traced over the logo's d: mostly
+   * inside it, about its height, taller than wide, and close in shape to
+   * one of the ways a d is written (bowl then stem, stem then bowl, the
+   * bowl either way round). The shapes are compared as 32 evenly spaced
+   * points, each stretched to fill a square.
+   */
+  tracedD(pts) {
+    if (!pts || pts.length < 12) return false;
+    const box = this.letterD();
+    const inside = pts.filter(([x, y]) => x >= box.x0 && x <= box.x1 && y >= box.y0 && y <= box.y1).length;
+    if (inside < pts.length * 0.7) return false;
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    const w = Math.max(...xs) - Math.min(...xs);
+    const h = Math.max(...ys) - Math.min(...ys);
+    if (h < (box.y1 - box.y0) * 0.35 || h < w * 0.9) return false;
+    const shape = normalizeStroke(pts);
+    return D_STROKES.some((tpl) => strokeDistance(shape, tpl) < 0.17);
   }
 
   toggleNight() {
@@ -5157,6 +5287,17 @@ class GardenSplash extends HTMLElement {
       g.fillRect(lx, ly, tw + 8, 15);
       g.fillStyle = rgba(ink);
       g.fillText(label, lx + 4, ly + 11);
+    }
+
+    // The letter being traced, faintly, so the finger can see its line.
+    if (this.trace && this.trace.length > 1) {
+      g.strokeStyle = rgba(ink, 0.35);
+      g.lineWidth = 2;
+      g.lineJoin = 'round';
+      g.lineCap = 'round';
+      g.beginPath();
+      this.trace.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+      g.stroke();
     }
 
     for (const pg of this.pings) {
