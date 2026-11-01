@@ -60,7 +60,7 @@
   data-duet-header
   data-game-access="{{ game_access }}"
   data-game-name="{{ game_name | escape }}"
-  style="--dh-ink: {{ section.settings.ink_color | default: '#191F6B' }}; --dh-bg: {{ section.settings.bar_color | default: '#FFFFFF' }}; --dh-panel: {{ section.settings.panel_color | default: '#FFFFFF' }}; --dh-logo-width: {{ section.settings.logo_width | default: 140 }}px; --dh-logo-width-mobile: {{ section.settings.logo_width_mobile | default: 100 }}px; --dh-text-size: {{ section.settings.text_size | default: 16 }}px; --dh-icon-size: {{ section.settings.icon_size | default: 22 }}px;"
+  style="--dh-ink: {{ section.settings.ink_color | default: '#191F6B' }}; --dh-ink-day: {{ section.settings.ink_color | default: '#191F6B' }}; --dh-bg: {{ section.settings.bar_color | default: '#FFFFFF' }}; --dh-panel: {{ section.settings.panel_color | default: '#FFFFFF' }}; --dh-logo-width: {{ section.settings.logo_width | default: 140 }}px; --dh-logo-width-mobile: {{ section.settings.logo_width_mobile | default: 100 }}px; --dh-text-size: {{ section.settings.text_size | default: 16 }}px; --dh-icon-size: {{ section.settings.icon_size | default: 22 }}px;"
 >
   <div class="duet-header__bar">
     {%- for zone in zones -%}
@@ -152,7 +152,13 @@
               <button
                 type="button"
                 style="{{ menu_vars | strip }}"
-                class="duet-header__item duet-header__menu{% if block.settings.outline %} duet-header__menu--outline{% endif %}{% if block.settings.fill %} duet-header__menu--fill{% endif %}"
+                {%- liquid
+                  assign menu_own = false
+                  if block.settings.fill or block.settings.text_color != blank or block.settings.outline_color != blank or block.settings.fill_color != blank
+                    assign menu_own = true
+                  endif
+                -%}
+                class="duet-header__item duet-header__menu{% if block.settings.outline %} duet-header__menu--outline{% endif %}{% if block.settings.fill %} duet-header__menu--fill{% endif %}{% if menu_own %} duet-header__menu--own{% endif %}"
                 data-dh-open="menu"
                 aria-expanded="false"
                 aria-controls="DuetHeaderMenu-{{ section.id }}"
@@ -570,6 +576,12 @@
     color: var(--dh-btn-text, var(--dh-bg, #fff));
   }
 
+  /* A button in its own colors keeps its daytime colors here; over a dark sky they are inverted
+     as a whole (see sections/garden-splash.liquid), lightness flipped and hue kept. */
+  .duet-header__menu--own:not(.duet-header__menu--fill) {
+    color: var(--dh-btn-text, var(--dh-ink-day, #191f6b));
+  }
+
   .duet-header__menu--outline,
   .duet-header__menu--fill {
     isolation: isolate;
@@ -591,7 +603,7 @@
   }
 
   .duet-header__menu--fill::before {
-    background: var(--dh-btn-fill, var(--dh-ink, #191f6b));
+    background: var(--dh-btn-fill, var(--dh-ink-day, #191f6b));
   }
 
   .duet-header__item svg {
