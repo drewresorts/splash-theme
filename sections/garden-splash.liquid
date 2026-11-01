@@ -459,6 +459,17 @@
     visibility: hidden;
   }
 
+  /* In the sky view the color swatches step away (they come back with the flowers). */
+  .garden-splash__schemes {
+    transition: opacity 0.4s ease, visibility 0s linear 0s;
+  }
+
+  .garden-splash.is-night .garden-splash__schemes {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease, visibility 0s linear 0.4s;
+  }
+
   .garden-splash__swatch {
     width: 22px;
     height: 22px;
@@ -1176,7 +1187,7 @@
         { "value": "sunset", "label": "Always sunset" },
         { "value": "night", "label": "Always night (stars)" }
       ],
-      "info": "What visitors see when they draw a circle around the logo. Choose one to preview it."
+      "info": "What visitors see in the hidden sky view (picking the flower colors Cotton Candy, Neon, then Camo opens it; clicking the moon three times, or the sun by day, closes it). Choose one to preview it."
     },
     {
       "type": "text",

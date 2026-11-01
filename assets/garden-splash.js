@@ -2516,59 +2516,80 @@ class GardenSplash extends HTMLElement {
    * straight up, as if lying on your back on the flowers: only the night
    * sky in view. Up there the white stars, one for each flower, gather
    * into the logo the way the flowers did, among faint
-   * constellations, twinkling, with a shooting star now and then. A
-   * circle drawn round the middle, Escape, or the menu brings the day back.
+   * constellations, twinkling, with a shooting star now and then. Clicking
+   * the moon three times in a row (by day, the sun), or opening the menu,
+   * brings the view back down.
    */
   bindNight() {
-    let path = null;
+    // In the sky: clicking (or tapping) the moon three times in a row (by day, the sun) brings the view back down.
+    let press = null;
     this.addEventListener(
       'pointerdown',
       (e) => {
-        if (this.classList.contains('is-nav-open') || !this.arranged || this.failed) return;
-        path = { id: e.pointerId, a: null, sum: 0, t0: e.timeStamp };
-      },
-      true
-    );
-    this.addEventListener(
-      'pointermove',
-      (e) => {
-        if (!path || e.pointerId !== path.id) return;
-        if ((this.view && this.view.tz > 1.02) || (this.skyView && this.skyView.tz > 1.02)) {
-          path = null;
-          return;
-        }
-        const r = this.getBoundingClientRect();
-        if (!this.night) return;
-        const b = this.logoBox || { x: 0, y: 0, w: this.w, h: this.h };
-        const dx = e.clientX - r.left - (b.x + b.w / 2);
-        const dy = e.clientY - r.top - (b.y + b.h / 2);
-        if (Math.hypot(dx, dy) < 40) return;
-        const a = Math.atan2(dy, dx);
-        if (path.a !== null) {
-          let d = a - path.a;
-          d = Math.atan2(Math.sin(d), Math.cos(d));
-          path.sum += d;
-        }
-        path.a = a;
-        if (Math.abs(path.sum) > TAU * 0.92 && e.timeStamp - path.t0 < 8000) {
-          path = null;
-          this.pointer.down = false;
-          this.gestured = true;
-          this.toggleNight();
-        }
+        if (!this.night || this.explorer) return;
+        press = { id: e.pointerId, x: e.clientX, y: e.clientY, t0: e.timeStamp };
       },
       true
     );
     const end = (e) => {
-      if (!path || e.pointerId !== path.id) return;
-      path = null;
+      if (!press || e.pointerId !== press.id) return;
+      const p = press;
+      press = null;
+      if (e.type !== 'pointerup' || e.timeStamp - p.t0 > 600 || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 14) return;
+      const n = this.night;
+      if (!n || n.dir < 0 || n.t < 1 || this.explorer) return;
+      if (this.onKnocker(e.clientX, e.clientY)) this.knock();
     };
     this.addEventListener('pointerup', end, true);
     this.addEventListener('pointercancel', end, true);
-    this.onNightKey = (e) => {
-      if (e.key === 'Escape' && this.night && this.night.dir > 0 && !this.explorer) this.toggleNight();
-    };
-    document.addEventListener('keydown', this.onNightKey);
+  }
+
+  /* What to click to come back down: the moon at night, the sun by day (the moon if the sun isn't up). */
+  knocker() {
+    const sky = this.sky;
+    if (!sky) return null;
+    return sky.time && !sky.time.dark && sky.sun ? sky.sun : sky.moon;
+  }
+
+  /* Whether a point on screen is on it (with a little room round it, for a finger). */
+  onKnocker(cx, cy) {
+    const m = this.knocker();
+    if (!m) return false;
+    const c = this.camera;
+    const r = this.getBoundingClientRect();
+    const v = m.at.clone().project(c);
+    if (v.z > 1) return false;
+    const sx = r.left + ((v.x + 1) / 2) * r.width;
+    const sy = r.top + ((1 - v.y) / 2) * r.height;
+    const dist = m.at.distanceTo(c.position);
+    const rad = (m.r / (dist * Math.tan((c.fov * Math.PI) / 360))) * (r.height / 2);
+    return Math.hypot(cx - sx, cy - sy) < Math.max(rad * 1.35, 28);
+  }
+
+  /* A click on the moon (or sun): it swells a little each time; the third in a row (each within 1.5 seconds) brings the view back down. */
+  knock() {
+    const m = this.knocker();
+    const t = this.elapsed;
+    m.knocks = t - m.knockAt < 1.5 ? m.knocks + 1 : 1;
+    m.knockAt = t;
+    this.gestured = true;
+    if (m.knocks >= 3) {
+      m.knocks = 0;
+      window.setTimeout(() => this.night && this.night.dir > 0 && this.toggleNight(), 250);
+    }
+    this.start();
+  }
+
+  /* The swell after a click: up quickly, back with a little wobble. */
+  knockSwell(m, t) {
+    if (!m) return;
+    const age = t - m.knockAt;
+    let s = 1;
+    if (m.knockAt >= 0 && age < 0.6) s = 1 + 0.12 * (0.6 + 0.4 * Math.min(m.knocks, 3) / 3) * Math.exp(-age * 7) * Math.cos(age * 18);
+    if (s === m.shown) return;
+    m.shown = s;
+    // Scaled about its own center: the rest matrix ends in the moon's own scale, so this multiplies on the right.
+    m.body.matrix.copy(m.rest).multiply(new THREE.Matrix4().makeScale(s, s, s));
   }
 
   toggleNight() {
@@ -3672,8 +3693,10 @@ float hillAt(vec2 p) {
       sunAt = { day: this.skyPlace(58, 160 + s), sunrise: this.skyPlace(5, 95), sunset: this.skyPlace(5, 265) }[this.skySetting] || null;
       moonAt = this.skySetting === 'night' ? this.skyPlace(52, 140 + s) : null;
     }
-    // The moon only where it can be seen against the sky: not in a bright day sky's glare near the sun.
-    const moon = moonAt ? this.buildMoon(group, disposables, glow, eye, D, viewW, viewH, moonAt) : null;
+    // At night the moon is the way back down from the sky (three clicks on it; by day the sun), so it is
+    // always there: where it really is when it is up, and otherwise in a fixed place high on the far side from the sun.
+    if (!moonAt) moonAt = this.skyPlace(40, this.south ? 330 : 210);
+    const moon = this.buildMoon(group, disposables, glow, eye, D, viewW, viewH, moonAt);
     const sun = sunAt && (time.light > 0.05 || time.warm > 0.05) ? this.buildSun(group, disposables, glow, eye, D, viewW, viewH, sunAt, time) : null;
     return { moon, sun };
   }
@@ -3690,6 +3713,7 @@ float hillAt(vec2 p) {
     const ball = new THREE.Mesh(geo, mat);
     ball.matrixAutoUpdate = false;
     ball.matrix.copy(this.roundAt(eye, at)).multiply(new THREE.Matrix4().makeScale(r, r, r));
+    const rest = ball.matrix.clone();
     ball.renderOrder = -2;
     group.add(ball);
     const sprite = (scale, tint) => {
@@ -3705,7 +3729,7 @@ float hillAt(vec2 p) {
     };
     const halo = sprite(5, mix(color, [255, 255, 255], 0.3));
     const wash = sprite(16, color);
-    return { ball, mat, halo, wash };
+    return { ball, body: ball, rest, at, r, mat, halo, wash, knocks: 0, knockAt: -1 };
   }
 
   /*
@@ -3822,6 +3846,7 @@ float hillAt(vec2 p) {
     const squeeze = this.roundAt(eye, at);
     disc.matrixAutoUpdate = false;
     disc.matrix.copy(squeeze).multiply(new THREE.Matrix4().makeScale(r, r, r));
+    const rest = disc.matrix.clone();
     disc.renderOrder = -1;
     group.add(disc);
     const haloMat = new THREE.SpriteMaterial({ map: glow, color: toColor([220, 230, 255]), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
@@ -3833,7 +3858,7 @@ float hillAt(vec2 p) {
     halo.renderOrder = -2;
     group.add(halo);
     const frame = { toViewer, right: screenRight, up: screenUp };
-    return { disc, halo, mat, lit, eye: eyeUniforms, frame, eyeAt: -1, nextEye: this.elapsed + 12 + Math.random() * 14 };
+    return { disc, body: disc, rest, at, r, halo, mat, lit, eye: eyeUniforms, frame, eyeAt: -1, nextEye: this.elapsed + 12 + Math.random() * 14, knocks: 0, knockAt: -1 };
   }
 
   /*
@@ -4066,6 +4091,8 @@ float hillAt(vec2 p) {
       sky.moon.mat.opacity = show * Math.max(stars, 0.6 * time.light);
       sky.moon.eye.uShadow.value = stars;
       sky.moon.halo.material.opacity = show * stars * (0.04 + 0.1 * sky.moon.lit);
+      this.knockSwell(sky.moon, t);
+      this.knockSwell(sky.sun, t);
     }
     if (sky.sun) {
       const up = show * clamp(time.light * 1.4 + time.warm, 0, 1);
