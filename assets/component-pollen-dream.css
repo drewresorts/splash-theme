@@ -1,7 +1,7 @@
 /*
- * Pollen Dream (assets/pollen-dream.js): free flight through the splash's
- * garden. A see-through layer over the garden (which fills the screen while
- * flying) holding the controls and the screens, in the site's interface
+ * Pollen Dream (assets/pollen-dream.js): exploring the splash's garden in
+ * the first person. A see-through layer over the garden (which fills the
+ * screen meanwhile) holding the controls and the screens, in the site's interface
  * language: monospace capitals, ocean ink and the fuchsia/teal double edge
  * on titles.
  */
@@ -40,14 +40,15 @@ html.pollen-dream-open body {
   display: none !important;
 }
 
-/* Waiting for the flowers (or nothing to fly in): the page is covered. */
+/* Waiting for the flowers (or nothing to explore): the page is covered. */
 .pollen-dream[data-state='loading'],
 .pollen-dream[data-state='error'] {
   background: var(--pd-plate);
 }
 
-/* Takes every touch and click, so the garden underneath only flies. */
-.pollen-dream__surface {
+/* Takes every touch, click and swipe, for looking round. (Shown though empty: the theme hides empty divs.) */
+.pollen-dream .pollen-dream__surface {
+  display: block;
   position: absolute;
   inset: 0;
   cursor: grab;

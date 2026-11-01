@@ -8,8 +8,9 @@
  * blimp, the birds, the sun and the moon carry on as they do on the page.
  *
  * No instructions: the controls are the ones every first-person game uses.
- *   Computer: click to look with the mouse (Esc lets go and pauses); W A S D
- *   or the arrows to walk, Space to jump, Shift to run.
+ *   Computer: click to look with the mouse (Esc lets go and pauses), or drag,
+ *   or swipe two fingers on a trackpad; W A S D or the arrows to walk, Space
+ *   to jump, Shift to run.
  *   Phone: move the phone itself to look round (where the phone allows it),
  *   or drag anywhere; the thumb stick walks (pushed all the way, runs); Jump.
  *
@@ -21,7 +22,7 @@
  * on a page without the splash it goes to the home page and opens there.
  */
 
-const LOOK = { mouse: 0.0022, drag: 0.005, touch: 0.0065 };
+const LOOK = { mouse: 0.0022, drag: 0.005, touch: 0.0065, wheel: 0.0035 };
 
 const STRINGS = {
   title: 'Pollen Dream',
@@ -327,7 +328,8 @@ class Explore {
     document.addEventListener('visibilitychange', () => document.hidden && this.state === 'play' && this.pause(), on);
 
     // Mouse: a click captures it and moving it looks round, as in any first-person game (Esc lets go and pauses).
-    // Where it can't be captured, dragging looks round instead.
+    // Dragging looks round too, captured or not (the capture can be refused, as in the theme editor's preview);
+    // and on a trackpad, so does swiping with two fingers.
     document.addEventListener(
       'pointerlockchange',
       () => {
@@ -354,7 +356,7 @@ class Explore {
           this.touch = true;
           this.ui.touch.hidden = false;
         }
-        if (e.pointerType === 'mouse' && !this.locked && this.lock()) return;
+        if (e.pointerType === 'mouse' && !this.locked) this.lock();
         if (this.drag.id !== null) return;
         this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, k: e.pointerType === 'mouse' ? LOOK.drag : LOOK.touch };
         try {
@@ -370,12 +372,30 @@ class Explore {
       (e) => {
         const d = this.drag;
         if (e.pointerId !== d.id) return;
+        // Captured, the mouse already looks round on its own (see mousemove).
+        if (this.locked) {
+          d.x = e.clientX;
+          d.y = e.clientY;
+          return;
+        }
         this.look((e.clientX - d.x) * d.k, (e.clientY - d.y) * d.k);
         d.x = e.clientX;
         d.y = e.clientY;
       },
       on
     );
+    s.addEventListener(
+      'wheel',
+      (e) => {
+        // Two-finger swipes on a trackpad (and a mouse wheel) look round; a pinch (ctrl + wheel) is left alone.
+        if (this.state !== 'play' || e.ctrlKey) return;
+        e.preventDefault();
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+        this.look(e.deltaX * unit * LOOK.wheel, e.deltaY * unit * LOOK.wheel);
+      },
+      { signal: this.abort.signal, passive: false }
+    );
+    document.addEventListener('pointerlockerror', () => (this.noLock = true), on);
     const endDrag = (e) => {
       if (e.pointerId === this.drag.id) this.drag.id = null;
     };
@@ -447,10 +467,10 @@ class Explore {
 
   /* Captures the mouse for looking round. False where it can't be (touch, or the theme editor's frame). */
   lock() {
-    if (this.touch || !this.surface.requestPointerLock) return false;
+    if (this.touch || this.noLock || !this.surface.requestPointerLock) return false;
     try {
       const r = this.surface.requestPointerLock();
-      if (r && r.catch) r.catch(() => {});
+      if (r && r.catch) r.catch(() => (this.noLock = true));
       return true;
     } catch (e) {
       return false;
