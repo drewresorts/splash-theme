@@ -840,7 +840,7 @@ class GardenSplash extends HTMLElement {
     if (this.onWorldPause) window.removeEventListener('duet:world-pause', this.onWorldPause);
     if (this.onWorldResume) window.removeEventListener('duet:world-resume', this.onWorldResume);
     if (this.onEggClick) document.removeEventListener('click', this.onEggClick);
-    if (this.groundParts) this.groundParts.forEach((x) => x.dispose());
+    if (this.terrain) this.terrain.parts.forEach((x) => x.dispose());
     if (this.bee) {
       this.bee.materials.forEach((m) => m.dispose());
       this.bee = null;
@@ -2629,38 +2629,218 @@ class GardenSplash extends HTMLElement {
     const b = this.camBase;
     this.flight = { x: b.x, y: b.y, z: b.z, yaw: 0, pitch: -Math.PI / 2 + 1e-3, vx: 0, vy: 0, vz: 0, intro: 0, from: b.clone(), input: { f: 0, r: 0, u: 0, turn: 0, fast: false } };
     this.camera.rotation.order = 'ZXY';
-    // The soil, out to the horizon, where it fades into the haze.
-    if (!this.ground) {
-      const geo = new THREE.PlaneGeometry(400000, 400000, 24, 24);
-      const mat = new THREE.MeshPhongMaterial({ color: toColor(this.soil), shininess: 4, specular: 0x111111, flatShading: true, fog: false });
-      const fade = (this.groundFade = { uCam: { value: new THREE.Vector2() }, uNear: { value: 2000 }, uFar: { value: 8000 }, uAir: { value: new THREE.Color() } });
-      mat.onBeforeCompile = (shader) => {
-        Object.assign(shader.uniforms, fade);
-        shader.vertexShader = shader.vertexShader
-          .replace('void main() {', 'varying vec2 vGroundXY;\nvoid main() {')
-          .replace('#include <project_vertex>', '#include <project_vertex>\n  vGroundXY = (modelMatrix * vec4(transformed, 1.0)).xy;');
-        shader.fragmentShader = shader.fragmentShader
-          .replace('void main() {', 'varying vec2 vGroundXY;\nuniform vec2 uCam;\nuniform float uNear;\nuniform float uFar;\nuniform vec3 uAir;\nvoid main() {')
-          .replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, uAir, smoothstep(uNear, uFar, distance(vGroundXY, uCam)));');
-      };
-      this.ground = new THREE.Mesh(geo, mat);
-      this.ground.position.set(this.w / 2, this.h / 2, FLOOR_Z - 1);
-      this.ground.renderOrder = -2;
-      this.scene.add(this.ground);
-      this.groundParts = [geo, mat];
-    }
-    this.ground.position.set(this.w / 2, this.h / 2, FLOOR_Z - 1);
-    this.ground.visible = true;
+    // The land: hills rolling away from the bed, meadow, grass (see buildLand).
+    if (!this.terrain) this.buildLand();
+    this.dressLand();
+    this.terrain.group.visible = true;
     Object.assign(this.pointer, { down: false, active: false });
     this.classList.add('is-flying');
     this.start();
     return true;
   }
 
+  /*
+   * The land around the garden while flying. Past the bed the ground rolls
+   * away into low hills, meadow-colored in patches; grass grows everywhere
+   * (a field of clumps around the visitor that comes with them, so it never
+   * ends), swaying in the wind, with now and then a tiny wildflower. The
+   * season colors it: fresh in spring, rich in summer, gold in autumn,
+   * frosted in winter. Everything fades into the air with distance.
+   */
+  buildLand() {
+    const span = Math.max(this.w, this.h);
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    const u = {
+      uCam: { value: new THREE.Vector2() },
+      uNear: { value: 2000 },
+      uFar: { value: 8000 },
+      uAir: { value: new THREE.Color() },
+      uCenter: { value: new THREE.Vector2(this.w / 2, this.h / 2) },
+      uFlat: { value: span * 1.1 },
+      uAmp: { value: span * 0.45 },
+      uS: { value: 1 / span },
+      uFloor: { value: FLOOR_Z },
+      uSoilC: { value: new THREE.Color() },
+      uMeadow: { value: new THREE.Color() },
+      uGrassBase: { value: new THREE.Color() },
+      uGrassTip: { value: new THREE.Color() },
+      uR: { value: 1400 },
+      uTime: { value: 0 },
+      uWind: { value: 0 },
+    };
+    const HILL = `
+uniform vec2 uCenter; uniform float uFlat; uniform float uAmp; uniform float uS; uniform float uFloor;
+uniform vec2 uCam; uniform float uNear; uniform float uFar; uniform vec3 uAir;
+float hillAt(vec2 p) {
+  float amp = smoothstep(uFlat, uFlat * 3.0, length(p - uCenter)) * uAmp;
+  vec2 q = p * uS;
+  float h = sin(q.x * 0.8 + 1.3) * cos(q.y * 0.65 - 0.7) + 0.5 * sin((q.x + q.y) * 1.4 + 2.1) + 0.25 * cos(q.x * 2.9 - q.y * 2.3);
+  return amp * (h * 0.5 + 0.35);
+}
+`;
+    const FADE = '#include <dithering_fragment>\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, uAir, smoothstep(uNear, uFar, distance(vGroundXY, uCam)));';
+
+    // The ground: flat under the bed, hills beyond, faceted like everything else.
+    const groundGeo = new THREE.PlaneGeometry(span * 70, span * 70, touch ? 160 : 240, touch ? 160 : 240);
+    const groundMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 3, specular: 0x0a0a0a, flatShading: true, fog: false });
+    groundMat.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, u);
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', HILL + 'varying vec2 vGroundXY;\nvarying float vHill;\nvoid main() {')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vec2 gW = (modelMatrix * vec4(transformed, 1.0)).xy;\n  float gHill = hillAt(gW);\n  transformed.z += gHill;\n  vGroundXY = gW;\n  vHill = gHill / max(uAmp, 1.0);');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', 'uniform vec2 uCam; uniform float uNear; uniform float uFar; uniform vec3 uAir; uniform float uS;\nuniform vec3 uSoilC; uniform vec3 uMeadow;\nvarying vec2 vGroundXY;\nvarying float vHill;\nvoid main() {')
+        .replace(
+          '#include <color_fragment>',
+          '#include <color_fragment>\n  vec2 gq = vGroundXY * uS;\n  float gn = sin(gq.x * 1.9 + 0.4 + sin(gq.y * 1.3)) * sin(gq.y * 1.6 - 1.1 + sin(gq.x * 1.1)) + 0.4 * sin(gq.x * 3.3 - gq.y * 2.6 + 2.0 * sin(gq.y * 0.9 + gq.x * 0.4));\n  diffuseColor.rgb = mix(uSoilC, uMeadow, clamp(0.55 + 0.22 * gn + 0.45 * vHill, 0.0, 1.0));'
+        )
+        .replace('#include <dithering_fragment>', FADE);
+    };
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.renderOrder = -2;
+
+    // Grass: clumps of three blades, laid out over a square around the visitor that wraps as they move.
+    const N = touch ? 12000 : 24000;
+    const blade = { pos: [], blade: [], idx: [] };
+    const T = [0, 0.35, 0.7, 1];
+    const Wd = [1, 0.75, 0.45, 0];
+    for (let k = 0; k < 3; k++) {
+      const first = blade.pos.length / 3;
+      const ang = k * 2.1 + Math.random() * 0.8;
+      const ox = (Math.random() - 0.5) * 7;
+      const oy = (Math.random() - 0.5) * 7;
+      const hf = k === 0 ? 1.2 : 0.7 + Math.random() * 0.35;
+      for (let j = 0; j < 4; j++) {
+        if (j < 3) {
+          blade.pos.push(-Wd[j] * 0.5, T[j], ang, Wd[j] * 0.5, T[j], ang);
+          blade.blade.push(ox, oy, hf, k === 0 ? 1 : 0, ox, oy, hf, k === 0 ? 1 : 0);
+        } else {
+          blade.pos.push(0, 1, ang);
+          blade.blade.push(ox, oy, hf, k === 0 ? 1 : 0);
+        }
+      }
+      const v = (i) => first + i;
+      blade.idx.push(v(0), v(1), v(2), v(1), v(3), v(2), v(2), v(3), v(4), v(3), v(5), v(4), v(4), v(5), v(6));
+    }
+    const grassGeo = new THREE.InstancedBufferGeometry();
+    grassGeo.setAttribute('position', new THREE.Float32BufferAttribute(blade.pos, 3));
+    grassGeo.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(blade.pos.length).fill(0), 3));
+    grassGeo.setAttribute('aBlade', new THREE.Float32BufferAttribute(blade.blade, 4));
+    grassGeo.setIndex(blade.idx);
+    const R = u.uR.value;
+    const aPos = new Float32Array(N * 2);
+    const aRnd = new Float32Array(N * 4);
+    for (let i = 0; i < N; i++) {
+      aPos[i * 2] = (Math.random() * 2 - 1) * R;
+      aPos[i * 2 + 1] = (Math.random() * 2 - 1) * R;
+      aRnd[i * 4] = Math.random() * TAU;
+      aRnd[i * 4 + 1] = 3 + Math.random() * 2.5;
+      aRnd[i * 4 + 2] = 13 + Math.random() * 17;
+      aRnd[i * 4 + 3] = Math.random();
+    }
+    grassGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(aPos, 2));
+    grassGeo.setAttribute('aRnd', new THREE.InstancedBufferAttribute(aRnd, 4));
+    grassGeo.setAttribute('aCol', new THREE.InstancedBufferAttribute(new Float32Array(N * 4), 4));
+    grassGeo.instanceCount = N;
+    const grassMat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, fog: false });
+    grassMat.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, u);
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          'void main() {',
+          HILL +
+            'attribute vec2 aPos; attribute vec4 aRnd; attribute vec4 aCol; attribute vec4 aBlade;\nuniform float uR; uniform float uTime; uniform float uWind; uniform vec3 uGrassBase; uniform vec3 uGrassTip;\nvarying vec2 vGroundXY;\nvarying vec3 vGrass;\nvoid main() {'
+        )
+        .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 0.0, 1.0);')
+        .replace(
+          '#include <begin_vertex>',
+          [
+            'vec2 gBase = uCam + mod(aPos - uCam + uR, 2.0 * uR) - uR;',
+            'float gFade = 1.0 - smoothstep(uR * 0.5, uR * 0.95, distance(gBase, uCam));',
+            'float gc = cos(aRnd.x); float gs = sin(aRnd.x);',
+            'vec2 gOff = vec2(aBlade.x * gc - aBlade.y * gs, aBlade.x * gs + aBlade.y * gc);',
+            'float gRot = aRnd.x + position.z;',
+            'vec2 gAcross = vec2(cos(gRot), sin(gRot));',
+            'vec2 gLean = vec2(-gAcross.y, gAcross.x);',
+            'float gT = position.y;',
+            'float gH = aRnd.z * aBlade.z * gFade;',
+            'float gSway = sin(uTime * (1.3 + aRnd.w) + gBase.x * 0.006 + gBase.y * 0.004) * 0.3 + uWind;',
+            'vec2 gp = gBase + gOff + gAcross * position.x * aRnd.y * gFade + (gLean * 0.3 + vec2(gSway, gSway * 0.3)) * gT * gT * gH;',
+            'vec3 transformed = vec3(gp, uFloor + hillAt(gBase) - 1.0 + gT * gH);',
+            'vGroundXY = gp;',
+            'vec3 gTip = (aCol.w > 0.5 && aBlade.w > 0.5) ? aCol.rgb : uGrassTip * (0.8 + 0.4 * aRnd.w);',
+            'vGrass = mix(uGrassBase, gTip, (aCol.w > 0.5 && aBlade.w > 0.5) ? smoothstep(0.6, 1.0, gT) : gT);',
+          ].join('\n  ')
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', 'uniform vec2 uCam; uniform float uNear; uniform float uFar; uniform vec3 uAir;\nvarying vec2 vGroundXY;\nvarying vec3 vGrass;\nvoid main() {')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb = vGrass;')
+        // Both sides of a blade lit alike.
+        .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n  normal = normalize(vNormal);')
+        .replace('#include <dithering_fragment>', FADE);
+    };
+    const grass = new THREE.Mesh(grassGeo, grassMat);
+    grass.frustumCulled = false;
+    const group = new THREE.Group();
+    group.add(ground, grass);
+    group.visible = false;
+    this.scene.add(group);
+    this.terrain = { group, ground, grass, u, N, parts: [groundGeo, groundMat, grassGeo, grassMat] };
+  }
+
+  /* The land's colors for this garden and season, and where it sits under the bed. */
+  dressLand() {
+    const L = this.terrain;
+    const u = L.u;
+    const span = Math.max(this.w, this.h);
+    u.uCenter.value.set(this.w / 2, this.h / 2);
+    u.uFlat.value = span * 1.1;
+    u.uAmp.value = span * 0.45;
+    u.uS.value = 1 / span;
+    L.ground.position.set(this.w / 2, this.h / 2, FLOOR_Z - 1);
+    const season = (this.seasonNow && this.seasonNow.name) || this.season().name;
+    const look = {
+      spring: { tip: [150, 206, 118], base: [30, 66, 46], meadow: [58, 112, 66], soil: [28, 52, 42], blooms: 0.09 },
+      summer: { tip: [128, 184, 84], base: [26, 60, 38], meadow: [52, 100, 54], soil: [26, 48, 36], blooms: 0.05 },
+      autumn: { tip: [204, 164, 82], base: [70, 66, 36], meadow: [120, 104, 56], soil: [62, 50, 34], blooms: 0.012 },
+      winter: { tip: [214, 224, 236], base: [74, 96, 98], meadow: [206, 216, 230], soil: [150, 164, 184], blooms: 0 },
+    }[season] || null;
+    const k = look || { tip: [128, 184, 84], base: [26, 60, 38], meadow: [52, 100, 54], soil: [26, 48, 36], blooms: 0.05 };
+    // A touch of the garden's own foliage and soil in all of it, so the land belongs with the flowers.
+    u.uGrassTip.value.copy(toColor(mix(k.tip, this.foliage, 0.25)));
+    u.uGrassBase.value.copy(toColor(mix(k.base, this.foliage, 0.15)));
+    u.uMeadow.value.copy(toColor(mix(k.meadow, this.foliage, 0.15)));
+    u.uSoilC.value.copy(toColor(mix(k.soil, this.soil, 0.3)));
+    // Wildflowers: a few clumps carry a tiny bloom in the garden's colors.
+    const col = L.grass.geometry.attributes.aCol;
+    const c = new THREE.Color();
+    for (let i = 0; i < L.N; i++) {
+      if (Math.random() < k.blooms) {
+        c.copy(toColor(pick(Math.random, this.palette)));
+        col.setXYZW(i, c.r, c.g, c.b, 1);
+      } else col.setXYZW(i, 0, 0, 0, 0);
+    }
+    col.needsUpdate = true;
+  }
+
+  /* The height of the land at (x, y), as the ground's shader works it out. */
+  hillAt(x, y) {
+    const L = this.terrain;
+    if (!L) return 0;
+    const u = L.u;
+    const d = Math.hypot(x - u.uCenter.value.x, y - u.uCenter.value.y);
+    const e = clamp((d - u.uFlat.value) / (u.uFlat.value * 2), 0, 1);
+    const amp = e * e * (3 - 2 * e) * u.uAmp.value;
+    const qx = x * u.uS.value;
+    const qy = y * u.uS.value;
+    const h = Math.sin(qx * 0.8 + 1.3) * Math.cos(qy * 0.65 - 0.7) + 0.5 * Math.sin((qx + qy) * 1.4 + 2.1) + 0.25 * Math.cos(qx * 2.9 - qy * 2.3);
+    return amp * (h * 0.5 + 0.35);
+  }
+
   stopFlight() {
     if (!this.flight) return;
     this.flight = null;
-    if (this.ground) this.ground.visible = false;
+    if (this.terrain) this.terrain.group.visible = false;
     this.classList.remove('is-flying');
     const c = this.camera;
     c.rotation.order = 'XYZ';
@@ -2715,7 +2895,7 @@ class GardenSplash extends HTMLElement {
       F.y += F.vy * dt;
       F.z += F.vz * dt;
       // Held in by the soil below and the clouds above; out past the edges of the world the air turns you gently back.
-      const floor = FLOOR_Z + 6;
+      const floor = FLOOR_Z + this.hillAt(F.x, F.y) + 6;
       const top = sky ? sky.eye.z + sky.D * 1.25 : span * 4;
       if (F.z < floor) {
         F.z = floor;
@@ -2745,13 +2925,18 @@ class GardenSplash extends HTMLElement {
     // clouds overhead stay clear). Higher up, the haze lies farther off.
     this.scene.fog.near = span * 2.5;
     this.scene.fog.far = span * 60;
-    const gu = this.groundFade;
-    if (gu) {
-      gu.uCam.value.set(F.x, F.y);
-      gu.uNear.value = span * 0.9 + Math.max(0, F.z) * 2;
-      gu.uFar.value = span * 3.5 + Math.max(0, F.z) * 14;
-      // Mixed in after the shader's own conversion for the screen, so converted the same way.
-      gu.uAir.value.copy(this.scene.fog.color).convertLinearToSRGB();
+    const L = this.terrain;
+    if (L) {
+      const u = L.u;
+      u.uCam.value.set(F.x, F.y);
+      u.uNear.value = span * 0.9 + Math.max(0, F.z) * 2;
+      u.uFar.value = span * 3.5 + Math.max(0, F.z) * 10;
+      // Mixed in after the shaders' own conversion for the screen, so converted the same way.
+      u.uAir.value.copy(this.scene.fog.color).convertLinearToSRGB();
+      u.uTime.value = this.elapsed;
+      u.uWind.value = clamp((this.weather ? this.weather.wind : 10) / 120, -0.6, 0.6) + (this.gust ? this.gust.dir * 0.25 * this.gust.strength : 0);
+      // Grass only matters near the ground.
+      L.grass.visible = F.z - FLOOR_Z - this.hillAt(F.x, F.y) < 1400;
     }
   }
 

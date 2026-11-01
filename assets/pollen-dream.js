@@ -6,7 +6,9 @@
  * easter egg), all of it one world, at the visitor's time of day. The bee,
  * the season's weather, the planes, the blimp, the birds, the sun and the
  * moon all carry on as they do on the page. There is nothing to win: just
- * fly about.
+ * fly about, and no instructions: the controls are the usual ones
+ * (mouse or drag to look, WASD or arrows, Space and Shift; a thumb stick
+ * and buttons on phones).
  *
  * The world is the page's garden itself (garden-splash.js startFlight());
  * this file only adds the controls and the screens over it. Opened from the
@@ -20,8 +22,6 @@ const LOOK = { mouse: 0.0024, drag: 0.005, touch: 0.006 };
 const STRINGS = {
   title: 'Pollen Dream',
   eyebrow: 'Duet',
-  intro: 'Fly anywhere in the garden: down among the flowers, up into the sky and back again.',
-  start: 'Fly',
   resume: 'Keep flying',
   exit: 'Back to Duet',
   pause: 'Pause',
@@ -116,7 +116,8 @@ class Flight {
     }
     this.garden = garden;
     this.bindInput();
-    this.show('title');
+    // No instructions: straight into the air. The controls are the usual ones, there to be found.
+    this.fly();
     this.tick();
   }
 
@@ -155,11 +156,8 @@ class Flight {
     root.className = 'pollen-dream';
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-modal', 'true');
-    root.setAttribute('aria-labelledby', 'PollenDreamTitle');
+    root.setAttribute('aria-label', String(this.opts.title || STRINGS.title));
     root.tabIndex = -1;
-    const controls = this.touch
-      ? `<li><b>Left thumb</b> fly forward and back, turn</li><li><b>Drag</b> anywhere to look around: you fly where you look</li><li><b>${S.up}</b> and <b>${S.down}</b> rise and sink · hold <b>${S.fast}</b> to speed up</li>`
-      : `<li><b>Mouse</b> look around: you fly where you look</li><li><b>W S</b> or <b>↑ ↓</b> forward and back</li><li><b>A D</b> sideways · <b>← →</b> turn</li><li><b>Space</b> or <b>E</b> rise · <b>Q</b> or <b>C</b> sink</li><li><b>Shift</b> fast · <b>Esc</b> pause</li>`;
     root.innerHTML = `
       <div class="pollen-dream__surface" data-surface aria-hidden="true"></div>
       <div class="pollen-dream__hud" data-hud hidden>
@@ -178,19 +176,8 @@ class Flight {
         <p class="pollen-dream__eyebrow">${S.eyebrow}</p>
         <p class="pollen-dream__lead">${S.loading}</p>
       </section>
-      <section class="pollen-dream__screen" data-screen="title" hidden>
-        <p class="pollen-dream__eyebrow">${S.eyebrow}</p>
-        <h2 class="pollen-dream__title" id="PollenDreamTitle">${this.title}</h2>
-        <p>${S.intro}</p>
-        <ul class="pollen-dream__controls">${controls}</ul>
-        <div class="pollen-dream__actions">
-          <button type="button" class="pollen-dream__button pollen-dream__button--primary" data-action="start">${S.start}</button>
-          <button type="button" class="pollen-dream__button" data-action="exit">${S.exit}</button>
-        </div>
-      </section>
       <section class="pollen-dream__screen" data-screen="paused" hidden>
-        <h2 class="pollen-dream__title">${S.paused}</h2>
-        <ul class="pollen-dream__controls">${controls}</ul>
+        <h2 class="pollen-dream__title" id="PollenDreamTitle">${S.paused}</h2>
         <div class="pollen-dream__actions">
           <button type="button" class="pollen-dream__button pollen-dream__button--primary" data-action="resume">${S.resume}</button>
           <button type="button" class="pollen-dream__button" data-action="exit">${S.exit}</button>
@@ -242,7 +229,7 @@ class Flight {
         const b = e.target.closest('[data-action]');
         if (!b) return;
         const act = b.dataset.action;
-        if (act === 'start' || act === 'resume') this.fly();
+        if (act === 'resume') this.fly();
         else if (act === 'pause') this.pause();
         else if (act === 'exit') this.close();
       },
@@ -450,7 +437,7 @@ class Flight {
   fly() {
     this.show('fly');
     this.root.focus({ preventScroll: true });
-    if (!this.touch) this.lock();
+    // The mouse is captured by a click in the garden (see bindInput), so Back to Duet stays in reach till then.
   }
 
   pause() {
