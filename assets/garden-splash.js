@@ -1346,8 +1346,8 @@ class GardenSplash extends HTMLElement {
       const p = this.pointer;
       if (!p.down || p.id !== e.pointerId) return;
       const [x, y] = local(e);
-      // A tap on the logo is its button's (the menu, or the asterisk's game), not a recolor.
-      if (!this.gestured && !p.logo && Math.hypot(x - p.sx, y - p.sy) < 14 && e.timeStamp - p.st < 450) this.tap(x, y);
+      // A tap recolors the flower under it, zoomed out over the logo just as zoomed in.
+      if (!this.gestured && Math.hypot(x - p.sx, y - p.sy) < 14 && e.timeStamp - p.st < 450) this.tap(x, y);
       p.down = false;
       if (e.pointerType !== 'mouse') p.active = false;
     };
