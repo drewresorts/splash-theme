@@ -2518,7 +2518,7 @@ class GardenSplash extends HTMLElement {
    * into the logo the way the flowers did, among faint
    * constellations, twinkling, with a shooting star now and then. Clicking
    * the moon three times in a row (by day, the sun), or opening the menu,
-   * brings the view back down.
+   * brings the view back down; so does Escape if neither is on screen.
    */
   bindNight() {
     // In the sky: clicking (or tapping) the moon three times in a row (by day, the sun) brings the view back down.
@@ -2535,20 +2535,35 @@ class GardenSplash extends HTMLElement {
       if (!press || e.pointerId !== press.id) return;
       const p = press;
       press = null;
-      if (e.type !== 'pointerup' || e.timeStamp - p.t0 > 600 || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 14) return;
+      if (e.type !== 'pointerup' || e.timeStamp - p.t0 > 1000 || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 14) return;
       const n = this.night;
       if (!n || n.dir < 0 || n.t < 1 || this.explorer) return;
       if (this.onKnocker(e.clientX, e.clientY)) this.knock();
     };
     this.addEventListener('pointerup', end, true);
     this.addEventListener('pointercancel', end, true);
+    // With neither the moon nor the sun on screen, Escape brings the view back down too.
+    this.onNightKey = (e) => {
+      const n = this.night;
+      if (e.key !== 'Escape' || !n || n.dir < 0 || this.explorer || this.knockerInView()) return;
+      this.toggleNight();
+    };
+    document.addEventListener('keydown', this.onNightKey);
   }
 
-  /* What to click to come back down: the moon at night, the sun by day (the moon if the sun isn't up). */
+  /* What to click to come back down: the moon at night, the sun by day. */
   knocker() {
     const sky = this.sky;
     if (!sky) return null;
-    return sky.time && !sky.time.dark && sky.sun ? sky.sun : sky.moon;
+    return (sky.time && sky.time.dark ? sky.moon : sky.sun) || sky.moon || sky.sun || null;
+  }
+
+  /* Whether it is on screen now (zoomed into another part of the sky, it may not be). */
+  knockerInView() {
+    const m = this.knocker();
+    if (!m) return false;
+    const v = m.at.clone().project(this.camera);
+    return v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
   }
 
   /* Whether a point on screen is on it (with a little room round it, for a finger). */
@@ -3693,11 +3708,14 @@ float hillAt(vec2 p) {
       sunAt = { day: this.skyPlace(58, 160 + s), sunrise: this.skyPlace(5, 95), sunset: this.skyPlace(5, 265) }[this.skySetting] || null;
       moonAt = this.skySetting === 'night' ? this.skyPlace(52, 140 + s) : null;
     }
-    // At night the moon is the way back down from the sky (three clicks on it; by day the sun), so it is
-    // always there: where it really is when it is up, and otherwise in a fixed place high on the far side from the sun.
-    if (!moonAt) moonAt = this.skyPlace(40, this.south ? 330 : 210);
-    const moon = this.buildMoon(group, disposables, glow, eye, D, viewW, viewH, moonAt);
-    const sun = sunAt && (time.light > 0.05 || time.warm > 0.05) ? this.buildSun(group, disposables, glow, eye, D, viewW, viewH, sunAt, time) : null;
+    // The way back down from the sky is three clicks on the moon at night, on the sun by day, so the one
+    // that matters is always there: where it really is when it is up, and otherwise in a fixed place in
+    // view. The moon only in a dark sky; the sun by day and at sunrise and sunset.
+    const night = time.dark;
+    if (night && !moonAt) moonAt = this.skyPlace(40, this.south ? 330 : 210);
+    if (!night && !sunAt) sunAt = this.skyPlace(time.warm > 0.3 ? 12 : 45, time.evening ? 250 : this.south ? 20 : 160);
+    const moon = night ? this.buildMoon(group, disposables, glow, eye, D, viewW, viewH, moonAt) : null;
+    const sun = sunAt && (!night || time.warm > 0.05) ? this.buildSun(group, disposables, glow, eye, D, viewW, viewH, sunAt, time) : null;
     return { moon, sun };
   }
 
@@ -4085,6 +4103,7 @@ float hillAt(vec2 p) {
       fc.setXYZ(i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
     });
     fc.needsUpdate = true;
+    this.knockSwell(sky.sun, t);
     if (sky.moon) {
       this.moonEye(t, show * stars);
       // By day a pale moon, its shadowed side gone; at night the full thing.
@@ -4092,7 +4111,6 @@ float hillAt(vec2 p) {
       sky.moon.eye.uShadow.value = stars;
       sky.moon.halo.material.opacity = show * stars * (0.04 + 0.1 * sky.moon.lit);
       this.knockSwell(sky.moon, t);
-      this.knockSwell(sky.sun, t);
     }
     if (sky.sun) {
       const up = show * clamp(time.light * 1.4 + time.warm, 0, 1);
