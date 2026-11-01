@@ -4297,9 +4297,9 @@ float hillAt(vec2 p) {
 
   /*
    * At night, rarely, a blimp: a silver airship drifting slowly across
-   * below the clouds, after the one in Scarface, with a digital screen on
-   * the side turned down to the viewer: the logo in LED pixels scrolling
-   * across it like a ticker. Built at unit size (2 long, nose along +x) and
+   * below the clouds, after the one in Scarface, with digital screens built
+   * into both flanks of the envelope, curving with it: the logo in LED
+   * pixels scrolling across them like a ticker. Built at unit size (2 long, nose along +x) and
    * scaled when it flies.
    */
   buildBlimp(group, disposables) {
@@ -4315,7 +4315,7 @@ float hillAt(vec2 p) {
     const silver = [70, 76, 96];
     const skin = this.makeMaterial({ color: toColor(silver), emissive: toColor(tone(silver, -0.45)), shininess: 40, specular: 0x666666 });
     const trim = this.makeMaterial({ color: toColor(tone(silver, -0.3)), emissive: toColor(tone(silver, -0.7)) });
-    const envelopeGeo = new THREE.SphereGeometry(1, 16, 8);
+    const envelopeGeo = new THREE.SphereGeometry(1, 40, 20);
     const finGeo = new THREE.BoxGeometry(0.3, 0.02, 0.22);
     const gondolaGeo = new THREE.BoxGeometry(0.18, 0.08, 0.06);
     disposables.push(skin, trim, envelopeGeo, finGeo, gondolaGeo);
@@ -4334,8 +4334,8 @@ float hillAt(vec2 p) {
     body.add(gondola);
 
     // The screen: a grid of LEDs, 4:1, the logo's lit cells scrolling through it.
-    const rows = 22;
-    const cols = 88;
+    const rows = 30;
+    const cols = 120;
     const logoRows = rows - 6;
     const aspect = box.w / Math.max(1, box.h);
     const logoCols = Math.max(8, Math.round(logoRows * aspect * 1.1));
@@ -4363,19 +4363,54 @@ float hillAt(vec2 p) {
     tex.minFilter = THREE.LinearFilter;
     tex.wrapS = THREE.RepeatWrapping;
     tex.repeat.set(cols / strip, 1);
-    const screenGeo = new THREE.PlaneGeometry(1.2, 0.3);
-    const frameGeo = new THREE.PlaneGeometry(1.26, 0.36);
-    const screenMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, fog: false });
-    const frameMat = new THREE.MeshBasicMaterial({ color: toColor([14, 15, 22]), side: THREE.DoubleSide, fog: false });
-    disposables.push(tex, screenGeo, frameGeo, screenMat, frameMat);
-    // Flat under the belly, facing down at the viewer. Seen from below, +x is screen right, so it reads as is.
-    const frame = new THREE.Mesh(frameGeo, frameMat);
-    frame.position.z = -0.302;
-    holder.add(frame);
-    const screen = new THREE.Mesh(screenGeo, screenMat);
-    screen.position.z = -0.306;
-    screen.scale.y = -1;
-    holder.add(screen);
+    // The screens are part of the envelope itself: a band of its own curved skin on each flank,
+    // turned a little down toward the ground, with a dark bezel round it, so the logo scrolls
+    // across the airship's side as on the real thing. Each reads left to right from its own side.
+    const RX = 1;
+    const RYZ = 0.3;
+    const band = (center, span, xs, lift, mirror) => {
+      const nx = 36;
+      const na = 10;
+      const pos = [];
+      const uv = [];
+      const idx = [];
+      for (let j = 0; j <= na; j++) {
+        // From the band's top edge (j = 0) to its bottom.
+        const th = center + span / 2 - (span * j) / na;
+        for (let i = 0; i <= nx; i++) {
+          const sx = -xs + (2 * xs * i) / nx;
+          const r = Math.sqrt(Math.max(0, 1 - sx * sx)) * RYZ * lift;
+          pos.push(sx * RX, Math.cos(th) * r, Math.sin(th) * r);
+          uv.push(mirror ? 1 - i / nx : i / nx, 1 - j / na);
+        }
+      }
+      for (let j = 0; j < na; j++) {
+        for (let i = 0; i < nx; i++) {
+          const a0 = j * (nx + 1) + i;
+          const a1 = a0 + 1;
+          const b0 = a0 + nx + 1;
+          const b1 = b0 + 1;
+          idx.push(a0, a1, b0, a1, b1, b0);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      disposables.push(geo);
+      return geo;
+    };
+    const screenMat = new THREE.MeshBasicMaterial({ map: tex, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const frameMat = new THREE.MeshBasicMaterial({ color: toColor([12, 13, 20]), fog: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    disposables.push(tex, screenMat, frameMat);
+    // Angles round the long axis: 0 is the +y flank, PI the -y flank; a little below each, toward the ground.
+    const tilt = 0.45;
+    const span = 1.05;
+    for (const [center, mirror] of [[Math.PI + tilt, false], [-tilt, true]]) {
+      holder.add(new THREE.Mesh(band(center, span + 0.14, 0.62, 1.004, mirror), frameMat));
+      holder.add(new THREE.Mesh(band(center, span, 0.56, 1.008, mirror), screenMat));
+    }
     return { holder, body, tex, strip, cols, active: null };
   }
 
@@ -4413,10 +4448,10 @@ float hillAt(vec2 p) {
 
   /*
    * By day, rarely, a biplane towing a banner: red wings, propeller
-   * spinning, and behind it on a line a long cloth banner printed with the
-   * logo (the logo's flowers as dots), rippling and flapping in the wind,
-   * more the further from the plane. Seen from below; the banner always
-   * reads left to right. Built at unit size (the plane 1 long, nose +x).
+   * spinning, and behind it on a line a long white banner printed with the
+   * logo, hung on edge as real tow banners fly, rippling in the wind, more
+   * the further from the plane. It reads the right way round from either
+   * side. Built at unit size (the plane 1 long, nose +x).
    */
   buildBanner(group, disposables) {
     const box = this.logoBox;
@@ -4473,28 +4508,42 @@ float hillAt(vec2 p) {
     blur.rotation.y = Math.PI / 2;
     part(new THREE.BoxGeometry(0.015, 0.38, 0.03), darkMat, 0.004, 0, 0, prop);
 
-    // The banner: cream cloth printed with the logo itself, sized to the logo with a margin all round,
-    // a red stripe along each edge, and a dark spreader bar at the front where the tow lines tie on.
+    // The banner: white cloth printed with the logo itself, sized to the logo with a margin all
+    // round, hung on edge from a spreader bar at the front, the way real tow banners fly, so it is
+    // read from the side. Printed on both faces, so it reads the right way round from either side.
     const m = this.mask;
     const aspect = m ? (m.x1 - m.x0) / (m.y1 - m.y0) : box.w / box.h;
     const H = 0.68;
-    const L = clamp(H * 0.64 * aspect + H * 0.55, 1.5, 4.2);
+    const L = clamp(H * 0.66 * aspect + H * 0.5, 1.5, 4.2);
     const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = Math.round(1024 * (H / L));
+    canvas.width = 2048;
+    canvas.height = Math.round(2048 * (H / L));
     const g = canvas.getContext('2d');
-    g.fillStyle = '#f6f0e1';
-    g.fillRect(0, 0, canvas.width, canvas.height);
-    const stripe = Math.max(4, Math.round(canvas.height * 0.06));
-    g.fillStyle = '#c42a36';
-    g.fillRect(0, stripe * 0.6, canvas.width, stripe);
-    g.fillRect(0, canvas.height - stripe * 1.6, canvas.width, stripe);
-    const lh = canvas.height * 0.62;
+    const lh = canvas.height * 0.66;
     const lw = lh * aspect;
     const lx = (canvas.width - lw) / 2;
     const ly = (canvas.height - lh) / 2;
+    const ink = '#191f6b';
+    // Prints the logo from any image of it (navy wherever it is opaque), cropped to its shape.
+    const print = (img, sx, sy, sw, sh) => {
+      const tmp = document.createElement('canvas');
+      tmp.width = Math.max(1, Math.round(lw));
+      tmp.height = Math.max(1, Math.round(lh));
+      const tg = tmp.getContext('2d');
+      tg.imageSmoothingEnabled = true;
+      tg.imageSmoothingQuality = 'high';
+      tg.drawImage(img, sx, sy, sw, sh, 0, 0, tmp.width, tmp.height);
+      tg.globalCompositeOperation = 'source-in';
+      tg.fillStyle = ink;
+      tg.fillRect(0, 0, tmp.width, tmp.height);
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, canvas.width, canvas.height);
+      g.drawImage(tmp, lx, ly);
+    };
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, canvas.width, canvas.height);
     if (m) {
-      // The logo's own silhouette, crisp, in navy.
+      // First from the logo shape the garden already has.
       const mw = m.x1 - m.x0;
       const mh = m.y1 - m.y0;
       const sc = document.createElement('canvas');
@@ -4503,21 +4552,13 @@ float hillAt(vec2 p) {
       const sg = sc.getContext('2d');
       const img = sg.createImageData(mw, mh);
       for (let y = 0; y < mh; y++) {
-        for (let x = 0; x < mw; x++) {
-          const a = m.alpha[(y + m.y0) * m.w + x + m.x0];
-          const o = (y * mw + x) * 4;
-          img.data[o] = 25;
-          img.data[o + 1] = 31;
-          img.data[o + 2] = 107;
-          img.data[o + 3] = a;
-        }
+        for (let x = 0; x < mw; x++) img.data[(y * mw + x) * 4 + 3] = m.alpha[(y + m.y0) * m.w + x + m.x0];
       }
       sg.putImageData(img, 0, 0);
-      g.imageSmoothingEnabled = true;
-      g.drawImage(sc, lx, ly, lw, lh);
+      print(sc, 0, 0, mw, mh);
     } else {
       const fit = Math.min(lw / box.w, lh / box.h);
-      g.fillStyle = '#191f6b';
+      g.fillStyle = ink;
       for (const f of this.flowers) {
         g.beginPath();
         g.arc(lx + (f.dest[0] - box.x) * fit, ly + (f.dest[1] - box.y) * fit, Math.max(1.5, f.r * fit * 0.9), 0, TAU);
@@ -4526,15 +4567,39 @@ float hillAt(vec2 p) {
     }
     const tex = keep(new THREE.CanvasTexture(canvas));
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
-    const clothGeo = keep(new THREE.PlaneGeometry(L, H, 40, 6));
-    // Mostly its own light (the print shows true), with the folds still shaded by the sun.
-    const clothMat = keep(this.makeMaterial({ map: tex, emissiveMap: tex, emissive: toColor([175, 175, 175]), side: THREE.DoubleSide, shininess: 6, flatShading: false }));
-    const cloth = new THREE.Mesh(clothGeo, clothMat);
-    // Seen from below +x is screen right; flip so the print reads the right way up.
-    cloth.scale.y = -1;
+    tex.anisotropy = 8;
+    // The other face: the same print, turned round so it reads from that side too.
+    const back = keep(tex.clone());
+    back.wrapS = THREE.RepeatWrapping;
+    back.repeat.x = -1;
+    back.offset.x = 1;
+    // Then sharp, from the logo image itself at full size (as large as the uploaded file allows).
+    const src = this.maskSource();
+    if (m && src) {
+      const hd = new Image();
+      hd.crossOrigin = 'anonymous';
+      hd.onload = () => {
+        const k = hd.naturalWidth / m.w;
+        try {
+          print(hd, m.x0 * k, m.y0 * k, (m.x1 - m.x0) * k, (m.y1 - m.y0) * k);
+          tex.needsUpdate = true;
+          back.needsUpdate = true;
+        } catch (e) {
+          /* keeps the first print */
+        }
+      };
+      hd.src = /[?&]width=\d+/.test(src) ? src.replace(/([?&])width=\d+/, '$1width=2400') : src;
+    }
+    const clothGeo = keep(new THREE.PlaneGeometry(L, H, 40, 8));
+    // Mostly its own light (the white stays white), with the folds still shaded by the sun.
+    const clothMat = keep(this.makeMaterial({ map: tex, emissiveMap: tex, emissive: toColor([200, 200, 200]), side: THREE.FrontSide, shininess: 6, flatShading: false }));
+    const backMat = keep(this.makeMaterial({ map: back, emissiveMap: back, emissive: toColor([200, 200, 200]), side: THREE.BackSide, shininess: 6, flatShading: false }));
+    // On edge: the cloth's face turned to the side (-y), its top edge up.
+    const cloth = new THREE.Group();
+    cloth.rotation.x = Math.PI / 2;
+    cloth.add(new THREE.Mesh(clothGeo, clothMat), new THREE.Mesh(clothGeo, backMat));
     holder.add(cloth);
-    const bar = part(new THREE.BoxGeometry(0.02, H * 1.04, 0.02), darkMat, 0, 0, 0, holder);
+    const bar = part(new THREE.BoxGeometry(0.02, 0.02, H * 1.04), darkMat, 0, 0, 0, holder);
     const rest = Float32Array.from(clothGeo.attributes.position.array);
     // The tow line from the tail to a ring, and a bridle from the ring to both ends of the bar.
     const lineGeo = keep(new THREE.BufferGeometry());
@@ -4543,7 +4608,7 @@ float hillAt(vec2 p) {
     const line = new THREE.LineSegments(lineGeo, lineMat);
     line.frustumCulled = false;
     holder.add(line);
-    return { holder, plane, prop, cloth, bar, rest, line, L, H, active: null };
+    return { holder, plane, prop, cloth, clothGeo, bar, rest, line, L, H, active: null };
   }
 
   flyBanner(t, dt, show, p) {
@@ -4581,8 +4646,10 @@ float hillAt(vec2 p) {
     const gap = 0.6;
     const front = -A.dir * (0.5 + gap);
     const cx = front - A.dir * (B.L / 2);
-    B.cloth.position.set(cx, 0, 0);
-    const pos = B.cloth.geometry.attributes.position;
+    // Hanging a little below the tow line.
+    const drop = -B.H * 0.12;
+    B.cloth.position.set(cx, 0, drop);
+    const pos = B.clothGeo.attributes.position;
     const sway = Math.sin(t * 1.3 + A.ph) * 0.03;
     for (let i = 0; i < pos.count; i++) {
       const x = B.rest[i * 3];
@@ -4592,20 +4659,21 @@ float hillAt(vec2 p) {
       const run = s * 12 - t * 11 + A.ph;
       const amp = 0.015 + s * 0.11;
       const z = amp * Math.sin(run) + s * 0.035 * Math.sin(y * 9 + s * 15 - t * 14) + sway * s;
-      // The cloth gathers a little where it folds, and the loose end lifts and drops.
-      pos.setXYZ(i, x + A.dir * s * 0.03 * (1 - Math.cos(run)), y + s * 0.045 * Math.sin(s * 6 - t * 5 + A.ph), z);
+      // The cloth gathers a little where it folds, the bottom edge trails a touch behind, and the loose end lifts and drops.
+      const trail = A.dir * (B.H / 2 - y) * 0.08 * s;
+      pos.setXYZ(i, x + A.dir * s * 0.03 * (1 - Math.cos(run)) - trail, y + s * 0.045 * Math.sin(s * 6 - t * 5 + A.ph), z);
     }
     pos.needsUpdate = true;
-    B.cloth.geometry.computeVertexNormals();
-    B.bar.position.set(front, 0, 0);
+    B.clothGeo.computeVertexNormals();
+    B.bar.position.set(front, 0, drop);
     const ring = front + A.dir * 0.22;
     const lp = B.line.geometry.attributes.position;
     lp.setXYZ(0, -A.dir * 0.47, 0, 0.01);
     lp.setXYZ(1, ring, 0, 0);
     lp.setXYZ(2, ring, 0, 0);
-    lp.setXYZ(3, front, B.H * 0.5, 0);
+    lp.setXYZ(3, front, 0, drop + B.H * 0.5);
     lp.setXYZ(4, ring, 0, 0);
-    lp.setXYZ(5, front, -B.H * 0.5, 0);
+    lp.setXYZ(5, front, 0, drop - B.H * 0.5);
     lp.needsUpdate = true;
   }
 
