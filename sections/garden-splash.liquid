@@ -584,6 +584,23 @@
     outline-offset: 3px;
   }
 
+  /* ---------- Flying (assets/pollen-dream.js) ---------- */
+
+  /* The garden fills the screen; nothing of the splash's own interface shows. */
+  .garden-splash.is-flying {
+    position: fixed;
+    inset: 0;
+    z-index: 2147482000;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .garden-splash.is-flying > :not(.garden-splash__canvas) {
+    visibility: hidden;
+  }
+
   /* ---------- The formed logo as the menu button ---------- */
 
   .garden-splash__logo-trigger {

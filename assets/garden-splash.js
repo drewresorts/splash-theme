@@ -840,6 +840,7 @@ class GardenSplash extends HTMLElement {
     if (this.onWorldPause) window.removeEventListener('duet:world-pause', this.onWorldPause);
     if (this.onWorldResume) window.removeEventListener('duet:world-resume', this.onWorldResume);
     if (this.onEggClick) document.removeEventListener('click', this.onEggClick);
+    if (this.groundParts) this.groundParts.forEach((x) => x.dispose());
     if (this.bee) {
       this.bee.materials.forEach((m) => m.dispose());
       this.bee = null;
@@ -1399,6 +1400,13 @@ class GardenSplash extends HTMLElement {
     const rect = this.getBoundingClientRect();
     const W = Math.max(1, Math.round(rect.width));
     const H = Math.max(1, Math.round(rect.height));
+    if (this.flight && !initial) {
+      // Flying, the garden fills the screen: only the picture changes size, the bed stays as it is.
+      this.renderer.setSize(W, H, false);
+      this.camera.aspect = W / H;
+      this.camera.updateProjectionMatrix();
+      return;
+    }
     if (!initial && W === this.w && H === this.h) return;
     const relayout = initial || !this.flowers.length || W !== this.w || Math.abs(H - this.h) > 90;
     this.w = W;
@@ -2101,11 +2109,11 @@ class GardenSplash extends HTMLElement {
     this.brushStep(dt);
     if (this.arranged && !this.background && !this.reduced) {
       // At night no gusts come, but heads still swinging come to rest.
-      if (!this.night) this.blow(t);
+      if (!this.night || this.flight) this.blow(t);
       else this.sway(dt, () => 0);
     }
     if (this.arranged && !this.backdrop && !this.reduced) {
-      if (!this.night) this.flyBee(t, dt);
+      if (!this.night || this.flight) this.flyBee(t, dt);
       else if (this.bee) this.bee.group.visible = false;
     }
     if (this.egg && this.egg.pulse > 0) this.eggReact(dt);
@@ -2178,6 +2186,7 @@ class GardenSplash extends HTMLElement {
   drift(t, dt) {
     if (!this.camBase) return;
     if (this.night) this.updateNight(t, dt);
+    if (this.flight) this.updateFlight(dt);
     if (this.night && this.night.t > 0) return;
     const v = this.view;
     if (v) this.easeView(dt);
@@ -2495,7 +2504,7 @@ class GardenSplash extends HTMLElement {
     this.addEventListener('pointerup', end, true);
     this.addEventListener('pointercancel', end, true);
     this.onNightKey = (e) => {
-      if (e.key === 'Escape' && this.night && this.night.dir > 0) this.toggleNight();
+      if (e.key === 'Escape' && this.night && this.night.dir > 0 && !this.flight) this.toggleNight();
     };
     document.addEventListener('keydown', this.onNightKey);
   }
@@ -2591,6 +2600,159 @@ class GardenSplash extends HTMLElement {
     this.scene.fog.color.copy(this.fogColor);
     this.scene.fog.near = this.camDist + 30;
     this.scene.fog.far = this.camDist + 320;
+  }
+
+  /* ---------------- flight ---------------- */
+
+  /*
+   * Free flight through the whole garden (opened by assets/pollen-dream.js,
+   * which reads the controls): the bed in its logo on the soil and, overhead,
+   * the sky of the sky view, all at once, at the visitor's time of day. The
+   * bee, the weather, the planes, the blimp, the birds, the sun and the moon
+   * all carry on as usual. Only the splash's own formed garden can fly.
+   */
+  canFly() {
+    return !!(this.renderer && !this.failed && !this.backdrop && !this.background && this.arranged && this.logoBox && this.flowers.length && this.camBase);
+  }
+
+  startFlight() {
+    if (this.flight) return true;
+    if (!this.canFly()) return false;
+    if (this.view) this.resetView(true);
+    if (!this.night) {
+      this.skyTime = this.skyNow();
+      this.buildSky();
+      this.night = { t: 1, dir: 1, since: 0, nextShoot: 3 + Math.random() * 4 };
+    }
+    Object.assign(this.night, { t: 1, dir: 1 });
+    this.skyView = { z: 1, tz: 1, ax: 0, ay: 0, tax: 0, tay: 0 };
+    const b = this.camBase;
+    this.flight = { x: b.x, y: b.y, z: b.z, yaw: 0, pitch: -Math.PI / 2 + 1e-3, vx: 0, vy: 0, vz: 0, intro: 0, from: b.clone(), input: { f: 0, r: 0, u: 0, turn: 0, fast: false } };
+    this.camera.rotation.order = 'ZXY';
+    // The soil, out to the horizon, where it fades into the haze.
+    if (!this.ground) {
+      const geo = new THREE.PlaneGeometry(400000, 400000, 24, 24);
+      const mat = new THREE.MeshPhongMaterial({ color: toColor(this.soil), shininess: 4, specular: 0x111111, flatShading: true, fog: false });
+      const fade = (this.groundFade = { uCam: { value: new THREE.Vector2() }, uNear: { value: 2000 }, uFar: { value: 8000 }, uAir: { value: new THREE.Color() } });
+      mat.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, fade);
+        shader.vertexShader = shader.vertexShader
+          .replace('void main() {', 'varying vec2 vGroundXY;\nvoid main() {')
+          .replace('#include <project_vertex>', '#include <project_vertex>\n  vGroundXY = (modelMatrix * vec4(transformed, 1.0)).xy;');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', 'varying vec2 vGroundXY;\nuniform vec2 uCam;\nuniform float uNear;\nuniform float uFar;\nuniform vec3 uAir;\nvoid main() {')
+          .replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, uAir, smoothstep(uNear, uFar, distance(vGroundXY, uCam)));');
+      };
+      this.ground = new THREE.Mesh(geo, mat);
+      this.ground.position.set(this.w / 2, this.h / 2, FLOOR_Z - 1);
+      this.ground.renderOrder = -2;
+      this.scene.add(this.ground);
+      this.groundParts = [geo, mat];
+    }
+    this.ground.position.set(this.w / 2, this.h / 2, FLOOR_Z - 1);
+    this.ground.visible = true;
+    Object.assign(this.pointer, { down: false, active: false });
+    this.classList.add('is-flying');
+    this.start();
+    return true;
+  }
+
+  stopFlight() {
+    if (!this.flight) return;
+    this.flight = null;
+    if (this.ground) this.ground.visible = false;
+    this.classList.remove('is-flying');
+    const c = this.camera;
+    c.rotation.order = 'XYZ';
+    c.near = 10;
+    c.far = 5000;
+    c.aspect = this.w / this.h;
+    this.renderer.setSize(this.w, this.h, false);
+    this.endNight();
+    c.position.copy(this.camBase);
+    c.lookAt(this.w / 2, this.h / 2, 0);
+    this.viewDirty = true;
+    this.start();
+  }
+
+  /* Turns the view: dx across, dy up and down, in radians. */
+  flyLook(dx, dy) {
+    const F = this.flight;
+    if (!F || F.intro < 1) return;
+    F.yaw -= dx;
+    F.pitch = clamp(F.pitch - dy, -1.5, 1.5);
+  }
+
+  updateFlight(dt) {
+    const F = this.flight;
+    const c = this.camera;
+    const sky = this.sky;
+    const span = Math.max(this.w, this.h);
+    if (F.intro < 1) {
+      // From the page's own view straight down on the logo, gliding back and down to look across it.
+      F.intro = Math.min(1, F.intro + dt / (this.reduced ? 0.05 : 2.8));
+      const e = smooth(F.intro);
+      F.x = F.from.x;
+      F.y = lerp(F.from.y, F.from.y - this.h * 0.8, e);
+      F.z = lerp(F.from.z, F.from.z * 0.3, e);
+      F.pitch = lerp(-Math.PI / 2 + 1e-3, -0.4, e);
+    } else {
+      const inp = F.input;
+      F.yaw -= inp.turn * 1.7 * dt;
+      // Fly where you look; strafe level; rise and sink straight up and down.
+      const speed = span * (inp.fast ? 1.5 : 0.45);
+      const cp = Math.cos(F.pitch);
+      const fx = -Math.sin(F.yaw) * cp;
+      const fy = Math.cos(F.yaw) * cp;
+      const fz = Math.sin(F.pitch);
+      const rx = Math.cos(F.yaw);
+      const ry = Math.sin(F.yaw);
+      const k = 1 - Math.exp(-dt * 2.4);
+      F.vx += ((fx * inp.f + rx * inp.r) * speed - F.vx) * k;
+      F.vy += ((fy * inp.f + ry * inp.r) * speed - F.vy) * k;
+      F.vz += ((fz * inp.f + inp.u) * speed - F.vz) * k;
+      F.x += F.vx * dt;
+      F.y += F.vy * dt;
+      F.z += F.vz * dt;
+      // Held in by the soil below and the clouds above; out past the edges of the world the air turns you gently back.
+      const floor = FLOOR_Z + 6;
+      const top = sky ? sky.eye.z + sky.D * 1.25 : span * 4;
+      if (F.z < floor) {
+        F.z = floor;
+        F.vz = Math.max(0, F.vz);
+      } else if (F.z > top) {
+        F.z = lerp(F.z, top, 1 - Math.exp(-dt * 3));
+        F.vz = Math.min(0, F.vz);
+      }
+      const ox = F.x - this.w / 2;
+      const oy = F.y - this.h / 2;
+      const d = Math.hypot(ox, oy);
+      const R = span * 6;
+      if (d > R) {
+        const back = (d - R) * (1 - Math.exp(-dt * 2));
+        F.x -= (ox / d) * back;
+        F.y -= (oy / d) * back;
+      }
+    }
+    c.position.set(F.x, F.y, F.z);
+    c.rotation.set(Math.PI / 2 + F.pitch, 0, F.yaw);
+    c.fov = lerp(FOV, 72, smooth(F.intro));
+    c.near = 2;
+    c.far = 400000;
+    c.updateProjectionMatrix();
+    // Far off, everything fades into the color of the air. The soil fades sooner, by its distance
+    // from the visitor across the ground, so it never ends in a line against the sky (and the
+    // clouds overhead stay clear). Higher up, the haze lies farther off.
+    this.scene.fog.near = span * 2.5;
+    this.scene.fog.far = span * 60;
+    const gu = this.groundFade;
+    if (gu) {
+      gu.uCam.value.set(F.x, F.y);
+      gu.uNear.value = span * 0.9 + Math.max(0, F.z) * 2;
+      gu.uFar.value = span * 3.5 + Math.max(0, F.z) * 14;
+      // Mixed in after the shader's own conversion for the screen, so converted the same way.
+      gu.uAir.value.copy(this.scene.fog.color).convertLinearToSRGB();
+    }
   }
 
   /* A clearing in the logo to lie down in: flowers close all round, none right overhead. */
@@ -3523,7 +3685,9 @@ class GardenSplash extends HTMLElement {
     sky.group.visible = true;
 
     // The camera: across to the clearing, down into it, tipping back to look up.
+    // In flight (see startFlight) the visitor steers it instead.
     const c = this.camera;
+    if (!this.flight) {
     // Sinking into the flowers first, then falling back to look up.
     const across = smooth(range(p, 0, 0.5));
     const down = smooth(range(p, 0.05, 0.75));
@@ -3545,6 +3709,7 @@ class GardenSplash extends HTMLElement {
     // Tipping up, the camera looks along the sky: draw all of it, or it is cut off in a hard line where the horizon would be.
     c.far = lerp(5000, 80000, smooth(range(p, 0, 0.3)));
     c.updateProjectionMatrix();
+    }
 
     // The sky comes in behind everything, and the light turns to the sky's:
     // moonlight at night, sun and blue sky by day, low gold at sunrise and sunset.
@@ -4939,7 +5104,7 @@ class GardenSplash extends HTMLElement {
       }
     }
     this.updatePiles(t, dt, w, level);
-    for (const kind of Object.values(W.kinds)) kind.o.visible = !this.night;
+    for (const kind of Object.values(W.kinds)) kind.o.visible = !this.night || !!this.flight;
     if (this.night || W.sky) this.skyWeather(t, dt, level);
   }
 
@@ -5027,7 +5192,7 @@ class GardenSplash extends HTMLElement {
     const n = this.night;
     if (!W.sky) this.buildSkyWeather();
     const S = W.sky;
-    const live = !!(n && sky) && n.t > 0.35;
+    const live = !!(n && sky) && n.t > 0.35 && !this.flight;
     S.group.visible = live;
     if (!live) {
       for (const k of Object.values(S.kinds)) k.p.forEach((q) => (q.live = false));

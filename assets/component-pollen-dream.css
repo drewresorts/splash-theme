@@ -1,7 +1,9 @@
 /*
- * Pollen Dream (assets/pollen-dream.js): a full-screen layer over the page,
- * white like the site, in its interface language: monospace capitals,
- * ocean ink and the fuchsia/teal double edge on titles.
+ * Pollen Dream (assets/pollen-dream.js): free flight through the splash's
+ * garden. A see-through layer over the garden (which fills the screen while
+ * flying) holding the controls and the screens, in the site's interface
+ * language: monospace capitals, ocean ink and the fuchsia/teal double edge
+ * on titles.
  */
 html.pollen-dream-open,
 html.pollen-dream-open body {
@@ -13,13 +15,12 @@ html.pollen-dream-open body {
   --pd-plate: #ffffff;
   --pd-hero: #f04e62;
   --pd-accent: #a62749;
-  --pd-pollen: #f2a834;
   --pd-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
   position: fixed;
   inset: 0;
   z-index: 2147483000;
   overflow: hidden;
-  background: var(--pd-plate);
+  background: transparent;
   color: var(--pd-ink);
   font-family: var(--pd-mono);
   font-size: 12px;
@@ -35,59 +36,25 @@ html.pollen-dream-open body {
   outline: none;
 }
 
-/* Arriving from the logo: the page stays visible while the garden loads, then the
-   garden fades in on the very same view and dives into the flowers. */
-.pollen-dream.is-arriving {
-  background: transparent;
-}
-
-.pollen-dream.is-arriving [data-screen='loading'] {
-  display: none;
-}
-
-.pollen-dream.is-arriving .pollen-dream__canvas {
-  opacity: 0;
-}
-
-.pollen-dream.is-diving .pollen-dream__canvas {
-  animation: pollen-dream-arrive 0.9s ease-out forwards;
-}
-
-@keyframes pollen-dream-arrive {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 .pollen-dream [hidden] {
   display: none !important;
 }
 
-.pollen-dream__canvas {
+/* Waiting for the flowers (or nothing to fly in): the page is covered. */
+.pollen-dream[data-state='loading'],
+.pollen-dream[data-state='error'] {
+  background: var(--pd-plate);
+}
+
+/* Takes every touch and click, so the garden underneath only flies. */
+.pollen-dream__surface {
   position: absolute;
   inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
   cursor: grab;
 }
 
-.pollen-dream.is-locked .pollen-dream__canvas {
+.pollen-dream.is-locked .pollen-dream__surface {
   cursor: none;
-}
-
-.pollen-dream__sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 /* ---------- Screens: title, pause, done, error ---------- */
@@ -145,11 +112,6 @@ html.pollen-dream-open body {
   font-size: 14px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-}
-
-.pollen-dream__goal {
-  padding-left: 12px;
-  border-left: 2px solid var(--pd-hero);
 }
 
 .pollen-dream__controls {
@@ -216,137 +178,15 @@ html.pollen-dream-open body {
 
 .pollen-dream__hud {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.pollen-dream__meter {
-  position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  left: max(16px, env(safe-area-inset-left));
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  background: color-mix(in srgb, var(--pd-plate) 80%, transparent);
-  border: 1px solid currentColor;
-}
-
-.pollen-dream__bar {
-  position: relative;
-  width: clamp(60px, 18vw, 160px);
-  height: 8px;
-  border: 1px solid currentColor;
-}
-
-.pollen-dream__bar span {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 0;
-  background: var(--pd-pollen);
-  transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.pollen-dream__meter.is-bumped {
-  animation: pollen-dream-bump 0.5s ease-out;
-}
-
-@keyframes pollen-dream-bump {
-  30% {
-    color: var(--pd-hero);
-    transform: scale(1.06);
-  }
-}
-
-.pollen-dream__hud-buttons {
-  position: absolute;
   top: max(16px, env(safe-area-inset-top));
   right: max(16px, env(safe-area-inset-right));
   display: flex;
   gap: 8px;
-  pointer-events: auto;
 }
 
 .pollen-dream__chip {
   padding: 8px 12px;
   background: color-mix(in srgb, var(--pd-plate) 80%, transparent);
-}
-
-.pollen-dream__chip[aria-pressed='false'] {
-  text-decoration: line-through;
-  opacity: 0.7;
-}
-
-/* Points to the nearest glowing flower; up means straight ahead. */
-.pollen-dream__compass {
-  position: absolute;
-  top: max(64px, calc(env(safe-area-inset-top) + 52px));
-  left: 50%;
-  width: 36px;
-  height: 36px;
-  margin-left: -18px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--pd-plate) 60%, transparent);
-}
-
-.pollen-dream__compass span {
-  position: absolute;
-  inset: 4px;
-  transform: rotate(var(--turn, 0rad));
-}
-
-.pollen-dream__compass span::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 0;
-  border: 6px solid transparent;
-  border-bottom: 12px solid var(--pd-hero);
-  border-top: 0;
-  transform: translateX(-50%);
-}
-
-/* The gathering ring fills while the player hovers in a flower's light. */
-.pollen-dream__reticle {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 34px;
-  height: 34px;
-  margin: -17px 0 0 -17px;
-  border-radius: 50%;
-  background: conic-gradient(var(--pd-hero) calc(var(--p, 0) * 360deg), transparent 0);
-  -webkit-mask: radial-gradient(circle, transparent 12px, #000 13px);
-  mask: radial-gradient(circle, transparent 12px, #000 13px);
-  opacity: 0.35;
-}
-
-.pollen-dream__reticle::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1px solid var(--pd-ink);
-  border-radius: 50%;
-}
-
-.pollen-dream__reticle.is-gathering {
-  opacity: 1;
-}
-
-.pollen-dream__prompt {
-  position: absolute;
-  left: 50%;
-  top: calc(50% + 34px);
-  margin: 0;
-  padding: 6px 10px;
-  background: color-mix(in srgb, var(--pd-plate) 70%, transparent);
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-.pollen-dream__prompt:empty {
-  display: none;
 }
 
 /* ---------- Touch controls ---------- */
@@ -406,23 +246,10 @@ html.pollen-dream-open body {
   .pollen-dream__screen {
     padding: 20px;
   }
-
-  .pollen-dream__meter > span:first-child {
-    display: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pollen-dream__screen,
-  .pollen-dream__meter.is-bumped {
+  .pollen-dream__screen {
     animation: none;
-  }
-
-  .pollen-dream__bar span {
-    transition: none;
-  }
-
-  .pollen-dream.is-diving .pollen-dream__canvas {
-    animation-duration: 0.01s;
   }
 }
