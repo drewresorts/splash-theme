@@ -18,7 +18,7 @@
  * this file reads the controls and draws the few buttons over it. New ways
  * of moving are modes in garden-splash.js (EXPLORE_MODES); new things to do
  * hook in through garden.exploreHooks. Opened from the menu, a #pollen-dream
- * link or the asterisk's hidden taps (snippets/pollen-dream-launcher.liquid);
+ * link or the hidden color combination (snippets/pollen-dream-launcher.liquid);
  * on a page without the splash it goes to the home page and opens there.
  */
 

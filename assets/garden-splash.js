@@ -37,8 +37,20 @@ import * as THREE from './three.module.min.js';
 import { SCHEMES } from './duet-schemes.js';
 
 const TAU = Math.PI * 2;
-// The flower colors that open the sky, in order (counted from the first swatch, 0): the 3rd, the 5th, then the 2nd.
-const SKY_COMBINATION = [2, 4, 1];
+/*
+ * Combinations of flower colors, picked in order like a combination lock,
+ * and what each opens. Colors count from the first swatch, 0: House 0,
+ * Camo 1, Cotton Candy 2, Circus 3, Neon 4, Tropical 5, Noir 6. A
+ * combination with fromStart begins from the colors already showing (its
+ * first color isn't picked, it's where the visitor starts); the rest must
+ * be picked within 30 seconds.
+ */
+const COMBINATIONS = [
+  // The sky view: Cotton Candy, Neon, Camo.
+  { colors: [2, 4, 1], opens: 'sky' },
+  // The game: from the house colors, Circus, Noir, Neon, Noir.
+  { colors: [0, 3, 6, 4, 6], opens: 'game', fromStart: true },
+];
 
 /*
  * The moon's age in days since the last new moon, and how much of its disc
@@ -776,6 +788,8 @@ class GardenSplash extends HTMLElement {
     }
     this.paintSwatches();
     this.applyScheme(this.storedScheme());
+    // The colors picked, in order, starting with those showing now (see COMBINATIONS).
+    this.picks = [{ i: this.scheme, at: -Infinity }];
     this.resize(true);
     // Layout waits for the logo's silhouette, which the flowers will form.
     this.loadMask().then(() => {
@@ -1060,21 +1074,13 @@ class GardenSplash extends HTMLElement {
 
   /*
    * A visitor picked a scheme: recolor every flower in place and remember it.
-   * Picked in the right order (SKY_COMBINATION), like a combination lock,
-   * the view turns over to the sky.
+   * Picked in the right order (COMBINATIONS), like a combination lock, the
+   * colors open the sky view or the game.
    */
   pickScheme(i) {
+    const before = this.scheme;
     this.applyScheme(i);
-    const now = performance.now();
-    const picks = (this.picks || []).filter((p) => now - p.at < 20000);
-    if (!picks.length || picks[picks.length - 1].i !== i) picks.push({ i, at: now });
-    this.picks = picks.slice(-SKY_COMBINATION.length);
-    if (!this.night && this.arranged && this.picks.length === SKY_COMBINATION.length && this.picks.every((p, k) => p.i === SKY_COMBINATION[k])) {
-      this.picks = [];
-      this.gestured = true;
-      // A moment to see the last color land, then over.
-      window.setTimeout(() => !this.night && this.toggleNight(), 500);
-    }
+    this.combination(before, i);
     try {
       const b = this.schemeButtons[i];
       window.localStorage.setItem(SCHEME_KEY, (b && b.dataset.scheme) || 'house');
@@ -1084,6 +1090,33 @@ class GardenSplash extends HTMLElement {
     if (!this.flowers.length) return;
     for (const f of this.flowers) this.sequence(f);
     this.buildMeshes();
+  }
+
+  /* Records a color pick and opens whatever its combination opens. */
+  combination(before, i) {
+    const now = performance.now();
+    const picks = this.picks || (this.picks = [{ i: before, at: -Infinity }]);
+    if (picks[picks.length - 1].i === i) return;
+    picks.push({ i, at: now });
+    if (picks.length > 8) picks.splice(0, picks.length - 8);
+    for (const C of COMBINATIONS) {
+      const n = C.colors.length;
+      const tail = picks.slice(-n);
+      if (tail.length < n || !tail.every((p, k) => p.i === C.colors[k])) continue;
+      // Every color that had to be picked, picked lately (where the visitor started can be from any time).
+      if (!tail.slice(C.fromStart ? 1 : 0).every((p) => now - p.at < 30000)) continue;
+      if (C.opens === 'sky' && (this.night || !this.arranged)) continue;
+      if (C.opens === 'game' && !this.eggEnabled()) continue;
+      this.picks = [{ i, at: now }];
+      this.gestured = true;
+      // A moment to see the last color land, then it opens.
+      window.setTimeout(() => {
+        if (C.opens === 'sky') {
+          if (!this.night) this.toggleNight();
+        } else window.dispatchEvent(new CustomEvent('duet:egg', { detail: { garden: this } }));
+      }, 600);
+      return;
+    }
   }
 
   /* ---------------- logo silhouette ---------------- */
@@ -1342,11 +1375,11 @@ class GardenSplash extends HTMLElement {
   }
 
   /*
-   * The hidden way into the Pollen Dream game: tapping the flowers of the
-   * logo's asterisk. Each tap makes them jump and spin a little more; the
-   * fifth (within a second and a half of the last) opens the game, which
-   * dives into this very arrangement. On the splash the taps land on the
-   * logo button; behind other pages, on any empty part of the page.
+   * Tapping the flowers of the logo's asterisk, for fun: each tap makes them
+   * jump and spin a little more, every fifth a bigger jump. (The game opens
+   * with a color combination now, see COMBINATIONS.) On the splash the taps
+   * land on the logo button; behind other pages, on any empty part of the
+   * page.
    */
   bindEgg() {
     if (this.logoTrigger) {
@@ -1403,10 +1436,11 @@ class GardenSplash extends HTMLElement {
     const r = this.getBoundingClientRect();
     if (!this.backdrop) this.pings.push({ x: cx - r.left, y: cy - r.top, t: 0 });
     for (const f of this.flowers) if (f.star && f.eye) f.eye.blinkAt = this.elapsed + Math.random() * 0.15;
+    // The taps are only for fun now (the game opens with a color combination, see COMBINATIONS):
+    // every fifth, a bigger jump.
     if (egg.taps >= 5) {
       egg.taps = 0;
       egg.pulse = 1.6;
-      window.dispatchEvent(new CustomEvent('duet:egg', { detail: { garden: this } }));
     }
     this.start();
   }
@@ -2477,7 +2511,7 @@ class GardenSplash extends HTMLElement {
 
   /*
    * The hidden sky: picking the flower colors in a combination (see
-   * SKY_COMBINATION and pickScheme) turns the view over. The camera sinks down onto
+   * COMBINATIONS and pickScheme) turns the view over. The camera sinks down onto
    * the bed, just above the flower heads, and tips back until it looks
    * straight up, as if lying on your back on the flowers: only the night
    * sky in view. Up there the white stars, one for each flower, gather
