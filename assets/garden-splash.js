@@ -4298,8 +4298,9 @@ float hillAt(vec2 p) {
   /*
    * At night, rarely, a blimp: a silver airship drifting slowly across
    * below the clouds, after the one in Scarface, with digital screens built
-   * into both flanks of the envelope, curving with it: the logo in LED
-   * pixels scrolling across them like a ticker. Built at unit size (2 long, nose along +x) and
+   * into both flanks of the envelope, curving with it: on one, the logo in
+   * LED pixels scrolling across like a ticker; on the other, the logo's
+   * asterisk in coral, bouncing across like a ball. Built at unit size (2 long, nose along +x) and
    * scaled when it flies.
    */
   buildBlimp(group, disposables) {
@@ -4368,7 +4369,8 @@ float hillAt(vec2 p) {
     // across the airship's side as on the real thing. Each reads left to right from its own side.
     const RX = 1;
     const RYZ = 0.3;
-    const band = (center, span, xs, lift, mirror) => {
+    // flip: the -y flank, where the band's first row (j = 0) is its bottom edge, not its top.
+    const band = (center, span, xs, lift, mirror, flip) => {
       const nx = 36;
       const na = 10;
       const pos = [];
@@ -4381,7 +4383,7 @@ float hillAt(vec2 p) {
           const sx = -xs + (2 * xs * i) / nx;
           const r = Math.sqrt(Math.max(0, 1 - sx * sx)) * RYZ * lift;
           pos.push(sx * RX, Math.cos(th) * r, Math.sin(th) * r);
-          uv.push(mirror ? 1 - i / nx : i / nx, 1 - j / na);
+          uv.push(mirror ? 1 - i / nx : i / nx, flip ? j / na : 1 - j / na);
         }
       }
       for (let j = 0; j < na; j++) {
@@ -4404,14 +4406,71 @@ float hillAt(vec2 p) {
     const screenMat = new THREE.MeshBasicMaterial({ map: tex, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     const frameMat = new THREE.MeshBasicMaterial({ color: toColor([12, 13, 20]), fog: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     disposables.push(tex, screenMat, frameMat);
+
+    // The other flank: the logo's asterisk in coral, bouncing across the screen like a ball,
+    // squashing as it lands and rolling as it goes. Redrawn each frame while the blimp is up.
+    // Its shape, finely, in an S x S grid; drawn N LEDs across on the screen.
+    const S = 40;
+    const N = 20;
+    const star = new Uint8Array(S * S);
+    const starFlowers = this.flowers.filter((f) => f.star);
+    if (starFlowers.length) {
+      // The asterisk the flowers make in the logo, fitted into a square.
+      const xs = starFlowers.map((f) => f.dest[0]);
+      const ys = starFlowers.map((f) => f.dest[1]);
+      const rr = starFlowers.reduce((a, f) => a + f.r, 0) / starFlowers.length;
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+      const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+      const size = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) + rr * 2;
+      for (const f of starFlowers) {
+        const u = ((f.dest[0] - cx) / size + 0.5) * S;
+        const v = ((f.dest[1] - cy) / size + 0.5) * S;
+        const rad = (f.r * 0.9 * S) / size;
+        for (let r = 0; r < S; r++) for (let c = 0; c < S; c++) if (Math.hypot(c + 0.5 - u, r + 0.5 - v) <= rad) star[r * S + c] = 1;
+      }
+    } else {
+      // No asterisk in the logo: a drawn one, six arms.
+      for (let r = 0; r < S; r++) {
+        for (let c = 0; c < S; c++) {
+          const dx = c + 0.5 - S / 2;
+          const dy = r + 0.5 - S / 2;
+          const d = Math.hypot(dx, dy);
+          const a = Math.atan2(dy, dx);
+          const arm = Math.abs(Math.sin(3 * a)) * d;
+          if (d < S / 2 && (arm < S * 0.085 || d < S * 0.12)) star[r * S + c] = 1;
+        }
+      }
+    }
+    const bounceCanvas = document.createElement('canvas');
+    bounceCanvas.width = cols * px;
+    bounceCanvas.height = rows * px;
+    // The unlit screen, drawn once; each frame starts from it.
+    const dark = document.createElement('canvas');
+    dark.width = bounceCanvas.width;
+    dark.height = bounceCanvas.height;
+    const dg = dark.getContext('2d');
+    dg.fillStyle = '#06070c';
+    dg.fillRect(0, 0, dark.width, dark.height);
+    dg.fillStyle = '#161a26';
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) dg.fillRect(c * px + 1, r * px + 1, px - 1, px - 1);
+    const bounceTex = new THREE.CanvasTexture(bounceCanvas);
+    bounceTex.colorSpace = THREE.SRGBColorSpace;
+    bounceTex.magFilter = THREE.NearestFilter;
+    bounceTex.minFilter = THREE.LinearFilter;
+    const bounceMat = new THREE.MeshBasicMaterial({ map: bounceTex, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    disposables.push(bounceTex, bounceMat);
+    const coral = this.heroColor || [240, 78, 98];
+    const bounce = { g: bounceCanvas.getContext('2d'), dark, tex: bounceTex, star, S, N, rows, cols, px, color: `rgb(${coral.map((v) => Math.round(v)).join(',')})` };
+
     // Angles round the long axis: 0 is the +y flank, PI the -y flank; a little below each, toward the ground.
+    // The logo on the +y flank; the bouncing asterisk on the -y flank.
     const tilt = 0.45;
     const span = 1.05;
-    for (const [center, mirror] of [[Math.PI + tilt, false], [-tilt, true]]) {
-      holder.add(new THREE.Mesh(band(center, span + 0.14, 0.62, 1.004, mirror), frameMat));
-      holder.add(new THREE.Mesh(band(center, span, 0.56, 1.008, mirror), screenMat));
+    for (const [center, mirror, flip, mat] of [[Math.PI + tilt, false, true, bounceMat], [-tilt, true, false, screenMat]]) {
+      holder.add(new THREE.Mesh(band(center, span + 0.14, 0.62, 1.004, mirror, flip), frameMat));
+      holder.add(new THREE.Mesh(band(center, span, 0.56, 1.008, mirror, flip), mat));
     }
-    return { holder, body, tex, strip, cols, active: null };
+    return { holder, body, tex, strip, cols, bounce, active: null };
   }
 
   flyBlimp(t, dt, show, p) {
@@ -4444,6 +4503,44 @@ float hillAt(vec2 p) {
     B.holder.rotation.z = Math.sin(t * 0.25 + A.ph) * 0.03;
     // The ticker: the logo slides in from the right and out to the left, about a screen's width every 3 seconds.
     B.tex.offset.x = (t * (B.cols / B.strip) / 3) % 1;
+    if (B.holder.visible) this.bounceStar(B.bounce, t);
+  }
+
+  /* The coral asterisk on the blimp's other screen, one frame: bouncing across like a ball. */
+  bounceStar(K, t) {
+    const { g, star, S, N, rows, cols, px } = K;
+    g.drawImage(K.dark, 0, 0);
+    // A bounce every 1.1 seconds: a parabola from the bottom row to near the top, squashing as it lands.
+    const ph = (t / 1.1) % 1;
+    const air = 4 * ph * (1 - ph);
+    const edge = Math.min(ph, 1 - ph);
+    const squash = edge < 0.07 ? 1 - 0.32 * (1 - edge / 0.07) : 1;
+    const sy = squash;
+    const sx = 1 / Math.sqrt(squash);
+    // Sliding left across the screen (as the logo does on the other side), right round again.
+    const travel = cols + N * 2;
+    const cx = cols + N - ((t * cols) / 3.4) % travel;
+    const floor = rows - 0.5;
+    const cy = floor - (N / 2) * sy - air * (rows - N - 1.5);
+    // Rolling as it goes.
+    const a = (cx / (N / 2)) * 0.9;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    g.fillStyle = K.color;
+    const reach = Math.ceil(N * 0.8);
+    const k = S / N;
+    for (let r = Math.max(0, Math.floor(cy - reach)); r <= Math.min(rows - 1, Math.ceil(cy + reach)); r++) {
+      for (let c = Math.max(0, Math.floor(cx - reach)); c <= Math.min(cols - 1, Math.ceil(cx + reach)); c++) {
+        // Back from this LED into the asterisk's own cells: undo the squash, then the roll.
+        const u = (c + 0.5 - cx) / sx;
+        const v = (r + 0.5 - cy) / sy;
+        const su = (ca * u + sa * v) * k + S / 2;
+        const sv = (-sa * u + ca * v) * k + S / 2;
+        if (su < 0 || sv < 0 || su >= S || sv >= S) continue;
+        if (star[Math.floor(sv) * S + Math.floor(su)]) g.fillRect(c * px + 1, r * px + 1, px - 1, px - 1);
+      }
+    }
+    K.tex.needsUpdate = true;
   }
 
   /*
