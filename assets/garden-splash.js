@@ -4994,8 +4994,9 @@ class GardenSplash extends HTMLElement {
     const kinds = {
       snow: { n: 600, o: instanced(600, flake, snowMat), far: 1000, aim: 0.08 },
       rain: { n: 300, o: rain, far: 1600, aim: 0.08 },
-      leaves: { n: 60, o: instanced(60, this.geometries.leaf, this.materials.foliage, leafColors), far: 700, aim: 0.2 },
-      petals: { n: 50, o: instanced(50, this.geometries.round, this.materials.petal, petalColors), far: 600, aim: 0.12 },
+      // Leaves and petals come from the trees and flowers round about, not the clouds: close, and plainly passing in front.
+      leaves: { n: 60, o: instanced(60, this.geometries.leaf, this.materials.foliage, leafColors), far: 360, aim: 0.2 },
+      petals: { n: 50, o: instanced(50, this.geometries.round, this.materials.petal, petalColors), far: 320, aim: 0.12 },
       pollen: { n: 120, o: instanced(120, flake, pollenMat), far: 420, aim: 0 },
     };
     for (const k of Object.values(kinds)) k.p = Array.from({ length: k.n }, () => ({ live: false, s: Math.random(), ph: Math.random() * TAU, spin: Math.random() * TAU }));
@@ -5087,8 +5088,9 @@ class GardenSplash extends HTMLElement {
           vx = W.wind * 1.5;
         } else if (name === 'leaves' || name === 'petals') {
           vz = -((name === 'leaves' ? 60 : 40) + 30 * q.s) * (0.75 + 0.45 * Math.abs(sway));
-          vx = W.wind * 1.4 + sway * 38;
-          vy = sway2 * 24;
+          // Seen from below a leaf mostly slips sideways as it tumbles, each drifting its own way.
+          vx = W.wind * 1.4 + sway * 70 + (q.s - 0.5) * 90;
+          vy = sway2 * 50 + (q.ph / Math.PI - 1) * 40;
           q.spin += dt * (1.5 + q.s * 2);
         } else {
           vz = 14 + 12 * q.s;
