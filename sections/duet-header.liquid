@@ -60,7 +60,7 @@
   data-duet-header
   data-game-access="{{ game_access }}"
   data-game-name="{{ game_name | escape }}"
-  style="--dh-ink: {{ section.settings.ink_color | default: '#191F6B' }}; --dh-bg: {{ section.settings.bar_color | default: '#FFFFFF' }}; --dh-panel: {{ section.settings.panel_color | default: '#FFFFFF' }}; --dh-logo-width: {{ section.settings.logo_width | default: 140 }}px; --dh-logo-width-mobile: {{ section.settings.logo_width_mobile | default: 100 }}px;"
+  style="--dh-ink: {{ section.settings.ink_color | default: '#191F6B' }}; --dh-bg: {{ section.settings.bar_color | default: '#FFFFFF' }}; --dh-panel: {{ section.settings.panel_color | default: '#FFFFFF' }}; --dh-logo-width: {{ section.settings.logo_width | default: 140 }}px; --dh-logo-width-mobile: {{ section.settings.logo_width_mobile | default: 100 }}px; --dh-text-size: {{ section.settings.text_size | default: 16 }}px; --dh-icon-size: {{ section.settings.icon_size | default: 22 }}px;"
 >
   <div class="duet-header__bar">
     {%- for zone in zones -%}
@@ -143,9 +143,16 @@
               </a>
             {%- when 'menu' -%}
               {%- assign menu_label = block.settings.label | default: 'Menu' -%}
+              {%- capture menu_vars -%}
+                {%- if block.settings.text_color != blank -%}--dh-btn-text: {{ block.settings.text_color }};{%- endif -%}
+                {%- if block.settings.outline_color != blank -%}--dh-btn-line: {{ block.settings.outline_color }};{%- endif -%}
+                {%- if block.settings.fill_color != blank -%}--dh-btn-fill: {{ block.settings.fill_color }};{%- endif -%}
+                --dh-btn-line-w: {{ block.settings.outline_width | default: 1 }}px; --dh-btn-radius: {{ block.settings.radius | default: 0 }}px;
+              {%- endcapture -%}
               <button
                 type="button"
-                class="duet-header__item duet-header__menu"
+                style="{{ menu_vars | strip }}"
+                class="duet-header__item duet-header__menu{% if block.settings.outline %} duet-header__menu--outline{% endif %}{% if block.settings.fill %} duet-header__menu--fill{% endif %}"
                 data-dh-open="menu"
                 aria-expanded="false"
                 aria-controls="DuetHeaderMenu-{{ section.id }}"
@@ -537,22 +544,66 @@
     cursor: pointer;
   }
 
-  /* The menu's word: larger, in lowercase. */
+  /* The menu's word, in lowercase, at the header's text size. */
   .duet-header__menu .duet-header__label {
-    font-size: 1.6rem;
+    font-size: var(--dh-text-size, 16px);
     letter-spacing: 0.06em;
     text-transform: lowercase;
   }
 
   .duet-header__item .svg-wrapper {
     display: inline-flex;
-    width: 2.2rem;
-    height: 2.2rem;
+    width: var(--dh-icon-size, 2.2rem);
+    height: var(--dh-icon-size, 2.2rem);
+  }
+
+  /*
+   * The menu button: its own text and icon color, and, each on its own, an
+   * outline and a fill (each in its own color), drawn a little inside the
+   * button's tap area so it sits like a button in the bar.
+   */
+  .duet-header__menu {
+    color: var(--dh-btn-text, inherit);
+  }
+
+  .duet-header__menu--fill {
+    color: var(--dh-btn-text, var(--dh-bg, #fff));
+  }
+
+  .duet-header__menu--outline,
+  .duet-header__menu--fill {
+    isolation: isolate;
+    padding: 0 1.2rem;
+  }
+
+  .duet-header__menu--outline::before,
+  .duet-header__menu--fill::before {
+    content: '';
+    position: absolute;
+    inset: 0.5rem 0;
+    z-index: -1;
+    border-radius: var(--dh-btn-radius, 0);
+    pointer-events: none;
+  }
+
+  .duet-header__menu--outline::before {
+    border: var(--dh-btn-line-w, 1px) solid var(--dh-btn-line, currentColor);
+  }
+
+  .duet-header__menu--fill::before {
+    background: var(--dh-btn-fill, var(--dh-ink, #191f6b));
   }
 
   .duet-header__item svg {
     width: 100%;
     height: 100%;
+  }
+
+  /* The cart icons are drawn small inside their square: a larger box, so they match the other icons. */
+  .duet-header__cart .svg-wrapper {
+    width: calc(var(--dh-icon-size, 2.2rem) * 1.8);
+    height: calc(var(--dh-icon-size, 2.2rem) * 1.8);
+    margin: calc(var(--dh-icon-size, 2.2rem) * -0.4);
   }
 
   .duet-header__item:hover {
@@ -852,6 +903,10 @@
       "default": "#FFFFFF"
     },
     {
+      "type": "header",
+      "content": "Sizes"
+    },
+    {
       "type": "range",
       "id": "logo_width",
       "label": "Logo width",
@@ -870,6 +925,27 @@
       "step": 4,
       "unit": "px",
       "default": 100
+    },
+    {
+      "type": "range",
+      "id": "text_size",
+      "label": "Text size",
+      "min": 10,
+      "max": 28,
+      "step": 1,
+      "unit": "px",
+      "default": 16,
+      "info": "Words in the header, such as the menu button's."
+    },
+    {
+      "type": "range",
+      "id": "icon_size",
+      "label": "Icon size",
+      "min": 14,
+      "max": 40,
+      "step": 1,
+      "unit": "px",
+      "default": 22
     },
     {
       "type": "header",
@@ -939,6 +1015,14 @@
           ]
         },
         { "type": "text", "id": "label", "label": "Text", "default": "Menu" },
+        { "type": "header", "content": "Button" },
+        { "type": "checkbox", "id": "outline", "label": "Outline", "default": false },
+        { "type": "checkbox", "id": "fill", "label": "Fill", "default": false, "info": "Outline and fill can be used together or on their own." },
+        { "type": "color", "id": "text_color", "label": "Text and icon color", "info": "Leave blank to match the header." },
+        { "type": "color", "id": "outline_color", "label": "Outline color", "info": "Leave blank to match the text." },
+        { "type": "color", "id": "fill_color", "label": "Fill color", "info": "Leave blank to use the header's icon and text color." },
+        { "type": "range", "id": "outline_width", "label": "Outline thickness", "min": 1, "max": 4, "step": 1, "unit": "px", "default": 1 },
+        { "type": "range", "id": "radius", "label": "Corner rounding", "min": 0, "max": 24, "step": 1, "unit": "px", "default": 0 },
         { "type": "checkbox", "id": "show", "label": "Show", "default": true, "info": "Off hides it but keeps its space, so the other blocks don't move. (The editor's eye icon removes it completely, and the others close the gap.)" },
         {
           "type": "select",
