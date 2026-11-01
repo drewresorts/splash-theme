@@ -25,6 +25,13 @@
           "settings": {
             "style": "text",
             "label": "Menu",
+            "outline": true,
+            "fill": false,
+            "text_color": "#000000",
+            "outline_color": "#000000",
+            "fill_color": "#FFFFFF",
+            "outline_width": 2,
+            "radius": 0,
             "show": true,
             "position": "right"
           }
@@ -68,8 +75,10 @@
         "ink_color": "#191f6b",
         "bar_color": "#ffffff",
         "panel_color": "#ffffff",
-        "logo_width": 140,
+        "logo_width": 100,
         "logo_width_mobile": 140,
+        "text_size": 16,
+        "icon_size": 22,
         "game_name": "Pollen Dream",
         "game_access": "secret"
       }
