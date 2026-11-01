@@ -104,7 +104,7 @@
         "weather": true,
         "season": "auto",
         "hemisphere": "north",
-        "sky": "auto",
+        "sky": "day",
         "hint_text": ""
       }
     }
