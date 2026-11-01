@@ -13,7 +13,7 @@
  *
  * Interaction is utilitarian: an ordinary pointer and a coordinate readout, hover or
  * tap to inspect, press and drag to speed up growth, tap to recolor a
- * flower (nearby eyes blink). Once arranged, the logo itself opens the menu.
+ * flower (nearby eyes blink). The menu opens from the menu button, not the logo.
  * The splash can be zoomed into, with no controls shown: scroll or pinch on
  * a trackpad, pinch on a touchscreen, or press and hold then slide up/down.
  * Zoomed in, dragging moves around and the render sharpens. Now and then a
@@ -1228,7 +1228,7 @@ class GardenSplash extends HTMLElement {
       const r = this.getBoundingClientRect();
       return [e.clientX - r.left, e.clientY - r.top];
     };
-    // The formed logo is a button over the flowers (it opens the menu): the
+    // The formed logo is a button over the flowers (for the hidden game): the
     // pointer over it is still over the bed, so it brushes the flowers.
     const onLogo = (e) => e.target instanceof Element && !!e.target.closest('[data-garden-logo-trigger]');
     const isUi = (e) => e.target instanceof Element && e.target.closest('[data-garden-ui]') && !onLogo(e);
@@ -1309,20 +1309,6 @@ class GardenSplash extends HTMLElement {
           e.preventDefault();
           e.stopImmediatePropagation();
           this.eggTap(e.clientX, e.clientY);
-          clearTimeout(this.eggMenuTimer);
-          // When the logo has an asterisk of its own, it belongs to the game:
-          // the rest of the logo opens the menu. A logo that is only the
-          // asterisk still opens the menu on a single tap.
-          const ownAsterisk = this.flowers.some((f) => f.star);
-          if (!ownAsterisk && this.egg && this.egg.taps === 1) {
-            this.eggMenuTimer = window.setTimeout(() => {
-              if (!this.egg || this.egg.taps !== 1) return;
-              this.egg.taps = 0;
-              const header = document.querySelector('duet-header');
-              if (header && header.openMenu) header.openMenu(this.logoTrigger);
-              else if (this.toggleNav) this.toggleNav(true);
-            }, 420);
-          }
         },
         true
       );
@@ -1536,7 +1522,7 @@ class GardenSplash extends HTMLElement {
     if (!this.backdrop) writeVisit({ seed: this.seed, entered: true });
   }
 
-  /* The formed logo is a button that opens the menu: it covers the logo's box. */
+  /* The formed logo is a button for the hidden game: it covers the logo's box. */
   placeLogoTrigger() {
     const btn = this.logoTrigger;
     if (!btn || !this.logoBox) return;

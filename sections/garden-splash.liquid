@@ -59,25 +59,11 @@
   <canvas class="garden-splash__overlay" data-garden-overlay aria-hidden="true"></canvas>
 
   {%- comment -%}
-    Once the flowers have formed the logo, the logo itself opens the menu.
-    garden-splash.js sizes this button to the logo and shows it then. With
-    no menu it is there only to catch taps on the asterisk (the hidden game).
+    Sized to the formed logo by garden-splash.js. It doesn't open the menu
+    (the menu button does that): it only catches taps on the asterisk (the
+    hidden game) and the traced "d" that opens the sky.
   {%- endcomment -%}
-  {%- if has_menu -%}
-    <button
-      type="button"
-      class="garden-splash__logo-trigger"
-      data-garden-logo-trigger
-      data-garden-nav-toggle
-      data-garden-ui
-      aria-expanded="false"
-      aria-controls="GardenSplashNav-{{ section.id }}"
-      aria-label="{{ shop.name | escape }}: {{ menu_label | escape }}"
-      hidden
-    ></button>
-  {%- else -%}
-    <button type="button" class="garden-splash__logo-trigger" data-garden-logo-trigger data-garden-ui tabindex="-1" aria-hidden="true" hidden></button>
-  {%- endif -%}
+  <button type="button" class="garden-splash__logo-trigger" data-garden-logo-trigger data-garden-ui tabindex="-1" aria-hidden="true" hidden></button>
 
   {%- capture logo_img -%}
     {%- if logo_image != blank -%}
@@ -265,12 +251,6 @@
       root.toggleNav = toggle;
       for (var i = 0; i < toggles.length; i++) {
         toggles[i].addEventListener('click', function () {
-          // With the site header on the page, the flower logo opens that same menu, out of the logo.
-          var header = document.querySelector('duet-header');
-          if (this.hasAttribute('data-garden-logo-trigger') && header && header.openMenu) {
-            header.openMenu(this);
-            return;
-          }
           toggle();
         });
       }
@@ -617,7 +597,7 @@
     padding: 0;
     border: 0;
     background: none;
-    cursor: pointer;
+    cursor: default;
     pointer-events: auto;
   }
 
@@ -630,7 +610,7 @@
     outline-offset: 4px;
   }
 
-  /* Without the 3D garden the flat logo in the center opens the menu instead. */
+  /* Without the 3D garden, the button sits over the flat logo in the center. */
   .garden-splash.is-static .garden-splash__logo-trigger {
     display: block;
     left: 50%;
