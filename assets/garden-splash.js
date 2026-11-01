@@ -5335,14 +5335,14 @@ float hillAt(vec2 p) {
     const kinds = {
       snow: { n: 420, o: instanced(420, flake, snowMat), pile: 'snow' },
       rain: { n: 260, o: add(new THREE.LineSegments(rainGeo, rainMat), rainGeo, rainMat) },
-      leaves: { n: 70, o: instanced(70, this.geometries.leaf, this.materials.foliage, leafColors), pile: 'leaves' },
+      leaves: { n: 34, o: instanced(34, this.geometries.leaf, this.materials.foliage, leafColors), pile: 'leaves' },
       petals: { n: 60, o: instanced(60, this.geometries.round, this.materials.petal, petalColors), pile: 'petals' },
       pollen: { n: 140, o: add(new THREE.Points(pollenGeo, pollenMat), pollenGeo, pollenMat) },
     };
     for (const k of Object.values(kinds)) k.p = Array.from({ length: k.n }, () => ({ x: 0, y: 0, z: -1e6, s: Math.random(), ph: Math.random() * TAU, spin: Math.random() * TAU, live: false }));
     const piles = {
       snow: { o: instanced(1500, flake, pileMat), items: [] },
-      leaves: { o: instanced(480, this.geometries.leaf, this.materials.foliage, leafColors), items: [] },
+      leaves: { o: instanced(260, this.geometries.leaf, this.materials.foliage, leafColors), items: [] },
       petals: { o: instanced(300, this.geometries.round, this.materials.petal, petalColors), items: [] },
       puddles: { o: instanced(40, disc, puddleMat), items: [] },
       splashes: { o: instanced(90, ring, splashMat), items: [] },
@@ -5487,14 +5487,29 @@ float hillAt(vec2 p) {
             q.x = lerp(b.x0 - 40, b.x1 + 40, Math.random());
             q.y = q.first ? b.y0 - 10 : lerp(b.y0, b.y1, Math.random());
           } else {
-            // Anywhere from the top down when the weather first starts, from the top after that.
-            q.z = q.first ? top : lerp(heads, top, Math.random());
-            // Aim for anywhere on the ground in view, starting upwind of it.
+            const blown = name === 'leaves' || name === 'petals';
+            // Aim for anywhere on the ground in view.
+            const gx = lerp(ground.x0 - 30, ground.x1 + 30, Math.random());
+            const gy = lerp(ground.y0 - 30, ground.y1 + 30, Math.random());
+            if (blown && q.first && this.explorer) {
+              // Seen from the ground, they come down from high overhead.
+              q.z = FLOOR_Z + 1600 + Math.random() * 900;
+            } else if (blown && q.first) {
+              // From high above, starting just out of sight: seen from above, a falling leaf drifts in
+              // from the edge of the view as it comes down (or, over the middle, drops in past the camera).
+              const f = Math.max(Math.abs(gx - this.w / 2) / (this.w / 2), Math.abs(gy - this.h / 2) / (this.h / 2));
+              q.z = clamp(this.camDist * (1 - f) + 40, top, this.camDist * 0.9);
+            } else {
+              // Anywhere from the top down when the weather first starts, from the top after that.
+              q.z = q.first ? top : lerp(heads, top, Math.random());
+            }
+            // Starting upwind of where it lands.
             const fall = (q.z - FLOOR_Z) / (name === 'rain' ? 1200 : name === 'snow' ? 80 : 75);
             const drift = W.wind * (name === 'rain' ? 1.5 : name === 'snow' ? 0.6 : 1.4) * fall;
-            q.x = lerp(ground.x0 - 30, ground.x1 + 30, Math.random()) - drift;
-            q.y = lerp(ground.y0 - 30, ground.y1 + 30, Math.random());
+            q.x = gx - drift;
+            q.y = gy;
           }
+          q.born = q.first ? t : -1e9;
           q.first = true;
         }
         // Each kind falls (or rises) in its own way. World y is up the screen, z up toward the camera.
@@ -5561,7 +5576,8 @@ float hillAt(vec2 p) {
           d.updateMatrix();
           kind.o.setMatrixAt(shown, d.matrix);
         } else {
-          const size = W.r * (name === 'leaves' ? 2.2 : 1.1);
+          // Grown in over its first moment, so none simply appears.
+          const size = W.r * (name === 'leaves' ? 2.2 : 1.1) * smooth(clamp((t - q.born) / 0.8, 0, 1));
           d.position.set(q.x, q.y, q.z);
           d.rotation.set(Math.sin(q.spin) * 1.2, q.spin * 0.7, q.spin + q.ph);
           d.scale.set(size, size * 0.6, size * 0.6);
@@ -5637,9 +5653,9 @@ float hillAt(vec2 p) {
     const kinds = {
       snow: { n: 600, o: instanced(600, flake, snowMat), far: 1000, aim: 0.08 },
       rain: { n: 300, o: rain, far: 1600, aim: 0.08 },
-      // Leaves and petals come from the trees and flowers round about, not the clouds: close, and plainly passing in front.
-      leaves: { n: 60, o: instanced(60, this.geometries.leaf, this.materials.foliage, leafColors), far: 360, aim: 0 },
-      petals: { n: 50, o: instanced(50, this.geometries.round, this.materials.petal, petalColors), far: 320, aim: 0 },
+      // Leaves and petals come from high up, well in front of the clouds, and fade in as they come.
+      leaves: { n: 28, o: instanced(28, this.geometries.leaf, this.materials.foliage, leafColors), far: 950, aim: 0 },
+      petals: { n: 50, o: instanced(50, this.geometries.round, this.materials.petal, petalColors), far: 850, aim: 0 },
       pollen: { n: 120, o: instanced(120, flake, pollenMat), far: 420, aim: 0 },
     };
     for (const k of Object.values(kinds)) k.p = Array.from({ length: k.n }, () => ({ live: false, s: Math.random(), ph: Math.random() * TAU, spin: Math.random() * TAU }));
@@ -5715,6 +5731,7 @@ float hillAt(vec2 p) {
           q.ox = q.x - q.tx;
           q.oy = q.y - q.ty;
           q.d0 = depth;
+          q.born = q.seen ? t : -1e9;
           q.seen = true;
         }
         const sway = Math.sin(t * (1.1 + q.s) + q.ph);
@@ -5786,7 +5803,7 @@ float hillAt(vec2 p) {
             // Never bigger than a soft fleck, however close it passes.
             d.scale.setScalar(Math.min(name === 'snow' ? 2.2 + q.s * 1.8 : 0.8 + q.s * 0.6, depth * 0.05));
           } else {
-            const size = Math.min(r * (name === 'leaves' ? 2.2 : 1.1), depth * 0.3);
+            const size = Math.min(r * (name === 'leaves' ? 2.2 : 1.1), depth * 0.3) * smooth(clamp((t - q.born) / 1, 0, 1));
             d.rotation.set(Math.sin(q.spin) * 1.2, q.spin * 0.7, q.spin + q.ph);
             d.scale.set(size, size * 0.6, size * 0.6);
           }
