@@ -537,6 +537,13 @@
     cursor: pointer;
   }
 
+  /* The menu's word: larger, in lowercase. */
+  .duet-header__menu .duet-header__label {
+    font-size: 1.6rem;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+  }
+
   .duet-header__item .svg-wrapper {
     display: inline-flex;
     width: 2.2rem;
@@ -778,7 +785,8 @@
       padding: 0 0.4rem;
     }
 
-    .duet-header__label {
+    /* Room is short on a phone: a button with an icon shows just the icon. (Text-only, it keeps its word.) */
+    .duet-header__item:has(.svg-wrapper) .duet-header__label {
       display: none;
     }
   }
