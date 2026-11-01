@@ -1,48 +1,51 @@
 /**
  * Pollen Dream
  *
- * Free first-person flight through the splash's own garden: the flowers in
- * their logo on the soil, and overhead the sky of the sky view (the "d"
- * easter egg), all of it one world, at the visitor's time of day. The bee,
- * the season's weather, the planes, the blimp, the birds, the sun and the
- * moon all carry on as they do on the page. There is nothing to win: just
- * fly about, and no instructions: the controls are the usual ones
- * (mouse or drag to look, WASD or arrows, Space and Shift; a thumb stick
- * and buttons on phones).
+ * Exploring the splash's own garden in the first person: on foot through
+ * the grass and the flowers of the logo, across the hills, under the sky
+ * of the sky view (the "d" easter egg), all of it one world at the
+ * visitor's time of day. The bee, the season's weather, the planes, the
+ * blimp, the birds, the sun and the moon carry on as they do on the page.
  *
- * The world is the page's garden itself (garden-splash.js startFlight());
- * this file only adds the controls and the screens over it. Opened from the
- * menu, a #pollen-dream link or the asterisk's hidden taps
- * (snippets/pollen-dream-launcher.liquid). On a page without the splash it
- * goes to the home page and opens there.
+ * No instructions: the controls are the ones every first-person game uses.
+ *   Computer: click to look with the mouse (Esc lets go and pauses); W A S D
+ *   or the arrows to walk, Space to jump, Shift to run.
+ *   Phone: move the phone itself to look round (where the phone allows it),
+ *   or drag anywhere; the thumb stick walks (pushed all the way, runs); Jump.
+ *
+ * The world is the page's garden itself (garden-splash.js startExplore());
+ * this file reads the controls and draws the few buttons over it. New ways
+ * of moving are modes in garden-splash.js (EXPLORE_MODES); new things to do
+ * hook in through garden.exploreHooks. Opened from the menu, a #pollen-dream
+ * link or the asterisk's hidden taps (snippets/pollen-dream-launcher.liquid);
+ * on a page without the splash it goes to the home page and opens there.
  */
 
-const LOOK = { mouse: 0.0024, drag: 0.005, touch: 0.006 };
+const LOOK = { mouse: 0.0022, drag: 0.005, touch: 0.0065 };
 
 const STRINGS = {
   title: 'Pollen Dream',
   eyebrow: 'Duet',
-  resume: 'Keep flying',
+  resume: 'Keep going',
   exit: 'Back to Duet',
   pause: 'Pause',
   paused: 'Paused',
   loading: 'Waiting for the flowers…',
-  failed: 'The garden can’t fly here.',
-  failedHelp: 'Flying needs the garden on the home page, with WebGL turned on.',
-  up: 'Up',
-  down: 'Down',
-  fast: 'Fast',
+  failed: 'The garden can’t open here.',
+  failedHelp: 'Exploring needs the garden on the home page, with WebGL turned on.',
+  jump: 'Jump',
+  motion: 'Tilt to look',
 };
 
 let current = null;
 
-/* Opens the flight, or brings the open one back into focus. */
+/* Opens the garden to explore, or brings the open one back into focus. */
 export async function openPollenDream(opts) {
   if (current) {
     current.focusScreen();
     return current;
   }
-  current = new Flight(opts || {});
+  current = new Explore(opts || {});
   try {
     await current.open();
   } catch (e) {
@@ -56,25 +59,61 @@ export async function openPollenDream(opts) {
 function splashGarden(preferred) {
   const all = Array.from(document.querySelectorAll('garden-splash'));
   if (preferred && !all.includes(preferred)) all.unshift(preferred);
-  return all.find((g) => typeof g.canFly === 'function' && g.canFly()) || null;
+  return all.find((g) => typeof g.canExplore === 'function' && g.canExplore()) || null;
 }
 
 /* A splash garden that is still growing: worth waiting for. */
 function growingGarden() {
-  return Array.from(document.querySelectorAll('garden-splash')).find((g) => typeof g.canFly === 'function' && !g.failed && !g.backdrop && !g.background && !g.arranged) || null;
+  return Array.from(document.querySelectorAll('garden-splash')).find((g) => typeof g.canExplore === 'function' && !g.failed && !g.backdrop && !g.background && !g.arranged) || null;
 }
 
-function homeUrl() {
-  const root = (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';
-  return root + '#pollen-dream';
+function rootPath() {
+  return (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';
 }
 
 function onHome() {
-  const root = (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';
+  const root = rootPath();
   return location.pathname === root || location.pathname === root.replace(/\/$/, '');
 }
 
-class Flight {
+/*
+ * Where the phone is pointing, from its orientation (degrees, as
+ * deviceorientation gives them) and the screen's rotation: the direction
+ * out of the back of the screen as { yaw, pitch } in radians. yaw turns to
+ * the left as it grows; pitch is up from level. The same sums as three.js's
+ * old DeviceOrientationControls, without three.js.
+ */
+function phoneAim(alpha, beta, gamma, screenAngle) {
+  const r = Math.PI / 180;
+  const x = beta * r;
+  const y = alpha * r;
+  const z = -gamma * r;
+  const c1 = Math.cos(x / 2);
+  const c2 = Math.cos(y / 2);
+  const c3 = Math.cos(z / 2);
+  const s1 = Math.sin(x / 2);
+  const s2 = Math.sin(y / 2);
+  const s3 = Math.sin(z / 2);
+  // Euler YXZ to a quaternion.
+  let q = [s1 * c2 * c3 + c1 * s2 * s3, c1 * s2 * c3 - s1 * c2 * s3, c1 * c2 * s3 - s1 * s2 * c3, c1 * c2 * c3 + s1 * s2 * s3];
+  const mul = (a, b) => [
+    a[0] * b[3] + a[3] * b[0] + a[1] * b[2] - a[2] * b[1],
+    a[1] * b[3] + a[3] * b[1] + a[2] * b[0] - a[0] * b[2],
+    a[2] * b[3] + a[3] * b[2] + a[0] * b[1] - a[1] * b[0],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+  ];
+  // Looking out of the back of the phone, not its top edge; then the screen's own turn.
+  q = mul(q, [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]);
+  const o = (-screenAngle * r) / 2;
+  q = mul(q, [0, 0, Math.sin(o), Math.cos(o)]);
+  // The view's forward direction, (0, 0, -1) turned by q.
+  const v = [0, 0, -1];
+  const t = [2 * (q[1] * v[2] - q[2] * v[1]), 2 * (q[2] * v[0] - q[0] * v[2]), 2 * (q[0] * v[1] - q[1] * v[0])];
+  const f = [v[0] + q[3] * t[0] + (q[1] * t[2] - q[2] * t[1]), v[1] + q[3] * t[1] + (q[2] * t[0] - q[0] * t[2]), v[2] + q[3] * t[2] + (q[0] * t[1] - q[1] * t[0])];
+  return { yaw: Math.atan2(-f[0], -f[2]), pitch: Math.asin(Math.max(-1, Math.min(1, f[1]))) };
+}
+
+class Explore {
   constructor(opts) {
     this.opts = opts;
     this.state = 'loading';
@@ -82,20 +121,23 @@ class Flight {
     this.keys = new Set();
     this.stick = { id: null, x: 0, y: 0 };
     this.drag = { id: null, x: 0, y: 0 };
-    this.holds = { up: false, down: false, fast: false };
+    this.holds = { jump: false };
+    // Looking by moving the phone: on once it is allowed and the phone reports it.
+    this.motion = { on: false, wanted: true, allowed: false, seen: false, yaw: 0, pitch: 0, offYaw: null, offPitch: 0 };
     this.touch = window.matchMedia('(pointer: coarse)').matches;
     this.returnFocus = opts.returnFocus || document.activeElement;
-    this.title = String(opts.title || STRINGS.title).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   }
 
   /* ---------------- open & close ---------------- */
 
   async open() {
+    // Asked for at once, while the tap that opened this still counts (iPhones only ask on a tap).
+    const asked = this.touch ? this.askMotion() : null;
     let garden = splashGarden(this.opts.source);
     if (!garden && !growingGarden() && !onHome()) {
-      // The world to fly in is the home page's garden.
+      // The world to explore is the home page's garden.
       current = null;
-      window.location.assign(homeUrl());
+      window.location.assign(rootPath() + '#pollen-dream');
       return;
     }
     await this.loadCss();
@@ -110,14 +152,15 @@ class Flight {
       garden = splashGarden();
     }
     if (this.closed) return;
-    if (!garden || !garden.startFlight()) {
+    if (!garden || !garden.startExplore('walk')) {
       this.showError();
       return;
     }
     this.garden = garden;
     this.bindInput();
-    // No instructions: straight into the air. The controls are the usual ones, there to be found.
-    this.fly();
+    if (asked) asked.then((ok) => !this.closed && this.motionReady(ok));
+    // No instructions: straight in. The controls are the usual ones, there to be found.
+    this.play();
     this.tick();
   }
 
@@ -140,7 +183,7 @@ class Flight {
     cancelAnimationFrame(this.raf);
     this.abort.abort();
     if (document.pointerLockElement === this.surface) document.exitPointerLock();
-    if (this.garden) this.garden.stopFlight();
+    if (this.garden) this.garden.stopExplore();
     if (this.root) this.root.remove();
     document.documentElement.classList.remove('pollen-dream-open');
     current = null;
@@ -156,20 +199,19 @@ class Flight {
     root.className = 'pollen-dream';
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-modal', 'true');
-    root.setAttribute('aria-label', String(this.opts.title || STRINGS.title));
+    root.setAttribute('aria-label', String(this.opts.title || S.title));
     root.tabIndex = -1;
     root.innerHTML = `
       <div class="pollen-dream__surface" data-surface aria-hidden="true"></div>
       <div class="pollen-dream__hud" data-hud hidden>
+        <button type="button" class="pollen-dream__chip" data-action="motion" aria-pressed="false" hidden>${S.motion}</button>
         <button type="button" class="pollen-dream__chip" data-action="pause">${S.pause}</button>
         <button type="button" class="pollen-dream__chip" data-action="exit">${S.exit}</button>
       </div>
       <div class="pollen-dream__touch" data-touch hidden>
         <div class="pollen-dream__stick" data-stick aria-hidden="true"><span data-knob></span></div>
         <div class="pollen-dream__holds">
-          <button type="button" class="pollen-dream__hold" data-hold="up">${S.up}</button>
-          <button type="button" class="pollen-dream__hold" data-hold="fast">${S.fast}</button>
-          <button type="button" class="pollen-dream__hold" data-hold="down">${S.down}</button>
+          <button type="button" class="pollen-dream__hold" data-hold="jump">${S.jump}</button>
         </div>
       </div>
       <section class="pollen-dream__screen" data-screen="loading" hidden>
@@ -177,7 +219,7 @@ class Flight {
         <p class="pollen-dream__lead">${S.loading}</p>
       </section>
       <section class="pollen-dream__screen" data-screen="paused" hidden>
-        <h2 class="pollen-dream__title" id="PollenDreamTitle">${S.paused}</h2>
+        <h2 class="pollen-dream__title">${S.paused}</h2>
         <div class="pollen-dream__actions">
           <button type="button" class="pollen-dream__button pollen-dream__button--primary" data-action="resume">${S.resume}</button>
           <button type="button" class="pollen-dream__button" data-action="exit">${S.exit}</button>
@@ -194,17 +236,17 @@ class Flight {
     this.root = root;
     const q = (s) => root.querySelector(s);
     this.surface = q('[data-surface]');
-    this.ui = { hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]') };
+    this.ui = { hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]'), motion: q('[data-action="motion"]') };
   }
 
   show(state) {
     this.state = state;
     this.root.dataset.state = state;
     this.root.querySelectorAll('[data-screen]').forEach((s) => (s.hidden = s.dataset.screen !== state));
-    const flying = state === 'fly';
-    this.ui.hud.hidden = !flying;
-    this.ui.touch.hidden = !(flying && this.touch);
-    if (!flying) this.clearInput();
+    const playing = state === 'play';
+    this.ui.hud.hidden = !playing;
+    this.ui.touch.hidden = !(playing && this.touch);
+    if (!playing) this.clearInput();
     this.focusScreen();
   }
 
@@ -229,9 +271,10 @@ class Flight {
         const b = e.target.closest('[data-action]');
         if (!b) return;
         const act = b.dataset.action;
-        if (act === 'resume') this.fly();
+        if (act === 'resume') this.play();
         else if (act === 'pause') this.pause();
         else if (act === 'exit') this.close();
+        else if (act === 'motion') this.toggleMotion();
       },
       on
     );
@@ -254,8 +297,8 @@ class Flight {
       (e) => {
         if (e.key !== 'Escape') return;
         e.stopPropagation();
-        if (this.state === 'fly') this.pause();
-        else if (this.state === 'paused') this.fly();
+        if (this.state === 'play') this.pause();
+        else if (this.state === 'paused') this.play();
         else this.close();
       },
       { signal: this.abort.signal, capture: true }
@@ -268,11 +311,11 @@ class Flight {
   bindInput() {
     const on = { signal: this.abort.signal };
     const capture = { signal: this.abort.signal, capture: true };
-    const KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'KeyC', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight'];
+    const KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyQ', 'KeyC'];
     window.addEventListener(
       'keydown',
       (e) => {
-        if (this.state !== 'fly' || !KEYS.includes(e.code)) return;
+        if (this.state !== 'play' || !KEYS.includes(e.code)) return;
         e.preventDefault();
         e.stopPropagation();
         this.keys.add(e.code);
@@ -280,16 +323,16 @@ class Flight {
       capture
     );
     window.addEventListener('keyup', (e) => this.keys.delete(e.code), capture);
-    window.addEventListener('blur', () => this.state === 'fly' && this.pause(), on);
-    document.addEventListener('visibilitychange', () => document.hidden && this.state === 'fly' && this.pause(), on);
+    window.addEventListener('blur', () => this.state === 'play' && this.pause(), on);
+    document.addEventListener('visibilitychange', () => document.hidden && this.state === 'play' && this.pause(), on);
 
-    // Mouse: captured after Fly, moving it looks around (Esc lets it go and pauses).
-    // Where it can't be captured, dragging looks around instead.
+    // Mouse: a click captures it and moving it looks round, as in any first-person game (Esc lets go and pauses).
+    // Where it can't be captured, dragging looks round instead.
     document.addEventListener(
       'pointerlockchange',
       () => {
         const locked = document.pointerLockElement === this.surface;
-        if (!locked && this.locked && this.state === 'fly') this.pause();
+        if (!locked && this.locked && this.state === 'play') this.pause();
         this.locked = locked;
         this.root.classList.toggle('is-locked', locked);
       },
@@ -298,7 +341,7 @@ class Flight {
     document.addEventListener(
       'mousemove',
       (e) => {
-        if (this.state === 'fly' && this.locked) this.garden.flyLook(e.movementX * LOOK.mouse, e.movementY * LOOK.mouse);
+        if (this.state === 'play' && this.locked) this.look(e.movementX * LOOK.mouse, e.movementY * LOOK.mouse);
       },
       on
     );
@@ -306,7 +349,7 @@ class Flight {
     s.addEventListener(
       'pointerdown',
       (e) => {
-        if (this.state !== 'fly') return;
+        if (this.state !== 'play') return;
         if (e.pointerType === 'touch' && !this.touch) {
           this.touch = true;
           this.ui.touch.hidden = false;
@@ -327,7 +370,7 @@ class Flight {
       (e) => {
         const d = this.drag;
         if (e.pointerId !== d.id) return;
-        this.garden.flyLook((e.clientX - d.x) * d.k, (e.clientY - d.y) * d.k);
+        this.look((e.clientX - d.x) * d.k, (e.clientY - d.y) * d.k);
         d.x = e.clientX;
         d.y = e.clientY;
       },
@@ -372,6 +415,19 @@ class Flight {
       b.addEventListener('pointerleave', set(false), on);
       b.addEventListener('contextmenu', (e) => e.preventDefault(), on);
     });
+
+    // The phone's own movement.
+    window.addEventListener('deviceorientation', (e) => this.onOrient(e), on);
+  }
+
+  /* Looks round by dx across and dy up and down (radians). With the phone steering, it shifts where the phone's aim points. */
+  look(dx, dy) {
+    const M = this.motion;
+    if (M.on && M.offYaw !== null) {
+      M.offYaw -= dx;
+      M.offPitch -= dy;
+      this.aim();
+    } else this.garden.exploreLook(dx, dy);
   }
 
   moveStick(e) {
@@ -389,7 +445,7 @@ class Flight {
     this.ui.knob.style.transform = `translate(${dx * 50}%, ${dy * 50}%)`;
   }
 
-  /* Captures the mouse for looking around. False where it can't be (touch, or the theme editor's frame). */
+  /* Captures the mouse for looking round. False where it can't be (touch, or the theme editor's frame). */
   lock() {
     if (this.touch || !this.surface.requestPointerLock) return false;
     try {
@@ -400,6 +456,91 @@ class Flight {
       return false;
     }
   }
+
+  /* ---------------- looking by moving the phone ---------------- */
+
+  /* Asks to read the phone's movement where that needs asking (iPhone). Resolves true if it may be read. */
+  askMotion() {
+    const D = window.DeviceOrientationEvent;
+    if (!D) return Promise.resolve(false);
+    if (typeof D.requestPermission !== 'function') return Promise.resolve(true);
+    try {
+      return D.requestPermission()
+        .then((r) => r === 'granted')
+        .catch(() => false);
+    } catch (e) {
+      return Promise.resolve(false);
+    }
+  }
+
+  /* Whether it may be read. Where it must be asked and wasn't allowed yet, the Tilt to look button asks again on a tap. */
+  motionReady(ok) {
+    const M = this.motion;
+    M.allowed = M.allowed || ok;
+    if (!M.allowed && window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+      M.wanted = false;
+      this.ui.motion.hidden = false;
+      this.syncMotion();
+    }
+  }
+
+  toggleMotion() {
+    const M = this.motion;
+    if (!M.allowed) {
+      this.askMotion().then((ok) => {
+        M.allowed = ok;
+        M.wanted = ok;
+        M.offYaw = null;
+        this.syncMotion();
+      });
+      return;
+    }
+    M.wanted = !M.wanted;
+    M.offYaw = null;
+    if (!M.wanted) {
+      M.on = false;
+      this.garden.exploreAim(null);
+    }
+    this.syncMotion();
+  }
+
+  syncMotion() {
+    const M = this.motion;
+    this.ui.motion.setAttribute('aria-pressed', String(!!(M.wanted && M.allowed)));
+  }
+
+  onOrient(e) {
+    const M = this.motion;
+    if (e.alpha === null || e.beta === null) return;
+    if (!M.seen) {
+      // The phone does report its movement: offer the switch, and use it from now on.
+      M.seen = true;
+      M.allowed = true;
+      this.ui.motion.hidden = false;
+      this.syncMotion();
+    }
+    if (!M.wanted || this.state !== 'play') return;
+    const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    const a = phoneAim(e.alpha, e.beta, e.gamma, angle);
+    M.yaw = a.yaw;
+    M.pitch = a.pitch;
+    if (M.offYaw === null) {
+      // Starting: whichever way the phone faces now is straight ahead in the garden.
+      const E = this.garden.explorer;
+      if (!E || E.intro < 1) return;
+      M.offYaw = E.yaw - a.yaw;
+      M.offPitch = 0;
+    }
+    M.on = true;
+    this.aim();
+  }
+
+  aim() {
+    const M = this.motion;
+    this.garden.exploreAim(M.yaw + M.offYaw, M.pitch + M.offPitch);
+  }
+
+  /* ---------------- each frame ---------------- */
 
   clearInput() {
     this.keys.clear();
@@ -412,18 +553,21 @@ class Flight {
 
   /* What the controls say now, handed to the garden every frame. */
   send() {
-    const F = this.garden && this.garden.flight;
-    if (!F) return;
+    const E = this.garden && this.garden.explorer;
+    if (!E) return;
     const k = this.keys;
     const has = (...codes) => codes.some((c) => k.has(c));
-    const on = this.state === 'fly';
+    const on = this.state === 'play';
     const st = this.stick;
     const dead = (v) => (Math.abs(v) < 0.12 ? 0 : (v - Math.sign(v) * 0.12) / 0.88);
-    F.input.f = on ? (has('KeyW', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0) - dead(st.y) : 0;
-    F.input.r = on ? (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0) : 0;
-    F.input.turn = on ? (has('ArrowRight') ? 1 : 0) - (has('ArrowLeft') ? 1 : 0) + dead(st.x) : 0;
-    F.input.u = on ? (has('Space', 'KeyE') || this.holds.up ? 1 : 0) - (has('KeyQ', 'KeyC') || this.holds.down ? 1 : 0) : 0;
-    F.input.fast = on && (has('ShiftLeft', 'ShiftRight') || this.holds.fast);
+    const push = Math.hypot(st.x, st.y);
+    const inp = E.input;
+    inp.f = on ? (has('KeyW', 'ArrowUp') ? 1 : 0) - (has('KeyS', 'ArrowDown') ? 1 : 0) - dead(st.y) : 0;
+    inp.r = on ? (has('KeyD') ? 1 : 0) - (has('KeyA') ? 1 : 0) + dead(st.x) : 0;
+    inp.turn = on ? (has('ArrowRight') ? 1 : 0) - (has('ArrowLeft') ? 1 : 0) : 0;
+    inp.jump = on && (has('Space') || this.holds.jump);
+    inp.up = on ? (has('Space', 'KeyE') ? 1 : 0) - (has('KeyQ', 'KeyC') ? 1 : 0) : 0;
+    inp.run = on && (has('ShiftLeft', 'ShiftRight') || push > 0.92);
   }
 
   tick() {
@@ -434,10 +578,10 @@ class Flight {
 
   /* ---------------- states ---------------- */
 
-  fly() {
-    this.show('fly');
+  play() {
+    this.show('play');
     this.root.focus({ preventScroll: true });
-    // The mouse is captured by a click in the garden (see bindInput), so Back to Duet stays in reach till then.
+    // The mouse is captured by a click in the garden, so Back to Duet stays in reach until then.
   }
 
   pause() {

@@ -304,6 +304,94 @@ const STAGE = {
 
 /* Heights above the z = 0 plane, where screen and world units match. */
 const FLOOR_Z = -45; // where seeds land and stems start; no ground is drawn
+const EYE = 62; // eye height above the ground, walking: the flower heads come up to about the chest (see startExplore)
+const LOOK_LIMIT = 1.55; // up and down, all but straight overhead and underfoot
+
+/*
+ * How the visitor moves while exploring (see startExplore): each mode moves
+ * the explorer E one frame from E.input ({ f, r, turn, up, jump, run }: f
+ * forward/back and r right/left from -1 to 1, up for flying, jump and run
+ * held). Walking is the default; add a mode here and switch to it with
+ * setExploreMode().
+ */
+const EXPLORE_MODES = {
+  walk(G, E, dt, span) {
+    const inp = E.input;
+    // A smaller garden (a phone's) is crossed at a slower pace.
+    const speed = (inp.run ? 300 : 125) * clamp(span / 1280, 0.6, 1.2);
+    const fx = -Math.sin(E.yaw);
+    const fy = Math.cos(E.yaw);
+    const rx = fy;
+    const ry = -fx;
+    let wx = fx * inp.f + rx * inp.r;
+    let wy = fy * inp.f + ry * inp.r;
+    const m = Math.hypot(wx, wy);
+    if (m > 1) {
+      wx /= m;
+      wy /= m;
+    }
+    // Quick to start and stop on the ground, little control in the air.
+    const k = 1 - Math.exp(-dt * (E.grounded ? 10 : 1.5));
+    E.vx += (wx * speed - E.vx) * k;
+    E.vy += (wy * speed - E.vy) * k;
+    E.x += E.vx * dt;
+    E.y += E.vy * dt;
+    const ground = FLOOR_Z + G.hillAt(E.x, E.y) + E.eye;
+    if (E.grounded && inp.jump) {
+      E.vz = 330;
+      E.grounded = false;
+    }
+    if (E.grounded && E.z - ground < 18) {
+      // Following the ground up and down the hills.
+      E.z = ground;
+      E.vz = 0;
+    } else {
+      E.vz -= 950 * dt;
+      E.z += E.vz * dt;
+      E.grounded = false;
+      if (E.z <= ground) {
+        E.z = ground;
+        E.vz = 0;
+        E.grounded = true;
+      }
+    }
+    // A gentle bob with each stride.
+    const pace = Math.hypot(E.vx, E.vy);
+    E.stride += pace * dt * 0.055;
+    const bob = E.grounded && !G.reduced ? Math.sin(E.stride * 2) * Math.min(1, pace / 125) * 1.8 : 0;
+    E.bob += (bob - E.bob) * (1 - Math.exp(-dt * 12));
+  },
+
+  fly(G, E, dt, span) {
+    const inp = E.input;
+    // Fly where you look; strafe level; rise and sink straight up and down.
+    const speed = span * (inp.run ? 1.5 : 0.45);
+    const cp = Math.cos(E.pitch);
+    const fx = -Math.sin(E.yaw) * cp;
+    const fy = Math.cos(E.yaw) * cp;
+    const fz = Math.sin(E.pitch);
+    const rx = Math.cos(E.yaw);
+    const ry = Math.sin(E.yaw);
+    const k = 1 - Math.exp(-dt * 2.4);
+    E.vx += ((fx * inp.f + rx * inp.r) * speed - E.vx) * k;
+    E.vy += ((fy * inp.f + ry * inp.r) * speed - E.vy) * k;
+    E.vz += ((fz * inp.f + inp.up) * speed - E.vz) * k;
+    E.x += E.vx * dt;
+    E.y += E.vy * dt;
+    E.z += E.vz * dt;
+    E.bob = 0;
+    // Held in by the land below and the clouds above.
+    const floor = FLOOR_Z + G.hillAt(E.x, E.y) + 6;
+    const top = G.sky ? G.sky.eye.z + G.sky.D * 1.25 : span * 4;
+    if (E.z < floor) {
+      E.z = floor;
+      E.vz = Math.max(0, E.vz);
+    } else if (E.z > top) {
+      E.z = lerp(E.z, top, 1 - Math.exp(-dt * 3));
+      E.vz = Math.min(0, E.vz);
+    }
+  },
+};
 const FOV = 50;
 const BLINK = 0.2;
 const ARRANGE = 2.4; // seconds for the bed to glide into the logo
@@ -1400,8 +1488,8 @@ class GardenSplash extends HTMLElement {
     const rect = this.getBoundingClientRect();
     const W = Math.max(1, Math.round(rect.width));
     const H = Math.max(1, Math.round(rect.height));
-    if (this.flight && !initial) {
-      // Flying, the garden fills the screen: only the picture changes size, the bed stays as it is.
+    if (this.explorer && !initial) {
+      // Exploring, the garden fills the screen: only the picture changes size, the bed stays as it is.
       this.renderer.setSize(W, H, false);
       this.camera.aspect = W / H;
       this.camera.updateProjectionMatrix();
@@ -2109,11 +2197,11 @@ class GardenSplash extends HTMLElement {
     this.brushStep(dt);
     if (this.arranged && !this.background && !this.reduced) {
       // At night no gusts come, but heads still swinging come to rest.
-      if (!this.night || this.flight) this.blow(t);
+      if (!this.night || this.explorer) this.blow(t);
       else this.sway(dt, () => 0);
     }
     if (this.arranged && !this.backdrop && !this.reduced) {
-      if (!this.night || this.flight) this.flyBee(t, dt);
+      if (!this.night || this.explorer) this.flyBee(t, dt);
       else if (this.bee) this.bee.group.visible = false;
     }
     if (this.egg && this.egg.pulse > 0) this.eggReact(dt);
@@ -2186,7 +2274,7 @@ class GardenSplash extends HTMLElement {
   drift(t, dt) {
     if (!this.camBase) return;
     if (this.night) this.updateNight(t, dt);
-    if (this.flight) this.updateFlight(dt);
+    if (this.explorer) this.updateExplore(dt);
     if (this.night && this.night.t > 0) return;
     const v = this.view;
     if (v) this.easeView(dt);
@@ -2504,7 +2592,7 @@ class GardenSplash extends HTMLElement {
     this.addEventListener('pointerup', end, true);
     this.addEventListener('pointercancel', end, true);
     this.onNightKey = (e) => {
-      if (e.key === 'Escape' && this.night && this.night.dir > 0 && !this.flight) this.toggleNight();
+      if (e.key === 'Escape' && this.night && this.night.dir > 0 && !this.explorer) this.toggleNight();
     };
     document.addEventListener('keydown', this.onNightKey);
   }
@@ -2602,22 +2690,30 @@ class GardenSplash extends HTMLElement {
     this.scene.fog.far = this.camDist + 320;
   }
 
-  /* ---------------- flight ---------------- */
+  /* ---------------- explore ---------------- */
 
   /*
-   * Free flight through the whole garden (opened by assets/pollen-dream.js,
-   * which reads the controls): the bed in its logo on the soil and, overhead,
-   * the sky of the sky view, all at once, at the visitor's time of day. The
-   * bee, the weather, the planes, the blimp, the birds, the sun and the moon
-   * all carry on as usual. Only the splash's own formed garden can fly.
+   * Exploring the whole garden in the first person (opened by
+   * assets/pollen-dream.js, which reads the controls): the bed in its logo
+   * on the land, and overhead the sky of the sky view, all at once, at the
+   * visitor's time of day, with the bee, the weather, the planes, the
+   * blimp, the birds, the sun and the moon carrying on as usual.
+   *
+   * The visitor (this.explorer) moves in a mode: 'walk', the default, on
+   * foot across the fields with gravity and a jump; 'fly', free flight up
+   * to the clouds. A mode is a function in EXPLORE_MODES that moves the
+   * visitor each frame from explorer.input, so new ways of moving slot in
+   * beside them. Functions in this.exploreHooks run every frame after the
+   * move (hook(dt, explorer, garden)): the place for things to find and do.
+   * Only the splash's own formed garden can be explored.
    */
-  canFly() {
+  canExplore() {
     return !!(this.renderer && !this.failed && !this.backdrop && !this.background && this.arranged && this.logoBox && this.flowers.length && this.camBase);
   }
 
-  startFlight() {
-    if (this.flight) return true;
-    if (!this.canFly()) return false;
+  startExplore(mode = 'walk') {
+    if (this.explorer) return true;
+    if (!this.canExplore()) return false;
     if (this.view) this.resetView(true);
     if (!this.night) {
       this.skyTime = this.skyNow();
@@ -2626,21 +2722,55 @@ class GardenSplash extends HTMLElement {
     }
     Object.assign(this.night, { t: 1, dir: 1 });
     this.skyView = { z: 1, tz: 1, ax: 0, ay: 0, tax: 0, tay: 0 };
-    const b = this.camBase;
-    this.flight = { x: b.x, y: b.y, z: b.z, yaw: 0, pitch: -Math.PI / 2 + 1e-3, vx: 0, vy: 0, vz: 0, intro: 0, from: b.clone(), input: { f: 0, r: 0, u: 0, turn: 0, fast: false } };
-    this.camera.rotation.order = 'ZXY';
     // The land: hills rolling away from the bed, meadow, grass (see buildLand).
     if (!this.terrain) this.buildLand();
     this.dressLand();
     this.terrain.group.visible = true;
+    const b = this.camBase;
+    // Where the walk begins: on the grass just below the logo, facing it.
+    const box = this.logoBox;
+    const sx = box.x + box.w / 2;
+    const sy = this.h - (box.y + box.h) - Math.max(this.w, this.h) * 0.22;
+    // Eye height: a phone's flowers are slighter on the same stems, so the visitor stands a little taller among them.
+    const eye = EYE * Math.sqrt(clamp(23 / (this.base || 23), 1, 1.6));
+    this.explorer = {
+      mode: EXPLORE_MODES[mode] ? mode : 'walk',
+      eye,
+      x: b.x,
+      y: b.y,
+      z: b.z,
+      yaw: 0,
+      pitch: -Math.PI / 2 + 1e-3,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      grounded: false,
+      stride: 0,
+      bob: 0,
+      intro: 0,
+      from: b.clone(),
+      to: { x: sx, y: sy, z: FLOOR_Z + this.hillAt(sx, sy) + eye, pitch: -0.12 },
+      aim: null,
+      input: { f: 0, r: 0, turn: 0, up: 0, jump: false, run: false },
+    };
+    this.exploreHooks = this.exploreHooks || [];
+    this.camera.rotation.order = 'ZXY';
     Object.assign(this.pointer, { down: false, active: false });
-    this.classList.add('is-flying');
+    this.classList.add('is-exploring');
     this.start();
     return true;
   }
 
+  /* Switches how the visitor moves ('walk' or 'fly'); flying down to the ground lands on foot. */
+  setExploreMode(mode) {
+    const E = this.explorer;
+    if (!E || !EXPLORE_MODES[mode] || E.mode === mode) return;
+    E.mode = mode;
+    E.grounded = false;
+  }
+
   /*
-   * The land around the garden while flying. Past the bed the ground rolls
+   * The land around the garden while exploring. Past the bed the ground rolls
    * away into low hills, meadow-colored in patches; grass grows everywhere
    * (a field of clumps around the visitor that comes with them, so it never
    * ends), swaying in the wind, with now and then a tiny wildflower. The
@@ -2837,11 +2967,11 @@ float hillAt(vec2 p) {
     return amp * (h * 0.5 + 0.35);
   }
 
-  stopFlight() {
-    if (!this.flight) return;
-    this.flight = null;
+  stopExplore() {
+    if (!this.explorer) return;
+    this.explorer = null;
     if (this.terrain) this.terrain.group.visible = false;
-    this.classList.remove('is-flying');
+    this.classList.remove('is-exploring');
     const c = this.camera;
     c.rotation.order = 'XYZ';
     c.near = 10;
@@ -2855,68 +2985,59 @@ float hillAt(vec2 p) {
     this.start();
   }
 
-  /* Turns the view: dx across, dy up and down, in radians. */
-  flyLook(dx, dy) {
-    const F = this.flight;
-    if (!F || F.intro < 1) return;
-    F.yaw -= dx;
-    F.pitch = clamp(F.pitch - dy, -1.5, 1.5);
+  /* Turns the view by dx across and dy up and down, in radians: all the way round, and up and down to straight overhead and underfoot. */
+  exploreLook(dx, dy) {
+    const E = this.explorer;
+    if (!E || E.intro < 1) return;
+    E.yaw -= dx;
+    E.pitch = clamp(E.pitch - dy, -LOOK_LIMIT, LOOK_LIMIT);
   }
 
-  updateFlight(dt) {
-    const F = this.flight;
+  /* Points the view at (yaw, pitch), eased (the phone's own movement steers this way); null lets go. */
+  exploreAim(yaw, pitch) {
+    const E = this.explorer;
+    if (!E) return;
+    E.aim = yaw === null ? null : { yaw, pitch: clamp(pitch, -LOOK_LIMIT, LOOK_LIMIT) };
+  }
+
+  updateExplore(dt) {
+    const E = this.explorer;
     const c = this.camera;
-    const sky = this.sky;
     const span = Math.max(this.w, this.h);
-    if (F.intro < 1) {
-      // From the page's own view straight down on the logo, gliding back and down to look across it.
-      F.intro = Math.min(1, F.intro + dt / (this.reduced ? 0.05 : 2.8));
-      const e = smooth(F.intro);
-      F.x = F.from.x;
-      F.y = lerp(F.from.y, F.from.y - this.h * 0.8, e);
-      F.z = lerp(F.from.z, F.from.z * 0.3, e);
-      F.pitch = lerp(-Math.PI / 2 + 1e-3, -0.4, e);
+    if (E.intro < 1) {
+      // From the page's own view straight down on the logo, gliding down to stand in the grass before it.
+      E.intro = Math.min(1, E.intro + dt / (this.reduced ? 0.05 : 3.2));
+      const e = smooth(E.intro);
+      const drop = smooth(smooth(E.intro));
+      E.x = lerp(E.from.x, E.to.x, e);
+      E.y = lerp(E.from.y, E.to.y, e);
+      E.z = lerp(E.from.z, E.to.z, drop);
+      E.pitch = lerp(-Math.PI / 2 + 1e-3, E.to.pitch, e);
+      if (E.intro >= 1) E.grounded = E.mode === 'walk';
     } else {
-      const inp = F.input;
-      F.yaw -= inp.turn * 1.7 * dt;
-      // Fly where you look; strafe level; rise and sink straight up and down.
-      const speed = span * (inp.fast ? 1.5 : 0.45);
-      const cp = Math.cos(F.pitch);
-      const fx = -Math.sin(F.yaw) * cp;
-      const fy = Math.cos(F.yaw) * cp;
-      const fz = Math.sin(F.pitch);
-      const rx = Math.cos(F.yaw);
-      const ry = Math.sin(F.yaw);
-      const k = 1 - Math.exp(-dt * 2.4);
-      F.vx += ((fx * inp.f + rx * inp.r) * speed - F.vx) * k;
-      F.vy += ((fy * inp.f + ry * inp.r) * speed - F.vy) * k;
-      F.vz += ((fz * inp.f + inp.u) * speed - F.vz) * k;
-      F.x += F.vx * dt;
-      F.y += F.vy * dt;
-      F.z += F.vz * dt;
-      // Held in by the soil below and the clouds above; out past the edges of the world the air turns you gently back.
-      const floor = FLOOR_Z + this.hillAt(F.x, F.y) + 6;
-      const top = sky ? sky.eye.z + sky.D * 1.25 : span * 4;
-      if (F.z < floor) {
-        F.z = floor;
-        F.vz = Math.max(0, F.vz);
-      } else if (F.z > top) {
-        F.z = lerp(F.z, top, 1 - Math.exp(-dt * 3));
-        F.vz = Math.min(0, F.vz);
+      if (E.aim) {
+        // Eased the short way round toward where the phone points.
+        const k = 1 - Math.exp(-dt * 18);
+        E.yaw += Math.atan2(Math.sin(E.aim.yaw - E.yaw), Math.cos(E.aim.yaw - E.yaw)) * k;
+        E.pitch += (E.aim.pitch - E.pitch) * k;
       }
-      const ox = F.x - this.w / 2;
-      const oy = F.y - this.h / 2;
+      E.yaw -= E.input.turn * 2 * dt;
+      EXPLORE_MODES[E.mode](this, E, dt, span);
+      // Out past the edge of the land the air turns the visitor gently back.
+      const ox = E.x - this.w / 2;
+      const oy = E.y - this.h / 2;
       const d = Math.hypot(ox, oy);
-      const R = span * 6;
+      const R = span * 18;
       if (d > R) {
         const back = (d - R) * (1 - Math.exp(-dt * 2));
-        F.x -= (ox / d) * back;
-        F.y -= (oy / d) * back;
+        E.x -= (ox / d) * back;
+        E.y -= (oy / d) * back;
       }
+      for (const hook of this.exploreHooks) hook(dt, E, this);
     }
-    c.position.set(F.x, F.y, F.z);
-    c.rotation.set(Math.PI / 2 + F.pitch, 0, F.yaw);
-    c.fov = lerp(FOV, 72, smooth(F.intro));
+    c.position.set(E.x, E.y, E.z + E.bob);
+    c.rotation.set(Math.PI / 2 + E.pitch, 0, E.yaw);
+    c.fov = lerp(FOV, E.mode === 'walk' ? 75 : 72, smooth(E.intro));
     c.near = 2;
     c.far = 400000;
     c.updateProjectionMatrix();
@@ -2928,15 +3049,15 @@ float hillAt(vec2 p) {
     const L = this.terrain;
     if (L) {
       const u = L.u;
-      u.uCam.value.set(F.x, F.y);
-      u.uNear.value = span * 0.9 + Math.max(0, F.z) * 2;
-      u.uFar.value = span * 3.5 + Math.max(0, F.z) * 10;
+      u.uCam.value.set(E.x, E.y);
+      u.uNear.value = span * 0.9 + Math.max(0, E.z) * 2;
+      u.uFar.value = span * 3.5 + Math.max(0, E.z) * 10;
       // Mixed in after the shaders' own conversion for the screen, so converted the same way.
       u.uAir.value.copy(this.scene.fog.color).convertLinearToSRGB();
       u.uTime.value = this.elapsed;
       u.uWind.value = clamp((this.weather ? this.weather.wind : 10) / 120, -0.6, 0.6) + (this.gust ? this.gust.dir * 0.25 * this.gust.strength : 0);
       // Grass only matters near the ground.
-      L.grass.visible = F.z - FLOOR_Z - this.hillAt(F.x, F.y) < 1400;
+      L.grass.visible = E.z - FLOOR_Z - this.hillAt(E.x, E.y) < 1400;
     }
   }
 
@@ -3870,9 +3991,9 @@ float hillAt(vec2 p) {
     sky.group.visible = true;
 
     // The camera: across to the clearing, down into it, tipping back to look up.
-    // In flight (see startFlight) the visitor steers it instead.
+    // Exploring (see startExplore), the visitor steers it instead.
     const c = this.camera;
-    if (!this.flight) {
+    if (!this.explorer) {
     // Sinking into the flowers first, then falling back to look up.
     const across = smooth(range(p, 0, 0.5));
     const down = smooth(range(p, 0.05, 0.75));
@@ -4305,72 +4426,124 @@ float hillAt(vec2 p) {
     group.add(holder);
     const plane = new THREE.Group();
     holder.add(plane);
-    const red = [196, 52, 58];
-    const cream = [236, 226, 200];
-    const wingMat = this.makeMaterial({ color: toColor(red), emissive: toColor(tone(red, -0.35)), shininess: 20 });
-    const bodyMat = this.makeMaterial({ color: toColor(cream), emissive: toColor(tone(cream, -0.45)), shininess: 20 });
-    const darkMat = this.makeMaterial({ color: toColor([40, 36, 40]) });
-    const box3 = (x, y, z) => {
-      const geo = new THREE.BoxGeometry(x, y, z);
-      disposables.push(geo);
-      return geo;
+    const keep = (x) => (disposables.push(x), x);
+    const red = [200, 42, 54];
+    const cream = [240, 232, 210];
+    const navy = [25, 31, 107];
+    // Lit by the sun but never murky: a little of their own light.
+    const mat = (c, k = 0.4) => keep(this.makeMaterial({ color: toColor(c), emissive: toColor(tone(c, -1 + k)), shininess: 30 }));
+    const wingMat = mat(red);
+    const bodyMat = mat(cream);
+    const trimMat = mat(navy, 0.3);
+    const darkMat = mat([46, 42, 48], 0.2);
+    const part = (geo, m, x, y, z, parent = plane) => {
+      const o = new THREE.Mesh(keep(geo), m);
+      o.position.set(x, y, z);
+      parent.add(o);
+      return o;
     };
-    disposables.push(wingMat, bodyMat, darkMat);
-    const part = (geo, mat, x, y, z) => {
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(x, y, z);
-      plane.add(m);
-      return m;
-    };
-    part(box3(0.9, 0.11, 0.11), bodyMat, 0, 0, 0); // fuselage
-    part(box3(0.22, 1.1, 0.025), wingMat, 0.16, 0, -0.08); // lower wing, toward the viewer
-    part(box3(0.22, 1.2, 0.025), wingMat, 0.2, 0, 0.12); // upper wing
-    part(box3(0.13, 0.4, 0.02), wingMat, -0.4, 0, 0); // tailplane
-    part(box3(0.13, 0.02, 0.15), wingMat, -0.4, 0, 0.08); // fin
-    for (const y of [-0.38, 0.38]) part(box3(0.02, 0.02, 0.2), darkMat, 0.2, y, 0.02); // struts
-    const prop = part(box3(0.02, 0.32, 0.03), darkMat, 0.47, 0, 0);
-
-    // The banner: cloth printed with the logo, its flowers as dots.
-    const L = 2.4;
-    const H = 0.42;
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = Math.round(512 * (H / L));
-    const g = canvas.getContext('2d');
-    g.fillStyle = '#f7f3e8';
-    g.fillRect(0, 0, canvas.width, canvas.height);
-    // The logo fitted inside the banner with a margin, centered.
-    const fit = Math.min((canvas.width * 0.86) / box.w, (canvas.height * 0.72) / box.h);
-    const ox = (canvas.width - box.w * fit) / 2;
-    const oy = (canvas.height - box.h * fit) / 2;
-    g.fillStyle = '#191f6b';
-    for (const f of this.flowers) {
-      g.beginPath();
-      g.arc(ox + (f.dest[0] - box.x) * fit, oy + (f.dest[1] - box.y) * fit, Math.max(1.2, f.r * fit * 0.75), 0, TAU);
-      g.fill();
+    // A little biplane, nose along +x, seen mostly from below: a rounded body tapering to the tail,
+    // two staggered wings (both show from underneath), struts, wheels, roundels and a spinning propeller.
+    const body = part(new THREE.CylinderGeometry(0.075, 0.032, 0.82, 10), bodyMat, -0.02, 0, 0);
+    body.rotation.z = -Math.PI / 2;
+    const cowl = part(new THREE.CylinderGeometry(0.088, 0.08, 0.1, 10), trimMat, 0.42, 0, 0);
+    cowl.rotation.z = -Math.PI / 2;
+    part(new THREE.BoxGeometry(0.2, 1.16, 0.022), wingMat, 0.19, 0, 0.13);
+    part(new THREE.BoxGeometry(0.18, 1.02, 0.022), wingMat, 0.1, 0, -0.07);
+    for (const y of [-0.42, 0.42]) {
+      // Roundels under the lower wing, in the garden's colors.
+      const outer = part(new THREE.CircleGeometry(0.07, 16), bodyMat, 0.1, y, -0.083);
+      outer.rotation.x = Math.PI;
+      const inner = part(new THREE.CircleGeometry(0.042, 16), trimMat, 0.1, y, -0.084);
+      inner.rotation.x = Math.PI;
+      part(new THREE.BoxGeometry(0.018, 0.018, 0.2), darkMat, 0.15, y * 0.8, 0.03);
     }
-    g.strokeStyle = '#c9c1ad';
-    g.lineWidth = 3;
-    g.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
-    const tex = new THREE.CanvasTexture(canvas);
+    part(new THREE.BoxGeometry(0.14, 0.4, 0.016), wingMat, -0.4, 0, 0.01);
+    part(new THREE.BoxGeometry(0.15, 0.016, 0.17), wingMat, -0.41, 0, 0.09);
+    for (const y of [-0.11, 0.11]) {
+      part(new THREE.BoxGeometry(0.016, 0.016, 0.13), darkMat, 0.22, y, -0.12);
+      const wheel = part(new THREE.CylinderGeometry(0.045, 0.045, 0.028, 12), darkMat, 0.22, y, -0.19);
+      wheel.rotation.x = 0;
+    }
+    const prop = new THREE.Group();
+    prop.position.set(0.485, 0, 0);
+    plane.add(prop);
+    const blurMat = keep(new THREE.MeshBasicMaterial({ color: toColor([60, 56, 60]), transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+    const blur = part(new THREE.CircleGeometry(0.19, 20), blurMat, 0, 0, 0, prop);
+    blur.rotation.y = Math.PI / 2;
+    part(new THREE.BoxGeometry(0.015, 0.38, 0.03), darkMat, 0.004, 0, 0, prop);
+
+    // The banner: cream cloth printed with the logo itself, sized to the logo with a margin all round,
+    // a red stripe along each edge, and a dark spreader bar at the front where the tow lines tie on.
+    const m = this.mask;
+    const aspect = m ? (m.x1 - m.x0) / (m.y1 - m.y0) : box.w / box.h;
+    const H = 0.68;
+    const L = clamp(H * 0.64 * aspect + H * 0.55, 1.5, 4.2);
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = Math.round(1024 * (H / L));
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#f6f0e1';
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    const stripe = Math.max(4, Math.round(canvas.height * 0.06));
+    g.fillStyle = '#c42a36';
+    g.fillRect(0, stripe * 0.6, canvas.width, stripe);
+    g.fillRect(0, canvas.height - stripe * 1.6, canvas.width, stripe);
+    const lh = canvas.height * 0.62;
+    const lw = lh * aspect;
+    const lx = (canvas.width - lw) / 2;
+    const ly = (canvas.height - lh) / 2;
+    if (m) {
+      // The logo's own silhouette, crisp, in navy.
+      const mw = m.x1 - m.x0;
+      const mh = m.y1 - m.y0;
+      const sc = document.createElement('canvas');
+      sc.width = mw;
+      sc.height = mh;
+      const sg = sc.getContext('2d');
+      const img = sg.createImageData(mw, mh);
+      for (let y = 0; y < mh; y++) {
+        for (let x = 0; x < mw; x++) {
+          const a = m.alpha[(y + m.y0) * m.w + x + m.x0];
+          const o = (y * mw + x) * 4;
+          img.data[o] = 25;
+          img.data[o + 1] = 31;
+          img.data[o + 2] = 107;
+          img.data[o + 3] = a;
+        }
+      }
+      sg.putImageData(img, 0, 0);
+      g.imageSmoothingEnabled = true;
+      g.drawImage(sc, lx, ly, lw, lh);
+    } else {
+      const fit = Math.min(lw / box.w, lh / box.h);
+      g.fillStyle = '#191f6b';
+      for (const f of this.flowers) {
+        g.beginPath();
+        g.arc(lx + (f.dest[0] - box.x) * fit, ly + (f.dest[1] - box.y) * fit, Math.max(1.5, f.r * fit * 0.9), 0, TAU);
+        g.fill();
+      }
+    }
+    const tex = keep(new THREE.CanvasTexture(canvas));
     tex.colorSpace = THREE.SRGBColorSpace;
-    const clothGeo = new THREE.PlaneGeometry(L, H, 28, 4);
+    tex.anisotropy = 4;
+    const clothGeo = keep(new THREE.PlaneGeometry(L, H, 40, 6));
     // Mostly its own light (the print shows true), with the folds still shaded by the sun.
-    const clothMat = this.makeMaterial({ map: tex, emissiveMap: tex, emissive: toColor([190, 190, 190]), side: THREE.DoubleSide, shininess: 6 });
-    disposables.push(tex, clothGeo, clothMat);
+    const clothMat = keep(this.makeMaterial({ map: tex, emissiveMap: tex, emissive: toColor([175, 175, 175]), side: THREE.DoubleSide, shininess: 6, flatShading: false }));
     const cloth = new THREE.Mesh(clothGeo, clothMat);
     // Seen from below +x is screen right; flip so the print reads the right way up.
     cloth.scale.y = -1;
     holder.add(cloth);
+    const bar = part(new THREE.BoxGeometry(0.02, H * 1.04, 0.02), darkMat, 0, 0, 0, holder);
     const rest = Float32Array.from(clothGeo.attributes.position.array);
-    const lineGeo = new THREE.BufferGeometry();
-    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-    const lineMat = new THREE.LineBasicMaterial({ color: toColor([70, 70, 80]), fog: false });
-    disposables.push(lineGeo, lineMat);
-    const line = new THREE.Line(lineGeo, lineMat);
+    // The tow line from the tail to a ring, and a bridle from the ring to both ends of the bar.
+    const lineGeo = keep(new THREE.BufferGeometry());
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(18), 3));
+    const lineMat = keep(new THREE.LineBasicMaterial({ color: toColor([60, 60, 70]), fog: false }));
+    const line = new THREE.LineSegments(lineGeo, lineMat);
     line.frustumCulled = false;
     holder.add(line);
-    return { holder, plane, prop, cloth, rest, line, L, H, active: null };
+    return { holder, plane, prop, cloth, bar, rest, line, L, H, active: null };
   }
 
   flyBanner(t, dt, show, p) {
@@ -4382,8 +4555,8 @@ float hillAt(vec2 p) {
     const k = depth / sky.D;
     if (!B.active && !this.reduced && n.dir > 0 && p >= 1 && t > sky.nextBlimp) {
       const dir = Math.random() < 0.5 ? 1 : -1;
-      const reach = sky.viewW * k * 1.05;
-      B.active = { x: sky.eye.x - dir * reach, y: sky.eye.y + (Math.random() - 0.5) * sky.viewH * k * 0.55, dir, speed: (reach * 2) / (22 + Math.random() * 8), reach, ph: Math.random() * TAU };
+      const reach = sky.viewW * k * 1.15;
+      B.active = { x: sky.eye.x - dir * reach, y: sky.eye.y + (Math.random() - 0.5) * sky.viewH * k * 0.5, dir, speed: (reach * 2) / (24 + Math.random() * 8), reach, ph: Math.random() * TAU };
     }
     const A = B.active;
     B.holder.visible = !!A && show > 0.05;
@@ -4395,31 +4568,44 @@ float hillAt(vec2 p) {
       sky.nextBlimp = t + 120 + Math.random() * 120;
       return;
     }
-    const size = sky.viewW * k * 0.09;
-    B.holder.position.set(A.x, A.y + Math.sin(t * 0.7 + A.ph) * size * 0.08, sky.eye.z + depth);
+    const size = sky.viewW * k * 0.11;
+    const bob = Math.sin(t * 0.7 + A.ph);
+    B.holder.position.set(A.x, A.y + bob * size * 0.06, sky.eye.z + depth);
     B.holder.scale.setScalar(size);
     B.plane.scale.x = A.dir;
-    B.plane.rotation.x = Math.sin(t * 0.9 + A.ph) * 0.12;
-    B.prop.rotation.x = t * 40;
-    // The banner trails behind on its line; the far end flaps hardest.
-    const gap = 0.55;
+    // A gentle rock of the wings and a nod with the bob.
+    B.plane.rotation.x = Math.sin(t * 0.9 + A.ph) * 0.14;
+    B.plane.rotation.y = -Math.cos(t * 0.7 + A.ph) * 0.05 * A.dir;
+    B.prop.rotation.x = t * 45;
+    // The banner trails on its line; it ripples in waves running back from the bar, the loose end hardest.
+    const gap = 0.6;
     const front = -A.dir * (0.5 + gap);
     const cx = front - A.dir * (B.L / 2);
     B.cloth.position.set(cx, 0, 0);
     const pos = B.cloth.geometry.attributes.position;
+    const sway = Math.sin(t * 1.3 + A.ph) * 0.03;
     for (let i = 0; i < pos.count; i++) {
       const x = B.rest[i * 3];
       const y = B.rest[i * 3 + 1];
-      // How far along from the end tied to the plane (0) to the loose end (1).
+      // How far along from the bar (0) to the loose end (1).
       const s = A.dir > 0 ? (B.L / 2 - x) / B.L : (x + B.L / 2) / B.L;
-      const wave = Math.sin(s * 11 - t * 9 + A.ph);
-      pos.setXYZ(i, x + A.dir * s * 0.03 * Math.cos(s * 11 - t * 9), y + s * 0.05 * Math.sin(s * 7 - t * 6), (0.02 + s * 0.09) * wave + y * 0.15 * s * Math.cos(s * 9 - t * 8));
+      const run = s * 12 - t * 11 + A.ph;
+      const amp = 0.015 + s * 0.11;
+      const z = amp * Math.sin(run) + s * 0.035 * Math.sin(y * 9 + s * 15 - t * 14) + sway * s;
+      // The cloth gathers a little where it folds, and the loose end lifts and drops.
+      pos.setXYZ(i, x + A.dir * s * 0.03 * (1 - Math.cos(run)), y + s * 0.045 * Math.sin(s * 6 - t * 5 + A.ph), z);
     }
     pos.needsUpdate = true;
     B.cloth.geometry.computeVertexNormals();
+    B.bar.position.set(front, 0, 0);
+    const ring = front + A.dir * 0.22;
     const lp = B.line.geometry.attributes.position;
-    lp.setXYZ(0, -A.dir * 0.48, 0, 0);
-    lp.setXYZ(1, front, 0, 0);
+    lp.setXYZ(0, -A.dir * 0.47, 0, 0.01);
+    lp.setXYZ(1, ring, 0, 0);
+    lp.setXYZ(2, ring, 0, 0);
+    lp.setXYZ(3, front, B.H * 0.5, 0);
+    lp.setXYZ(4, ring, 0, 0);
+    lp.setXYZ(5, front, -B.H * 0.5, 0);
     lp.needsUpdate = true;
   }
 
@@ -5289,7 +5475,7 @@ float hillAt(vec2 p) {
       }
     }
     this.updatePiles(t, dt, w, level);
-    for (const kind of Object.values(W.kinds)) kind.o.visible = !this.night || !!this.flight;
+    for (const kind of Object.values(W.kinds)) kind.o.visible = !this.night || !!this.explorer;
     if (this.night || W.sky) this.skyWeather(t, dt, level);
   }
 
@@ -5377,7 +5563,7 @@ float hillAt(vec2 p) {
     const n = this.night;
     if (!W.sky) this.buildSkyWeather();
     const S = W.sky;
-    const live = !!(n && sky) && n.t > 0.35 && !this.flight;
+    const live = !!(n && sky) && n.t > 0.35 && !this.explorer;
     S.group.visible = live;
     if (!live) {
       for (const k of Object.values(S.kinds)) k.p.forEach((q) => (q.live = false));

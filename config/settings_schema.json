@@ -1619,7 +1619,7 @@
         "id": "garden_game",
         "label": "Enable the Pollen Dream game",
         "default": true,
-        "info": "First-person flight through the home page's 3D garden: the flowers, the sky and everything in it. Opened from the splash and shop menus; any menu link to /#pollen-dream opens it too. It loads only when a visitor starts it."
+        "info": "Explore the home page's 3D garden in the first person, on foot: the flowers, the fields and the sky above. Opened from the splash and shop menus; any menu link to /#pollen-dream opens it too. It loads only when a visitor starts it."
       },
       {
         "type": "text",
