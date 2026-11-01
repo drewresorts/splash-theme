@@ -122,6 +122,11 @@ const RAD = Math.PI / 180;
 function daysSince2000(date) {
   return date.getTime() / 86400000 + 2440587.5 - 2451545.0;
 }
+/* The color of the air in the sky view: what the renderer clears to, and the sky fades into at its edges. */
+function skyAir(time) {
+  return mix(mix([3, 4, 18], [96, 156, 220], time.light), time.evening ? [214, 120, 140] : [236, 160, 140], time.warm * 0.7);
+}
+
 function horizontal(ra, dec, d, lat, lon) {
   // Local sidereal time, then the hour angle.
   const lst = (280.46061837 + 360.98564736629 * d + lon) % 360;
@@ -3034,10 +3039,15 @@ class GardenSplash extends HTMLElement {
 
     // The far sky: many faint stars, and a few brighter ones grouped in constellations.
     const field = [];
-    for (let i = 0; i < 1100; i++) {
+    // Well past the view too, so tipping up to it the stars don't stop at an edge.
+    for (let i = 0; i < 2000; i++) {
+      const u = Math.random() - 0.5;
+      const v = Math.random() - 0.5;
+      // Past the view they dim away to nothing, as stars low in a hazy sky do.
+      const fade = 1 - smooth(clamp((Math.max(Math.abs(u), Math.abs(v)) * 2.4 - 0.5) / 0.65, 0, 1));
       field.push({
-        p: new THREE.Vector3(eye.x + (Math.random() - 0.5) * viewW * 1.8, eye.y + (Math.random() - 0.5) * viewH * 1.8, eye.z + D * 1.3),
-        col: WHITE.map((c) => c * (0.35 + Math.random() * 0.5)),
+        p: new THREE.Vector3(eye.x + u * viewW * 2.4, eye.y + v * viewH * 2.4, eye.z + D * 1.3),
+        col: WHITE.map((c) => c * (0.35 + Math.random() * 0.5) * fade),
         tw: 0.8 + Math.random() * 4,
         ph: Math.random() * TAU,
       });
@@ -3060,7 +3070,10 @@ class GardenSplash extends HTMLElement {
     fp.needsUpdate = true;
     // The sky itself: a coarse grid of colors, all deep navy, with patches a
     // shade lighter or darker, dithered in banded steps the PS1 way.
-    const skyGeo = new THREE.PlaneGeometry(viewW * 2.4, viewH * 2.4, 12, 9);
+    // Reaching far past the view, so the camera tipping up never sees its edge:
+    // beyond the view it fades into the air color the renderer clears to.
+    const skyGeo = new THREE.PlaneGeometry(viewW * 12, viewH * 12, 50, 36);
+    const air = skyAir(time);
     const sc = [];
     const sp = skyGeo.attributes.position;
     const blobs = [[14, 22, 72], [3, 5, 22], [10, 18, 60]].map((c) => [c, Math.random() * TAU, 0.2 + Math.random() * 0.25]);
@@ -3084,11 +3097,14 @@ class GardenSplash extends HTMLElement {
         const glow = toward > 0.6 ? mix([255, 120, 140], [255, 196, 120], (toward - 0.6) / 0.4) : mix([84, 64, 140], [255, 120, 140], toward / 0.6);
         c = mix(c, glow, time.warm * 0.85);
       }
-      // Vertex colors are linear, like everything three.js shades.
+      const edge = smooth(clamp((Math.max(Math.abs(u), Math.abs(v)) - 0.85) / 1.6, 0, 1));
+      c = mix(c, air, edge);
+      // Vertex colors are linear, like everything three.js shades. Out at the edge it
+      // thins away too, leaving just the air: no line where it ends.
       const lin = toColor(c);
-      sc.push(lin.r, lin.g, lin.b);
+      sc.push(lin.r, lin.g, lin.b, 1 - edge);
     }
-    skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
+    skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(sc, 4));
     // The PS1 dither suits the dark night sky; on a light, smooth sky it breaks
     // into a grid of red, green and blue dots, so a day sky is left smooth.
     const skyBase = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide });
@@ -3526,14 +3542,15 @@ class GardenSplash extends HTMLElement {
       c.rotateX(sv.ay * tip);
     }
     c.fov = lerp(FOV, sky.fov / (sv ? sv.z : 1), down);
+    // Tipping up, the camera looks along the sky: draw all of it, or it is cut off in a hard line where the horizon would be.
+    c.far = lerp(5000, 80000, smooth(range(p, 0, 0.3)));
     c.updateProjectionMatrix();
 
     // The sky comes in behind everything, and the light turns to the sky's:
     // moonlight at night, sun and blue sky by day, low gold at sunrise and sunset.
     const dark = smooth(range(p, 0.1, 0.8));
     const time = sky.time;
-    const NIGHT = [3, 4, 18];
-    const air = mix(mix(NIGHT, [96, 156, 220], time.light), time.evening ? [214, 120, 140] : [236, 160, 140], time.warm * 0.7);
+    const air = skyAir(time);
     this.renderer.setClearColor(toColor(air), dark);
     const day = this.dayLight();
     const skyKey = lerp(0.7, day.key * 0.95, time.light);
@@ -4931,8 +4948,8 @@ class GardenSplash extends HTMLElement {
    * It comes down out of the sky straight at you: specks far off that grow
    * and spread outward as they near, rain as streaks bursting out from the
    * middle. Now and then something lands right on you: a flake that melts,
-   * a raindrop that slides and dries, a leaf that sits a moment before the
-   * wind takes it.
+   * or a raindrop that slides and dries. Leaves and petals tumble past and
+   * sweep out of view.
    */
   buildSkyWeather() {
     const W = this.weather;
@@ -4981,8 +4998,8 @@ class GardenSplash extends HTMLElement {
       snow: { n: 600, o: instanced(600, flake, snowMat), far: 1000, aim: 0.08 },
       rain: { n: 300, o: rain, far: 1600, aim: 0.08 },
       // Leaves and petals come from the trees and flowers round about, not the clouds: close, and plainly passing in front.
-      leaves: { n: 60, o: instanced(60, this.geometries.leaf, this.materials.foliage, leafColors), far: 360, aim: 0.2 },
-      petals: { n: 50, o: instanced(50, this.geometries.round, this.materials.petal, petalColors), far: 320, aim: 0.12 },
+      leaves: { n: 60, o: instanced(60, this.geometries.leaf, this.materials.foliage, leafColors), far: 360, aim: 0 },
+      petals: { n: 50, o: instanced(50, this.geometries.round, this.materials.petal, petalColors), far: 320, aim: 0 },
       pollen: { n: 120, o: instanced(120, flake, pollenMat), far: 420, aim: 0 },
     };
     for (const k of Object.values(kinds)) k.p = Array.from({ length: k.n }, () => ({ live: false, s: Math.random(), ph: Math.random() * TAU, spin: Math.random() * TAU }));
@@ -5077,6 +5094,17 @@ class GardenSplash extends HTMLElement {
           // Seen from below a leaf mostly slips sideways as it tumbles, each drifting its own way.
           vx = W.wind * 1.4 + sway * 70 + (q.s - 0.5) * 90;
           vy = sway2 * 50 + (q.ph / Math.PI - 1) * 40;
+          // Close by, it is falling past the viewer, not onto them: it sweeps out past the edge of the view.
+          const near = 1 - clamp((q.z - eye.z - lensAt) / 140, 0, 1);
+          if (near > 0) {
+            const ox = q.x - eye.x;
+            const oy = q.y - eye.y;
+            const m = Math.hypot(ox, oy) || 1;
+            const out = near * near * 260;
+            vx += (ox / m) * out;
+            vy += (oy / m) * out;
+            vz *= 1 - near * 0.6;
+          }
           q.spin += dt * (1.5 + q.s * 2);
         } else {
           vz = 14 + 12 * q.s;
@@ -5097,8 +5125,8 @@ class GardenSplash extends HTMLElement {
         const nx = (q.x - eye.x) / (tan0 * aspect * Math.max(1, depth));
         const ny = (q.y - eye.y) / (tan0 * Math.max(1, depth));
         if (depth < lensAt) {
-          // Reached the viewer: if it is in view, it lands on them.
-          if (Math.abs(nx) < 1 && Math.abs(ny) < 1) this.landOnViewer(name, nx, -ny, t);
+          // Reached the viewer: if it is in view, it lands on them (a leaf or petal just goes by).
+          if (Math.abs(nx) < 1 && Math.abs(ny) < 1 && name !== 'leaves' && name !== 'petals') this.landOnViewer(name, nx, -ny, t);
           q.live = false;
           continue;
         }
