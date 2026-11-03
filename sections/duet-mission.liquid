@@ -1,6 +1,7 @@
 {%- comment -%}
   About page: the brand's mission, then a row of short "pillars" (what we
-  stock, how we choose it, how shopping with us feels). Styles live in
+  stock, how we choose it, how shopping with us feels), with photos and
+  videos among them where wanted (snippets/duet-media.liquid). Styles live in
   assets/component-duet-about.css, shared with the other About sections.
 {%- endcomment -%}
 {{ 'component-duet-about.css' | asset_url | stylesheet_tag }}
@@ -35,14 +36,20 @@
     {%- if section.blocks.size > 0 -%}
       <ul class="duet-about__grid">
         {%- for block in section.blocks -%}
-          <li class="duet-about__item" {{ block.shopify_attributes }}>
-            {%- if block.settings.title != blank -%}
-              <h3>{{ block.settings.title | escape }}</h3>
-            {%- endif -%}
-            {%- if block.settings.text != blank -%}
-              <div class="duet-about__text">{{ block.settings.text }}</div>
-            {%- endif -%}
-          </li>
+          {%- if block.type == 'photo' or block.type == 'video' -%}
+            <li class="duet-about__cell--{{ block.settings.width | default: 'full' }}" {{ block.shopify_attributes }}>
+              {%- render 'duet-media', block: block -%}
+            </li>
+          {%- else -%}
+            <li class="duet-about__item" {{ block.shopify_attributes }}>
+              {%- if block.settings.title != blank -%}
+                <h3>{{ block.settings.title | escape }}</h3>
+              {%- endif -%}
+              {%- if block.settings.text != blank -%}
+                <div class="duet-about__text">{{ block.settings.text }}</div>
+              {%- endif -%}
+            </li>
+          {%- endif -%}
         {%- endfor -%}
       </ul>
     {%- endif -%}
@@ -135,6 +142,73 @@
           "id": "text",
           "label": "Text",
           "default": "<p>Describe one thing customers can count on.</p>"
+        }
+      ]
+    },
+    {
+      "type": "photo",
+      "name": "Photo",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "Photo" },
+        { "type": "text", "id": "caption", "label": "Caption" },
+        { "type": "url", "id": "link", "label": "Link" },
+        {
+          "type": "select",
+          "id": "width",
+          "label": "Width",
+          "default": "full",
+          "options": [
+            { "value": "full", "label": "Whole row, nearly edge to edge" },
+            { "value": "half", "label": "Half the row" },
+            { "value": "column", "label": "One column" }
+          ]
+        },
+        {
+          "type": "select",
+          "id": "ratio",
+          "label": "Shape",
+          "default": "natural",
+          "options": [
+            { "value": "natural", "label": "As the photo is" },
+            { "value": "16_9", "label": "Wide (16:9)" },
+            { "value": "4_3", "label": "Landscape (4:3)" },
+            { "value": "1_1", "label": "Square" },
+            { "value": "3_4", "label": "Portrait (3:4)" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "video",
+      "name": "Video",
+      "settings": [
+        { "type": "video", "id": "video", "label": "Video file" },
+        { "type": "video_url", "id": "video_url", "label": "Or a YouTube or Vimeo link", "accept": ["youtube", "vimeo"] },
+        { "type": "checkbox", "id": "autoplay", "label": "Play on its own", "default": true, "info": "Muted and looping, like a moving photo. Off: it waits with its play button." },
+        { "type": "text", "id": "caption", "label": "Caption" },
+        {
+          "type": "select",
+          "id": "width",
+          "label": "Width",
+          "default": "full",
+          "options": [
+            { "value": "full", "label": "Whole row, nearly edge to edge" },
+            { "value": "half", "label": "Half the row" },
+            { "value": "column", "label": "One column" }
+          ]
+        },
+        {
+          "type": "select",
+          "id": "ratio",
+          "label": "Shape",
+          "default": "16_9",
+          "options": [
+            { "value": "natural", "label": "As the video is (uploaded files)" },
+            { "value": "16_9", "label": "Wide (16:9)" },
+            { "value": "4_3", "label": "Landscape (4:3)" },
+            { "value": "1_1", "label": "Square" },
+            { "value": "3_4", "label": "Portrait (3:4)" }
+          ]
         }
       ]
     }

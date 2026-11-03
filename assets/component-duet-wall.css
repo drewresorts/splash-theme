@@ -193,9 +193,11 @@ html.wall-remote-open body {
   max-height: 100%;
   overflow-y: auto;
   padding: 22px;
-  border: 1px solid currentColor;
-  background: #fff;
-  box-shadow: 4px 4px 0 var(--wr-hero), -4px -4px 0 #66a4c8;
+  border: 0;
+  /* Fogged glass, no frame. */
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
   transform: translateY(12px) scale(0.98);
   transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -260,7 +262,7 @@ html.wall-remote-open body {
   height: 40px;
   margin: 0;
   padding: 0;
-  border: 1px solid currentColor;
+  border: 0;
   background: none;
   color: inherit;
   font: inherit;
@@ -281,7 +283,6 @@ html.wall-remote-open body {
 .wall-remote__view {
   position: relative;
   aspect-ratio: 16 / 9;
-  border: 1px solid currentColor;
   background: #f4f4f8;
 }
 
@@ -328,7 +329,6 @@ html.wall-remote-open body {
   margin: 0;
   padding: 10px 0 0;
   border: 0;
-  border-top: 1px solid currentColor;
 }
 
 .wall-remote__group legend {
@@ -352,9 +352,9 @@ html.wall-remote-open body {
   min-height: 36px;
   margin: 0;
   padding: 6px 10px;
-  border: 1px solid currentColor;
+  border: 0;
   border-radius: 0;
-  background: #fff;
+  background: rgba(25, 31, 107, 0.07);
   color: inherit;
   font: inherit;
   font-size: 11px;
@@ -382,7 +382,7 @@ html.wall-remote-open body {
 .wall-remote__swatch {
   width: 14px;
   height: 14px;
-  border: 1px solid currentColor;
+  border: 0;
   border-radius: 50%;
   background: conic-gradient(#f04e62 0 33%, #66a4c8 0 67%, #191f6b 0);
 }

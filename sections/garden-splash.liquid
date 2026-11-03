@@ -475,10 +475,13 @@
     height: 22px;
     margin: 0;
     padding: 0;
-    border: 1px solid var(--gs-ink, #191f6b);
+    border: 0;
     border-radius: 50%;
     background: conic-gradient(var(--s1) 0 33%, var(--s2) 0 67%, var(--s3) 0);
+    /* No ring: a soft shadow lifts each off the flowers. */
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.28));
     cursor: pointer;
+    transition: transform 0.2s ease;
   }
 
   /* Each theme's swatch looks like its name. */
@@ -527,9 +530,9 @@
     pointer-events: none;
   }
 
+  /* The chosen one stands up a little. */
   .garden-splash__swatch[aria-pressed='true'] {
-    outline: 1px solid var(--gs-ink, #191f6b);
-    outline-offset: 3px;
+    transform: translateY(-4px) scale(1.18);
   }
 
   .garden-splash__swatch:focus-visible {
@@ -743,23 +746,27 @@
     right: max(16px, env(safe-area-inset-right));
     margin: 0;
     padding: 8px 12px;
-    border: 1px solid currentColor;
+    border: 0;
     border-radius: 0;
     background: none;
     color: inherit;
     font: inherit;
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
     cursor: pointer;
   }
 
+  /* No box: the word alone, its double edge showing on hover. */
   .garden-splash__nav-close:hover,
   .garden-splash__nav-close:focus-visible {
-    background: var(--gs-ink, #b9e5fb);
-    color: var(--gs-ground, #191f6b);
-    outline: none;
+    text-shadow: 2px 0 rgba(240, 78, 98, 0.6), -2px 0 rgba(102, 164, 200, 0.6);
+  }
+
+  .garden-splash__nav-close:focus-visible {
+    outline: 1px dashed currentColor;
+    outline-offset: 2px;
   }
 
   /* The game's entry sits in the list like any other link. */
@@ -800,11 +807,6 @@
 
   .garden-splash__nav-item {
     counter-increment: garden-nav;
-    border-top: 1px solid currentColor;
-  }
-
-  .garden-splash__nav-item:last-child {
-    border-bottom: 1px solid currentColor;
   }
 
   .garden-splash__nav-link {

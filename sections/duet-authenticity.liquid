@@ -6,6 +6,8 @@
   - step: one stage of the review / claim process (numbered in order)
   - authenticator: an endorsed authentication service. Blocks left without
     a name are hidden on the live store (the editor shows a reminder).
+  - photo, video: pictures among the steps (snippets/duet-media.liquid);
+    the steps' numbers skip over them.
   Styles: assets/component-duet-about.css.
 {%- endcomment -%}
 {{ 'component-duet-about.css' | asset_url | stylesheet_tag }}
@@ -26,6 +28,10 @@
 
 {%- liquid
   assign steps = section.blocks | where: 'type', 'step'
+  assign pictures = section.blocks | where: 'type', 'photo'
+  assign videos = section.blocks | where: 'type', 'video'
+  assign step_row = steps.size | plus: pictures.size | plus: videos.size
+  assign step_no = 0
   assign authenticators = section.blocks | where: 'type', 'authenticator'
   assign named = 0
   for a in authenticators
@@ -58,21 +64,28 @@
       </div>
     {%- endif -%}
 
-    {%- if steps.size > 0 -%}
+    {%- if step_row > 0 -%}
       {%- if section.settings.steps_heading != blank -%}
         <h3 class="duet-about__subhead">{{ section.settings.steps_heading | escape }}</h3>
       {%- endif -%}
       <ol class="duet-about__grid">
-        {%- for block in steps -%}
-          <li class="duet-about__item" {{ block.shopify_attributes }}>
-            <span class="duet-about__num" aria-hidden="true">{{ forloop.index | prepend: '0' | slice: -2, 2 }}</span>
-            {%- if block.settings.title != blank -%}
-              <h3>{{ block.settings.title | escape }}</h3>
-            {%- endif -%}
-            {%- if block.settings.text != blank -%}
-              <div class="duet-about__text">{{ block.settings.text }}</div>
-            {%- endif -%}
-          </li>
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'photo' or block.type == 'video' -%}
+            <li class="duet-about__cell--{{ block.settings.width | default: 'full' }}" {{ block.shopify_attributes }}>
+              {%- render 'duet-media', block: block -%}
+            </li>
+          {%- elsif block.type == 'step' -%}
+            {%- assign step_no = step_no | plus: 1 -%}
+            <li class="duet-about__item" {{ block.shopify_attributes }}>
+              <span class="duet-about__num" aria-hidden="true">{{ step_no | prepend: '0' | slice: -2, 2 }}</span>
+              {%- if block.settings.title != blank -%}
+                <h3>{{ block.settings.title | escape }}</h3>
+              {%- endif -%}
+              {%- if block.settings.text != blank -%}
+                <div class="duet-about__text">{{ block.settings.text }}</div>
+              {%- endif -%}
+            </li>
+          {%- endif -%}
         {%- endfor -%}
       </ol>
     {%- endif -%}
@@ -279,6 +292,73 @@
           "type": "url",
           "id": "url",
           "label": "Website"
+        }
+      ]
+    },
+    {
+      "type": "photo",
+      "name": "Photo",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "Photo" },
+        { "type": "text", "id": "caption", "label": "Caption" },
+        { "type": "url", "id": "link", "label": "Link" },
+        {
+          "type": "select",
+          "id": "width",
+          "label": "Width",
+          "default": "full",
+          "options": [
+            { "value": "full", "label": "Whole row, nearly edge to edge" },
+            { "value": "half", "label": "Half the row" },
+            { "value": "column", "label": "One column" }
+          ]
+        },
+        {
+          "type": "select",
+          "id": "ratio",
+          "label": "Shape",
+          "default": "natural",
+          "options": [
+            { "value": "natural", "label": "As the photo is" },
+            { "value": "16_9", "label": "Wide (16:9)" },
+            { "value": "4_3", "label": "Landscape (4:3)" },
+            { "value": "1_1", "label": "Square" },
+            { "value": "3_4", "label": "Portrait (3:4)" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "video",
+      "name": "Video",
+      "settings": [
+        { "type": "video", "id": "video", "label": "Video file" },
+        { "type": "video_url", "id": "video_url", "label": "Or a YouTube or Vimeo link", "accept": ["youtube", "vimeo"] },
+        { "type": "checkbox", "id": "autoplay", "label": "Play on its own", "default": true, "info": "Muted and looping, like a moving photo. Off: it waits with its play button." },
+        { "type": "text", "id": "caption", "label": "Caption" },
+        {
+          "type": "select",
+          "id": "width",
+          "label": "Width",
+          "default": "full",
+          "options": [
+            { "value": "full", "label": "Whole row, nearly edge to edge" },
+            { "value": "half", "label": "Half the row" },
+            { "value": "column", "label": "One column" }
+          ]
+        },
+        {
+          "type": "select",
+          "id": "ratio",
+          "label": "Shape",
+          "default": "16_9",
+          "options": [
+            { "value": "natural", "label": "As the video is (uploaded files)" },
+            { "value": "16_9", "label": "Wide (16:9)" },
+            { "value": "4_3", "label": "Landscape (4:3)" },
+            { "value": "1_1", "label": "Square" },
+            { "value": "3_4", "label": "Portrait (3:4)" }
+          ]
         }
       ]
     }

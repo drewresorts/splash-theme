@@ -678,26 +678,30 @@
     right: max(1.6rem, env(safe-area-inset-right));
     margin: 0;
     padding: 0.8rem 1.2rem;
-    border: 1px solid currentColor;
+    border: 0;
     background: none;
     color: inherit;
     font: inherit;
-    font-size: 1.1rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    font-size: var(--dh-text-size, 1.6rem);
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
     cursor: pointer;
   }
 
+  /* No box: the word alone, its double edge showing on hover. */
   .duet-header__close:hover,
   .duet-header__close:focus-visible {
-    background: var(--dh-ink, #191f6b);
-    color: var(--dh-panel, #fff);
-    outline: none;
+    text-shadow: 2px 0 rgba(240, 78, 98, 0.6), -2px 0 rgba(102, 164, 200, 0.6);
+  }
+
+  .duet-header__close:focus-visible {
+    outline: 1px dashed currentColor;
+    outline-offset: 2px;
   }
 
   .duet-header__nav-list {
     display: grid;
-    gap: 0.4rem;
+    gap: 1.4rem;
     width: 100%;
     max-width: 72rem;
     /* Centered when it fits; scrolls from the first item when it doesn't. */
@@ -707,13 +711,9 @@
     counter-reset: duet-nav;
   }
 
+  /* No rules between the items: space and the numbers set them apart. */
   .duet-header__nav-item {
     counter-increment: duet-nav;
-    border-top: 1px solid currentColor;
-  }
-
-  .duet-header__nav-item:last-child {
-    border-bottom: 1px solid currentColor;
   }
 
   .duet-header__nav-link {
@@ -785,7 +785,20 @@
     width: 100%;
     max-width: 72rem;
     margin: 0 auto;
-    border-bottom: 1px solid currentColor;
+    padding: 0 1.6rem;
+    background: color-mix(in srgb, currentColor 6%, transparent);
+    transition: background-color 0.2s ease;
+  }
+
+  /* Typing in it: the bar deepens a little instead of drawing a box round the field. */
+  .duet-header__search-form:focus-within {
+    background: color-mix(in srgb, currentColor 11%, transparent);
+  }
+
+  .duet-header__search-input:focus,
+  .duet-header__search-input:focus-visible {
+    outline: none;
+    box-shadow: none;
   }
 
   .duet-header__search-input {

@@ -1,0 +1,138 @@
+/*
+ * Every page in the splash's look, without borders (after base.css, on all
+ * layouts). The theme's own border settings are set to nothing here, and
+ * the lines Dawn draws itself (accordions, the footer, the cart, account
+ * tables, quotes) are taken out. What a border did, space, a light tint or
+ * the fogged glass does now: buttons are solid, fields and option pills are
+ * soft fills. Headings and buttons take the splash's monospace capitals,
+ * headings its coral/teal double edge. Focus outlines stay, for keyboards.
+ */
+
+:root:root {
+  --duet-edge: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
+  --media-border-width: 0px;
+  --product-card-border-width: 0rem;
+  --collection-card-border-width: 0rem;
+  --blog-card-border-width: 0rem;
+  --popup-border-width: 0px;
+  --drawer-border-width: 0px;
+  --text-boxes-border-width: 0px;
+  --buttons-border-width: 0px;
+  --inputs-border-width: 0px;
+  --variant-pills-border-width: 0px;
+}
+
+/* ---------- Type: the splash's monospace capitals ---------- */
+
+:is(#MainContent, .drawer, cart-notification, .shopify-section-group-footer-group) :is(h1, h2, .h0, .h1, .h2, .title, .product__title > *, .main-page-title) {
+  font-family: var(--duet-mono);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: var(--duet-edge);
+}
+
+:is(#MainContent, .drawer, cart-notification, .shopify-section-group-footer-group) :is(h3, h4, .h3, .h4, .caption-with-letter-spacing, .form__label, .price, .badge) {
+  font-family: var(--duet-mono);
+  letter-spacing: 0.1em;
+}
+
+:is(.button, .shopify-challenge__button, .customer button, button.shopify-payment-button__button--unbranded) {
+  font-family: var(--duet-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ---------- Buttons: solid, no outline ---------- */
+
+.button--secondary,
+.customer .button--secondary {
+  --color-button: var(--color-foreground);
+  background-color: rgba(var(--color-foreground), 0.08);
+}
+
+.button--secondary:hover {
+  background-color: rgba(var(--color-foreground), 0.14);
+}
+
+/* ---------- Fields and options: soft fills instead of edges ---------- */
+
+:is(.field__input, .select__select, .text-area, .customer .field input, .localization-form__select, .quantity),
+body.has-garden-world #MainContent :is(.field__input, .select__select, .text-area) {
+  background-color: rgba(var(--color-foreground), 0.06);
+  box-shadow: none;
+}
+
+.product-form__input input[type='radio'] + label {
+  background-color: rgba(var(--color-foreground), 0.06);
+}
+
+.product-form__input input[type='radio']:checked + label {
+  background-color: rgb(var(--color-foreground));
+  color: rgb(var(--color-background));
+}
+
+/* ---------- Lines Dawn draws itself ---------- */
+
+hr {
+  height: 0;
+  margin: 3.2rem 0;
+  background: none;
+}
+
+.accordion,
+.accordion summary,
+.footer,
+.footer__content-bottom,
+.footer__content-top,
+.totals,
+.cart__footer,
+.cart-drawer .drawer__footer,
+.drawer__header,
+.share-button__fallback,
+.facets__disclosure,
+.facets-container,
+.mobile-facets__footer,
+.product__accordion,
+.predictive-search,
+.search-modal,
+.customer .order-history,
+body .cart-items :is(thead th, td),
+body .customer table :is(thead th, td, tbody tr),
+body .rte :is(table, th, td) {
+  border: 0;
+}
+
+.accordion + .accordion {
+  margin-top: 0.4rem;
+}
+
+.accordion summary {
+  padding-block: 1.6rem;
+}
+
+body .rte blockquote {
+  border: 0;
+  margin-inline: 0;
+  padding-left: 2.4rem;
+  font-style: italic;
+  opacity: 0.85;
+}
+
+/* Tables without rules: every other row lightly tinted. */
+body .rte tr:nth-child(even),
+body .customer tbody tr:nth-child(even) {
+  background-color: rgba(var(--color-foreground), 0.04);
+}
+
+/* Cards and media: no frames. */
+:is(.card, .card__inner, .product__media-item, .global-media-settings, .article-card, .collection-card-wrapper) {
+  border: 0;
+}
+
+/* Drawers and pop-ups on fogged glass instead of a frame. */
+:is(.drawer__inner, .cart-notification, .predictive-search, .search-modal__content) {
+  border: 0;
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+}

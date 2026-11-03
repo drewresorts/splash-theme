@@ -2,7 +2,11 @@
  * The About page sections (sections/duet-mission.liquid,
  * duet-authenticity.liquid, duet-location.liquid), in the site's interface
  * language: monospace capitals, ocean ink, the fuchsia/teal double edge on
- * titles, thin rules instead of boxes.
+ * titles. No borders or rules anywhere: space, type and the fogged glass
+ * set things apart. Photos and videos (snippets/duet-media.liquid) run
+ * large and frameless between the written blocks, so pictures and words
+ * read as two different things; the story section (sections/duet-story)
+ * sets them side by side.
  */
 .duet-about {
   --da-ink: #191f6b;
@@ -78,8 +82,6 @@
   display: grid;
   align-content: start;
   gap: 0.8rem;
-  padding-top: 1.6rem;
-  border-top: 1px solid currentColor;
 }
 
 .duet-about__item h3 {
@@ -106,18 +108,20 @@
 .duet-about__button {
   justify-self: start;
   display: inline-block;
-  padding: 1.2rem 1.8rem;
-  border: 1px solid currentColor;
-  color: inherit;
+  padding: 1.3rem 2rem;
+  border: 0;
+  background: var(--da-ink);
+  color: #fff;
   font-family: var(--da-mono);
   font-size: 1.2rem;
   letter-spacing: 0.14em;
   text-decoration: none;
   text-transform: uppercase;
+  transition: background-color 0.2s ease;
 }
 
 .duet-about__button:hover {
-  background: var(--da-ink);
+  background: var(--da-hero);
   color: #fff;
 }
 
@@ -137,10 +141,11 @@
 .duet-about__promise {
   display: grid;
   gap: 1.2rem;
-  padding: 2.8rem;
-  border: 1px solid currentColor;
-  box-shadow: 4px 4px 0 var(--da-hero), -4px -4px 0 var(--da-teal);
-  background: rgba(255, 255, 255, 0.85);
+  padding: 3.6rem;
+  /* A pane of clearer glass on the fogged page: no frame. */
+  background: rgba(255, 255, 255, 0.62);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
 }
 
 .duet-about__promise-title {
@@ -152,6 +157,7 @@
   line-height: 1.25;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  text-shadow: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
 }
 
 .duet-about__subhead {
@@ -175,7 +181,7 @@
 
 .duet-about__placeholder {
   padding: 1.2rem;
-  border: 1px dashed currentColor;
+  background: rgba(25, 31, 107, 0.06);
   font-family: var(--da-mono);
   font-size: 1.2rem;
   opacity: 0.7;
@@ -204,8 +210,6 @@
 .duet-about__detail {
   display: grid;
   gap: 0.6rem;
-  padding-top: 1.2rem;
-  border-top: 1px solid currentColor;
 }
 
 .duet-about__detail address {
@@ -220,9 +224,8 @@
 
 .duet-about__map {
   position: relative;
-  border: 1px solid currentColor;
   aspect-ratio: 4 / 3;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .duet-about__map iframe,
@@ -238,7 +241,164 @@
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid currentColor;
+}
+
+/* ---------- Photos and videos among the words (snippets/duet-media) ---------- */
+
+/* In a row of columns, a picture can take the whole row, half of it, or one column. */
+.duet-about__cell--full {
+  grid-column: 1 / -1;
+}
+
+.duet-about__cell--half {
+  grid-column: span 2;
+}
+
+/* A picture beside the words is two rows tall, and the words fill in round it. */
+.duet-about__grid:has(.duet-about__cell--half, .duet-about__cell--column) {
+  grid-auto-flow: dense;
+}
+
+:is(.duet-about__cell--half, .duet-about__cell--column) {
+  grid-row: span 2;
+  align-self: start;
+}
+
+.duet-media {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+}
+
+/* Taking the whole row, it runs past the text's margins, nearly to the edges of the screen. */
+.duet-about__cell--full .duet-media,
+.duet-story__cell--full .duet-media {
+  margin-inline: calc((100% - min(100vw - 4rem, 140rem)) / 2);
+}
+
+.duet-media__frame {
+  position: relative;
+  overflow: hidden;
+  background: rgba(25, 31, 107, 0.05);
+}
+
+.duet-media__img,
+.duet-media__video,
+.duet-media__placeholder-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+
+.duet-media__link {
+  display: block;
+  height: 100%;
+}
+
+.duet-media__link .duet-media__img {
+  transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.duet-media__link:hover .duet-media__img {
+  transform: scale(1.03);
+}
+
+.duet-media__placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.duet-media__placeholder-svg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+}
+
+.duet-media__placeholder span {
+  position: relative;
+  max-width: 32rem;
+  padding: 1rem 1.4rem;
+  background: rgba(255, 255, 255, 0.85);
+  font-family: var(--da-mono);
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.duet-media__caption {
+  font-family: var(--da-mono);
+  font-size: 1.1rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+/* ---------- Story: pictures and words side by side (sections/duet-story) ---------- */
+
+.duet-story__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  gap: 6.4rem 4.8rem;
+  align-items: center;
+}
+
+.duet-story__cell--full {
+  grid-column: 1 / -1;
+}
+
+/* Words: a narrow measure, set in from the picture beside them. */
+.duet-story__words {
+  display: grid;
+  gap: 1.4rem;
+  max-width: 48rem;
+  padding: 0 1.6rem;
+}
+
+.duet-story__words h3 {
+  margin: 0;
+  color: inherit;
+  font-family: var(--da-mono);
+  font-size: clamp(2rem, 2.6vw, 2.8rem);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
+}
+
+.duet-story__words .duet-about__text {
+  font-size: 1.7rem;
+}
+
+@media (max-width: 749px) {
+  .duet-about__cell--half,
+  .duet-about__cell--column {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .duet-story__grid {
+    grid-template-columns: 1fr;
+    gap: 4rem;
+  }
+
+  .duet-about__cell--full .duet-media,
+  .duet-story__cell--full .duet-media {
+    margin-inline: -2rem;
+  }
+
+  .duet-about__cell--full .duet-media__caption,
+  .duet-story__cell--full .duet-media__caption {
+    padding-inline: 2rem;
+  }
+
+  .duet-story__words {
+    padding: 0;
+  }
 }
 
 @media (max-width: 749px) {
