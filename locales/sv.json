@@ -373,6 +373,15 @@
       "min_error": "Den här artikeln har minst {{ min }}",
       "max_error": "Den här artikeln har max {{ max }}",
       "step_error": "Du kan endast lägga till den här artikeln med ökningar om {{ step }}"
+    },
+    "product_live_stream": {
+      "empty": "Choose a product to show it here.",
+      "nav_label": "Menu",
+      "menu_empty": "Choose a menu in this section’s settings."
+    },
+    "collections_live": {
+      "nav_label": "Menu",
+      "menu_empty": "Choose a menu in this section’s settings."
     }
   },
   "localization": {
@@ -389,7 +398,14 @@
       "title": "Konto",
       "details": "Kontouppgifter",
       "view_addresses": "Visa adresser",
-      "return": "Återgå till kontouppgifter"
+      "return": "Återgå till kontouppgifter",
+      "signed_in_as": "Signed in as",
+      "continue_shopping": "Continue shopping",
+      "nav_aria": "Account navigation",
+      "nav_overview": "Overview",
+      "help": "Help",
+      "returns": "Returns",
+      "no_default_address": "You have not set a default address yet."
     },
     "account_fallback": "Konto",
     "activate_account": {
@@ -525,6 +541,100 @@
       "send_on_label": "Skicka den (valfritt)",
       "expanded": "Mottagarformulär för presentkort öppnat",
       "collapsed": "Mottagarformulär för presentkort stängt"
+    }
+  },
+  "splash_streams": {
+    "email": {
+      "error": "Please enter a valid email address.",
+      "success": "Thanks — you're on the list.",
+      "captcha": "Check the box in the dialog, tap Submit there, then tap Continue below.",
+      "captcha_heading": "To continue, let us know you're not a robot.",
+      "captcha_frame_title": "Verification",
+      "captcha_retry": "Continue"
+    }
+  },
+  "catalog_splash": {
+    "nav": {
+      "placeholder": "Choose a menu in the theme editor (left column links)."
+    }
+  },
+  "product_splash": {
+    "add_to_cart": "Add To Cart",
+    "sold_out": "Sold out",
+    "added": "Added to cart",
+    "error": "We couldn’t add that to the cart. Please try again.",
+    "nav": {
+      "placeholder": "Choose a menu in the theme editor (left column links)."
+    }
+  },
+  "coming_soon": {
+    "countdown": {
+      "days": "Days",
+      "hours": "Hours",
+      "minutes": "Minutes",
+      "seconds": "Seconds"
+    },
+    "signup": {
+      "label": "Get notified when we launch",
+      "placeholder": "your@email.com",
+      "button": "Notify me",
+      "success": "You're on the list. See you at launch."
+    },
+    "sound": {
+      "mute": "Mute",
+      "unmute": "Unmute"
+    }
+  },
+  "boutique": {
+    "loading": "Building the boutique…",
+    "intro": {
+      "skip_3d": "Browse a 2D list instead",
+      "empty_catalog": "There are no products in this collection yet. Add products in the admin or pick a different collection in the theme editor."
+    },
+    "legend": {
+      "move": "to walk",
+      "look": "to look around",
+      "interact": "to inspect",
+      "exit": "to exit",
+      "mouse": "Mouse",
+      "click": "Click"
+    },
+    "crosshair": {
+      "inspect": "Press E or click to inspect"
+    },
+    "hud": {
+      "back": "Exit boutique",
+      "cart": "View cart"
+    },
+    "product": {
+      "close": "Close product",
+      "quantity": "Quantity",
+      "qty_minus": "Decrease quantity",
+      "qty_plus": "Increase quantity",
+      "add": "Add to cart",
+      "added": "Added ✓",
+      "added_n": "Added ‘[[title]]’ × [[count]] to your cart.",
+      "sold_out": "Sold out",
+      "out_of_stock": "Out of stock",
+      "in_stock": "In stock",
+      "low_stock_n": "Only [[count]] left",
+      "view_full": "View full details",
+      "error_generic": "We couldn’t add that to the cart. Please try again."
+    },
+    "cart": {
+      "title": "Your cart",
+      "close": "Close cart",
+      "empty": "Your cart is empty.",
+      "subtotal": "Subtotal",
+      "checkout": "Checkout"
+    },
+    "fallback": {
+      "note": "Your device couldn’t open the 3D boutique, so here’s the standard product list.",
+      "from_price_html": "From {{ price }}"
+    },
+    "noscript": {
+      "heading": "JavaScript is required to enter the 3D boutique",
+      "body": "Re-enable JavaScript or browse the catalog below."
     }
   }
 }

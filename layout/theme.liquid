@@ -76,6 +76,7 @@
       {{ body_font_bold_italic | font_face: font_display: 'swap' }}
       {{ settings.type_header_font | font_face: font_display: 'swap' }}
 
+      {% assign scheme_classes = '' %}
       {% for scheme in settings.color_schemes -%}
         {% assign scheme_classes = scheme_classes | append: ', .color-' | append: scheme.id %}
         {% if forloop.index == 1 -%}
@@ -371,7 +372,7 @@
           );
         })();
       </script>
-      <script src="{{ 'splash-email-signup.js' | asset_url }}"></script>
+      <script src="{{ 'splash-email-signup.js' | asset_url }}" defer></script>
       {% style %}
         body.layout-splash-streams {
           display: block;

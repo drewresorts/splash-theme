@@ -15,7 +15,6 @@
     if (window.pollenDream) return;
     var urls = {
       game: {{ 'pollen-dream.js' | asset_url | json }},
-      garden: {{ 'garden-splash.js' | asset_url | json }},
       css: {{ 'component-pollen-dream.css' | asset_url | json }},
     };
     var busy = false;
@@ -43,7 +42,6 @@
       import(urls.game)
         .then(function (game) {
           return game.openPollenDream({
-            gardenUrl: urls.garden,
             cssUrl: urls.css,
             returnFocus: returnTo,
             title: h ? h.dataset.gameName : '',

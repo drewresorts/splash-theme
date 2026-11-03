@@ -57,8 +57,7 @@
 
 /* ---------- Fields and options: soft fills instead of edges ---------- */
 
-:is(.field__input, .select__select, .text-area, .customer .field input, .localization-form__select, .quantity),
-body.has-garden-world #MainContent :is(.field__input, .select__select, .text-area) {
+:is(.field__input, .select__select, .text-area, .customer .field input, .localization-form__select, .quantity) {
   background-color: rgba(var(--color-foreground), 0.06);
   box-shadow: none;
 }

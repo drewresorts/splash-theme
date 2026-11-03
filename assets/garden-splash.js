@@ -165,56 +165,6 @@ const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a === undefin
 const colorKey = (c) => `${c[0] | 0},${c[1] | 0},${c[2] | 0}`;
 const hex = (c) => '#' + c.map((v) => (v | 0).toString(16).padStart(2, '0')).join('').toUpperCase();
 
-/*
- * OKLCH, a perceptual color space: turning a color's hue here keeps how
- * light and how saturated it looks, so a rotated palette keeps the
- * original's relationships. Colors are [r, g, b] in 0-255.
- */
-const toLinear = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-const fromLinear = (v) => 255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
-
-function toOklch(c) {
-  const [r, g, b] = c.map(toLinear);
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
-  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
-  const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
-  return [L, Math.hypot(A, B), Math.atan2(B, A)];
-}
-
-function oklchToLinear(L, C, h) {
-  const A = C * Math.cos(h);
-  const B = C * Math.sin(h);
-  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
-  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
-  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
-  return [
-    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
-  ];
-}
-
-/* Turns a color's hue by deg, giving up chroma only where the new hue can't hold it on screen. */
-function rotateHue(c, deg) {
-  const [L, C, h0] = toOklch(c);
-  const h = h0 + (deg * Math.PI) / 180;
-  const fits = (rgb) => rgb.every((v) => v >= -1e-4 && v <= 1 + 1e-4);
-  let rgb = oklchToLinear(L, C, h);
-  if (!fits(rgb)) {
-    let lo = 0;
-    let hi = C;
-    for (let i = 0; i < 24; i++) {
-      const mid = (lo + hi) / 2;
-      if (fits(oklchToLinear(L, mid, h))) lo = mid;
-      else hi = mid;
-    }
-    rgb = oklchToLinear(L, lo, h);
-  }
-  return rgb.map((v) => Math.round(clamp(fromLinear(clamp(v, 0, 1)), 0, 255)));
-}
 const luminance = (c) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
 const toColor = (c) => new THREE.Color(`rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`);
 
@@ -5180,27 +5130,6 @@ float hillAt(vec2 p) {
     if (n.dir < 0) sky.encounter = null;
   }
 
-  /*
-   * Two fingers swiped across the flowers: up starts the hidden game, down
-   * lies back to look at the sky. In the sky, swiping up gets back up.
-   */
-  twoFingerSwipe(dir) {
-    if (this.classList.contains('is-nav-open') || !this.arranged || this.failed) return;
-    this.gestured = true;
-    if (this.night) {
-      if (dir === 'up' && this.night.dir > 0) this.toggleNight();
-      return;
-    }
-    if (dir === 'down') {
-      this.toggleNight();
-      return;
-    }
-    if (this.eggEnabled()) {
-      if (this.egg) this.egg.taps = 0;
-      window.dispatchEvent(new CustomEvent('duet:egg', { detail: { garden: this } }));
-    }
-  }
-
   /* ---------------- zooming in the sky ---------------- */
 
   /* Lying on the bed, looking up, and not on the way in or out. */
@@ -6216,7 +6145,7 @@ float hillAt(vec2 p) {
           const [a, b] = [...pts.values()];
           const mx = (a.x + b.x) / 2;
           const my = (a.y + b.y) / 2;
-          g = { mode: 'pinch', d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoomNow(), w: anchor(mx, my), mx, my, t0: e.timeStamp };
+          g = { mode: 'pinch', d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoomNow(), w: anchor(mx, my) };
           endGrowth();
         } else if (pts.size === 1) {
           g = { mode: null, id: e.pointerId, sx: x, sy: y, lx: x, ly: y };
@@ -6244,18 +6173,10 @@ float hillAt(vec2 p) {
         const [x, y] = local(e);
         pt.x = x;
         pt.y = y;
-        if ((g.mode === 'pinch' || g.mode === 'swipe') && pts.size >= 2) {
+        if (g.mode === 'pinch' && pts.size >= 2) {
           const [a, b] = [...pts.values()];
           const d = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
-          const my = (a.y + b.y) / 2;
-          // Two fingers moving up or down together, still the same distance
-          // apart, are a swipe, not a pinch: the zoom goes back to where it was.
-          if (g.mode === 'pinch' && Math.abs(d / g.d0 - 1) < 0.15 && Math.abs(my - g.my) > 45) {
-            g.mode = 'swipe';
-            zoomAt(g.z0, g.w, g.mx, g.my);
-          }
-          g.dy = my - g.my;
-          if (g.mode === 'pinch') zoomAt((g.z0 * d) / g.d0, g.w, (a.x + b.x) / 2, (a.y + b.y) / 2);
+          zoomAt((g.z0 * d) / g.d0, g.w, (a.x + b.x) / 2, (a.y + b.y) / 2);
         } else if (g.mode === 'hold' && e.pointerId === g.id) {
           // Slide up to zoom in, down to zoom out, around the point first held.
           zoomAt(g.z0 * Math.exp((g.hy - y) * 0.012), g.w, g.hx, g.hy);
@@ -6289,11 +6210,6 @@ float hillAt(vec2 p) {
     const up = (e) => {
       if (!pts.delete(e.pointerId)) return;
       clearTimeout(holdTimer);
-      if (g && g.mode === 'swipe') {
-        const quick = e.timeStamp - g.t0 < 1200;
-        if (quick && Math.abs(g.dy) > 70) this.twoFingerSwipe(g.dy < 0 ? 'up' : 'down');
-        g.mode = 'done';
-      }
       // Lifting one finger of a pinch doesn't start a pan with the other.
       if (pts.size === 0) g = null;
       else if (g) g.mode = 'done';
@@ -6609,38 +6525,6 @@ float hillAt(vec2 p) {
 
 if (!customElements.get('garden-splash')) customElements.define('garden-splash', GardenSplash);
 
-/*
- * The garden's own building blocks, for the Pollen Dream game: the same
- * scene setup, plastic materials, petal geometry, eyes and growth code,
- * without the element around them. The bed it returns has the element's
- * methods for flowers (makeFlower, sequence, assignEyes, buildMeshes,
- * shape, updateEyes, clearMeshes); config supplies the colors and sizes
- * readConfig would normally read from data attributes.
- */
-export function createBed(config) {
-  const bed = Object.create(GardenSplash.prototype);
-  // Colors as '#hex' strings or [r, g, b] arrays (a page garden's own, scheme applied).
-  const col = (c) => (Array.isArray(c) ? c : parseColor(c));
-  const palette = (config.palette || []).map(col).filter(Boolean);
-  Object.assign(bed, {
-    palette: palette.length ? palette : [[166, 39, 73], [102, 164, 200], [185, 229, 251], [240, 78, 98]],
-    foliage: col(config.foliage) || [102, 164, 200],
-    heroColor: col(config.center) || [240, 78, 98],
-    heroAccent: col(config.accent) || [166, 39, 73],
-    soil: col(config.soil) || OCEAN,
-    flowers: [],
-    elapsed: 0,
-    reduced: !!config.reduced,
-    h: 0,
-    camDist: config.camDist || 1000,
-  });
-  bed.isLight = luminance(bed.soil) > 0.6;
-  bed.ink = bed.isLight ? OCEAN : POWDER;
-  bed.setupScene();
-  return bed;
-}
-
 /* What the shop's blossoms (assets/garden-blossoms.js) build with: handed over, so that file never imports this one a second time. */
 const HELPERS = { THREE, FLOOR_Z, STAGE, clamp, lerp, range, smooth, mix, tone, toColor, parseColor, mulberry32 };
 
-export { THREE, STAGE, FLOOR_Z, mulberry32, poissonDisc, parseColor, mix, tone, toColor, rgba, clamp, lerp, range, smooth, alphaTexture };
