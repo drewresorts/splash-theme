@@ -86,6 +86,16 @@
     go(url, { push: true });
   });
 
+  // Other scripts can change page the same way (the 3D shop flies a product into its page): false if that page needs a real load.
+  window.duetSoftNav = {
+    go(href) {
+      const url = urlOf({ href });
+      if (!url || url.origin !== location.origin || HARD.test(url.pathname)) return false;
+      go(url, { push: true });
+      return true;
+    },
+  };
+
   window.addEventListener('popstate', (e) => {
     const here = location.pathname + location.search;
     if (here === shownUrl) return;

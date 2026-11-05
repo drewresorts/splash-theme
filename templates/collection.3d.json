@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "duet-shop-3d",
+      "settings": {
+        "per_page": 24,
+        "show_description": false,
+        "show_sort": true,
+        "open_in": "3d"
+      }
+    }
+  },
+  "order": ["main"]
+}
