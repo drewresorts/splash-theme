@@ -14,6 +14,10 @@
  *   Phone: move the phone itself to look round (where the phone allows it),
  *   or drag anywhere; the thumb stick walks (pushed all the way, runs); Jump.
  *
+ * Now and then a gust of wind rises nearby (garden-splash.js updateGusts):
+ * a note at the top says so and an arrow points the way. Walk into it and
+ * it carries you up above the clouds, to glide back down, steering.
+ *
  * The world is the page's garden itself (garden-splash.js startExplore());
  * this file reads the controls and draws the few buttons over it. New ways
  * of moving are modes in garden-splash.js (EXPLORE_MODES); new things to do
@@ -36,6 +40,9 @@ const STRINGS = {
   failedHelp: 'Exploring needs the garden on the home page, with WebGL turned on.',
   jump: 'Jump',
   motion: 'Tilt to look',
+  gust: 'Wind rising nearby',
+  lifted: 'Carried up on the wind',
+  gliding: 'Gliding down',
 };
 
 let current = null;
@@ -204,6 +211,7 @@ class Explore {
     root.tabIndex = -1;
     root.innerHTML = `
       <div class="pollen-dream__surface" data-surface aria-hidden="true"></div>
+      <p class="pollen-dream__alert" data-alert role="status" hidden><span class="pollen-dream__alert-arrow" data-alert-arrow aria-hidden="true"></span><span data-alert-text></span></p>
       <div class="pollen-dream__hud" data-hud hidden>
         <button type="button" class="pollen-dream__chip" data-action="motion" aria-pressed="false" hidden>${S.motion}</button>
         <button type="button" class="pollen-dream__chip" data-action="pause">${S.pause}</button>
@@ -237,7 +245,7 @@ class Explore {
     this.root = root;
     const q = (s) => root.querySelector(s);
     this.surface = q('[data-surface]');
-    this.ui = { hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]'), motion: q('[data-action="motion"]') };
+    this.ui = { alert: q('[data-alert]'), alertText: q('[data-alert-text]'), alertArrow: q('[data-alert-arrow]'), hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]'), motion: q('[data-action="motion"]') };
   }
 
   show(state) {
@@ -588,11 +596,48 @@ class Explore {
     inp.jump = on && (has('Space') || this.holds.jump);
     inp.up = on ? (has('Space', 'KeyE') ? 1 : 0) - (has('KeyQ', 'KeyC') ? 1 : 0) : 0;
     inp.run = on && (has('ShiftLeft', 'ShiftRight') || push > 0.92);
+    inp.paused = !on;
+  }
+
+  /*
+   * The note at the top about the wind: a gust rising nearby, with an arrow
+   * pointing which way it is from where the visitor faces (straight up is
+   * straight ahead); then, carried up, and gliding down for a moment.
+   */
+  windNote() {
+    const g = this.garden;
+    const E = g && g.explorer;
+    const G = g && g.updraft;
+    let msg = '';
+    let arrow = null;
+    if (E && this.state === 'play' && E.intro >= 1) {
+      if (E.mode === 'lift') msg = STRINGS.lifted;
+      else if (E.mode === 'glide') {
+        if (!this.glideAt) this.glideAt = performance.now();
+        if (performance.now() - this.glideAt < 4000) msg = STRINGS.gliding;
+      } else if (G && !G.rider && G.age < G.life && G.out > 0) {
+        msg = STRINGS.gust;
+        const toward = Math.atan2(G.y - E.y, G.x - E.x);
+        const ahead = E.yaw + Math.PI / 2;
+        arrow = Math.atan2(Math.sin(toward - ahead), Math.cos(toward - ahead));
+      }
+      if (E.mode !== 'glide') this.glideAt = 0;
+    }
+    const ui = this.ui;
+    if (msg !== this.noteShown) {
+      this.noteShown = msg;
+      ui.alert.hidden = !msg;
+      ui.alertText.textContent = msg;
+    }
+    ui.alertArrow.hidden = arrow === null;
+    // Turning left (counterclockwise seen from above) is a turn to the left on screen.
+    if (arrow !== null) ui.alertArrow.style.transform = `rotate(${(-arrow * 180) / Math.PI}deg)`;
   }
 
   tick() {
     if (this.closed) return;
     this.send();
+    this.windNote();
     this.raf = requestAnimationFrame(() => this.tick());
   }
 

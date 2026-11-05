@@ -265,6 +265,73 @@ const EXPLORE_MODES = {
     E.bob += (bob - E.bob) * (1 - Math.exp(-dt * 12));
   },
 
+  /*
+   * Carried up by a gust (see updateGusts): drawn into the middle of the
+   * column and round it, rising fast and easing off as it nears the top,
+   * high above the clouds. Then the visitor glides.
+   */
+  lift(G, E, dt, span) {
+    const R = E.ride;
+    R.t += dt;
+    const k = 1 - Math.exp(-dt * 2.5);
+    const ox = E.x - R.cx;
+    const oy = E.y - R.cy;
+    const ang = Math.atan2(oy, ox) + dt * 1.3;
+    const rad = lerp(Math.hypot(ox, oy), R.r, k);
+    E.x = R.cx + Math.cos(ang) * rad;
+    E.y = R.cy + Math.sin(ang) * rad;
+    E.vx = -Math.sin(ang) * rad * 1.3;
+    E.vy = Math.cos(ang) * rad * 1.3;
+    const left = R.top - E.z;
+    E.vz += (Math.min(span * 1.1, 160 + left * 0.85) - E.vz) * k;
+    E.z += E.vz * dt;
+    E.bob += (Math.sin(R.t * 7) * 3 - E.bob) * k;
+    if (left < span * 0.03 || R.t > 16) {
+      E.mode = 'glide';
+      E.vz *= 0.3;
+      E.ride = null;
+    }
+  },
+
+  /*
+   * Gliding back down from on high: floating where the visitor steers
+   * (forward, back and to the sides as on foot, Shift for faster), sinking
+   * gently all the way; holding jump catches the air and slows the fall.
+   * On the ground they are back on foot.
+   */
+  glide(G, E, dt, span) {
+    const inp = E.input;
+    const speed = (inp.run ? 460 : 240) * clamp(span / 1280, 0.6, 1.2);
+    const fx = -Math.sin(E.yaw);
+    const fy = Math.cos(E.yaw);
+    let wx = fx * inp.f + fy * inp.r;
+    let wy = fy * inp.f - fx * inp.r;
+    const m = Math.hypot(wx, wy);
+    if (m > 1) {
+      wx /= m;
+      wy /= m;
+    }
+    const k = 1 - Math.exp(-dt * 1.4);
+    E.vx += (wx * speed - E.vx) * k;
+    E.vy += (wy * speed - E.vy) * k;
+    const sink = (inp.jump ? 40 : inp.run ? 140 : 85) * clamp(span / 1280, 0.7, 1.2);
+    E.vz += (-sink - E.vz) * (1 - Math.exp(-dt * 1.2));
+    E.x += E.vx * dt;
+    E.y += E.vy * dt;
+    E.z += E.vz * dt;
+    // Riding the air: a slow rise and fall.
+    E.stride += dt;
+    E.bob = G.reduced ? 0 : Math.sin(E.stride * 0.9) * 5;
+    const ground = FLOOR_Z + G.hillAt(E.x, E.y) + E.eye;
+    if (E.z <= ground) {
+      E.z = ground;
+      E.vz = 0;
+      E.bob = 0;
+      E.mode = 'walk';
+      E.grounded = true;
+    }
+  },
+
   fly(G, E, dt, span) {
     const inp = E.input;
     // Fly where you look; strafe level; rise and sink straight up and down.
@@ -834,6 +901,7 @@ class GardenSplash extends HTMLElement {
     if (this.onWorldResume) window.removeEventListener('duet:world-resume', this.onWorldResume);
     if (this.onEggClick) document.removeEventListener('click', this.onEggClick);
     if (this.terrain) this.terrain.parts.forEach((x) => x.dispose());
+    if (this.windColumn) this.windColumn.parts.forEach((x) => x.dispose());
     if (this.bee) {
       this.bee.materials.forEach((m) => m.dispose());
       this.bee = null;
@@ -2613,12 +2681,13 @@ class GardenSplash extends HTMLElement {
     if (this.explorer) return true;
     if (!this.canExplore()) return false;
     if (this.view) this.resetView(true);
-    if (!this.night) {
-      this.skyTime = this.skyNow();
-      this.buildSky();
-      this.night = { t: 1, dir: 1, since: 0, nextShoot: 3 + Math.random() * 4 };
-    }
-    Object.assign(this.night, { t: 1, dir: 1 });
+    // The sky over all the land (see buildSky), not just over the bed as in the sky view.
+    this.skyTime = this.skyNow();
+    this.buildSky(true);
+    if (!this.night) this.night = { t: 1, dir: 1, since: 0, nextShoot: 3 + Math.random() * 4 };
+    Object.assign(this.night, { t: 1, dir: 1, since: 0 });
+    this.updraft = null;
+    this.nextUpdraft = this.elapsed + 9 + Math.random() * 6;
     this.skyView = { z: 1, tz: 1, ax: 0, ay: 0, tax: 0, tay: 0 };
     // The land: hills rolling away from the bed, meadow, grass (see buildLand).
     if (!this.terrain) this.buildLand();
@@ -2868,6 +2937,8 @@ float hillAt(vec2 p) {
   stopExplore() {
     if (!this.explorer) return;
     this.explorer = null;
+    this.updraft = null;
+    if (this.windColumn) this.windColumn.group.visible = false;
     if (this.terrain) this.terrain.group.visible = false;
     this.classList.remove('is-exploring');
     const c = this.camera;
@@ -2920,7 +2991,8 @@ float hillAt(vec2 p) {
         E.pitch += (E.aim.pitch - E.pitch) * k;
       }
       E.yaw -= E.input.turn * 2 * dt;
-      EXPLORE_MODES[E.mode](this, E, dt, span);
+      // Paused in the air, the visitor hangs there until they come back.
+      if (!(E.input.paused && E.mode !== 'walk')) EXPLORE_MODES[E.mode](this, E, dt, span);
       // Out past the edge of the land the air turns the visitor gently back.
       const ox = E.x - this.w / 2;
       const oy = E.y - this.h / 2;
@@ -2931,11 +3003,15 @@ float hillAt(vec2 p) {
         E.x -= (ox / d) * back;
         E.y -= (oy / d) * back;
       }
+      this.updateGusts(dt, E);
       for (const hook of this.exploreHooks) hook(dt, E, this);
     }
     c.position.set(E.x, E.y, E.z + E.bob);
     c.rotation.set(Math.PI / 2 + E.pitch, 0, E.yaw);
-    c.fov = lerp(FOV, E.mode === 'walk' ? 75 : 72, smooth(E.intro));
+    // A little wider on foot, and wider still carried up on the wind; eased from one to the next.
+    const fov = E.mode === 'walk' ? 75 : E.mode === 'lift' ? 82 : 72;
+    E.fov = E.fov === undefined ? fov : E.fov + (fov - E.fov) * (1 - Math.exp(-dt * 1.5));
+    c.fov = lerp(FOV, E.fov, smooth(E.intro));
     c.near = 2;
     c.far = 400000;
     c.updateProjectionMatrix();
@@ -2957,6 +3033,145 @@ float hillAt(vec2 p) {
       // Grass only matters near the ground.
       L.grass.visible = E.z - FLOOR_Z - this.hillAt(E.x, E.y) < 1400;
     }
+  }
+
+  /*
+   * Wind gusts, exploring on foot. Now and then a gust rises out of the
+   * grass somewhere a short walk from the visitor: a turning column of
+   * wind, streaks of air and a few petals carried round and up in it, there
+   * for half a minute or so (assets/pollen-dream.js warns of it and points
+   * the way). Walked into, it carries the visitor up, round and round, high
+   * above the clouds (mode 'lift'), and from there they glide back down to
+   * the ground, steering as they go ('glide'). this.updraft is the gust
+   * now, or null: { x, y, R, H, age, life, out (0 to 1, how much it is
+   * there), rider }.
+   */
+  updateGusts(dt, E) {
+    const span = Math.max(this.w, this.h);
+    const t = this.elapsed;
+    const W = this.windColumn || this.buildWindColumn();
+    let G = this.updraft;
+    // None while up in the air, and not straight away on landing.
+    if (E.mode !== 'walk') this.nextUpdraft = Math.max(this.nextUpdraft, t + 12);
+    if (!G && E.mode === 'walk' && t > this.nextUpdraft) {
+      // Ahead, off to one side or the other, a short walk away.
+      const a = E.yaw + Math.PI / 2 + (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.9);
+      const d = span * (0.3 + Math.random() * 0.3);
+      G = this.updraft = { x: E.x + Math.cos(a) * d, y: E.y + Math.sin(a) * d, R: span * 0.07, H: span * 0.8, age: 0, life: 26 + Math.random() * 10, out: 0, rider: false };
+    }
+    W.group.visible = !!G;
+    if (!G) return;
+    G.age += dt;
+    const ending = !G.rider && G.age > G.life;
+    G.out = clamp(G.out + dt * (ending ? -0.6 : 0.8), 0, 1);
+    if (ending && G.out <= 0) {
+      this.updraft = null;
+      W.group.visible = false;
+      this.nextUpdraft = t + 14 + Math.random() * 18;
+      return;
+    }
+    const ground = FLOOR_Z + this.hillAt(G.x, G.y);
+    // Walked into, it takes the visitor up.
+    if (!G.rider && G.out > 0.5 && E.mode === 'walk' && Math.hypot(E.x - G.x, E.y - G.y) < G.R * 1.2 && E.z < ground + G.H) {
+      G.rider = true;
+      const sky = this.sky;
+      E.mode = 'lift';
+      E.grounded = false;
+      E.vz = Math.max(E.vz, 120);
+      E.ride = { cx: G.x, cy: G.y, r: G.R * 0.35, t: 0, top: sky ? sky.eye.z + sky.D * 1.65 : span * 4 };
+    }
+    // Once it has let them go at the top, it dies away.
+    if (G.rider && E.mode !== 'lift') {
+      G.rider = false;
+      G.life = 0;
+    }
+    // Carrying someone, the column reaches up after them.
+    const H = G.rider ? Math.max(G.H, E.z - ground + span * 0.25) : G.H;
+    const P = W.motes;
+    const pos = P.geometry.attributes.position;
+    const col = P.geometry.attributes.color;
+    const spin = this.reduced ? 0.3 : 1;
+    const cam = this.camera.position;
+    for (let i = 0; i < W.n; i++) {
+      const h = (W.h0[i] + t * W.rise[i]) % 1;
+      const r = G.R * (0.2 + 0.95 * h) * W.rad[i];
+      const a = W.ph[i] + t * W.spin[i] * spin * (1.7 - h);
+      const x = G.x + Math.cos(a) * r;
+      const y = G.y + Math.sin(a) * r;
+      const z = ground + h ** 1.25 * H;
+      pos.setXYZ(i, x, y, z);
+      // None right in the visitor's face (they would be big soft blurs), riding it or walking through.
+      const near = clamp((Math.hypot(x - cam.x, y - cam.y, z - cam.z) - 25) / 90, 0, 1);
+      col.setW(i, G.out * Math.sin(Math.PI * h) ** 0.6 * W.alpha[i] * near);
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    // Streaks of air wound round it, each a short arc fading toward its tail.
+    const L = W.streaks;
+    const lp = L.geometry.attributes.position;
+    const lc = L.geometry.attributes.color;
+    let v = 0;
+    for (let s = 0; s < W.ns; s++) {
+      const st = W.st[s];
+      const h = (st.h0 + t * st.rise) % 1;
+      const a0 = st.ph + t * st.spin * spin * (1.7 - h);
+      for (let j = 0; j < W.seg; j++) {
+        for (const q of [j, j + 1]) {
+          const hh = Math.max(0, h - q * 0.006);
+          const a = a0 - q * 0.075;
+          const r = G.R * (0.25 + 0.95 * hh) * st.rad;
+          lp.setXYZ(v, G.x + Math.cos(a) * r, G.y + Math.sin(a) * r, ground + hh ** 1.25 * H);
+          lc.setW(v, G.out * Math.sin(Math.PI * h) * (1 - q / W.seg) * 0.8);
+          v++;
+        }
+      }
+    }
+    lp.needsUpdate = true;
+    lc.needsUpdate = true;
+  }
+
+  /* The gust's look (see updateGusts): motes of air and petals, and streaks, drawn round its column each frame. */
+  buildWindColumn() {
+    const n = 640;
+    const tex = this.glowTexture();
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    const cols = new Float32Array(n * 4);
+    const c = new THREE.Color();
+    const W = { n, h0: [], rise: [], rad: [], ph: [], spin: [], alpha: [] };
+    for (let i = 0; i < n; i++) {
+      // Mostly white air; now and then a petal in the garden's colors.
+      const petal = Math.random() < 0.18 && this.palette && this.palette.length;
+      c.copy(petal ? toColor(pick(Math.random, this.palette)) : toColor(WHITE));
+      cols.set([c.r, c.g, c.b, 0], i * 4);
+      W.h0.push(Math.random());
+      W.rise.push(0.07 + Math.random() * 0.09);
+      W.rad.push(0.6 + Math.random() * 0.55);
+      W.ph.push(Math.random() * TAU);
+      W.spin.push(2.2 + Math.random() * 1.6);
+      W.alpha.push(petal ? 1 : 0.5 + Math.random() * 0.45);
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(cols, 4));
+    const mat = new THREE.PointsMaterial({ size: 15, map: tex, vertexColors: true, transparent: true, depthWrite: false, fog: true });
+    const motes = new THREE.Points(geo, mat);
+    motes.frustumCulled = false;
+    const ns = 26;
+    const seg = 14;
+    const lgeo = new THREE.BufferGeometry();
+    lgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ns * seg * 2 * 3), 3));
+    const lcol = new Float32Array(ns * seg * 2 * 4);
+    for (let i = 0; i < ns * seg * 2; i++) lcol.set([1, 1, 1, 0], i * 4);
+    lgeo.setAttribute('color', new THREE.BufferAttribute(lcol, 4));
+    const lmat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, fog: true });
+    const streaks = new THREE.LineSegments(lgeo, lmat);
+    streaks.frustumCulled = false;
+    const st = Array.from({ length: ns }, () => ({ h0: Math.random(), rise: 0.06 + Math.random() * 0.06, rad: 0.7 + Math.random() * 0.5, ph: Math.random() * TAU, spin: 2 + Math.random() * 1.4 }));
+    const group = new THREE.Group();
+    group.add(motes, streaks);
+    group.visible = false;
+    this.scene.add(group);
+    this.windColumn = Object.assign(W, { group, motes, streaks, ns, seg, st, parts: [tex, geo, mat, lgeo, lmat] });
+    return this.windColumn;
   }
 
   /* A clearing in the logo to lie down in: flowers close all round, none right overhead. */
@@ -3164,7 +3379,13 @@ float hillAt(vec2 p) {
   }
 
   /* The sky and its stars, laid out for this screen and this clearing. */
-  buildSky() {
+  /*
+   * wide: for exploring, the sky reaches over all the land. The clouds and
+   * stars fill a square that goes along with the visitor (see updateNight),
+   * wrapping round inside it, and the sky itself, the sun and the moon
+   * (in sky.dome) stay overhead wherever they are.
+   */
+  buildSky(wide = false) {
     if (this.sky) {
       this.scene.remove(this.sky.group);
       this.sky.disposables.forEach((d) => d.dispose());
@@ -3186,6 +3407,10 @@ float hillAt(vec2 p) {
     const D = 2600;
     const viewW = 2 * D * Math.tan((fov * Math.PI) / 360) * (this.w / this.h);
     const viewH = 2 * D * Math.tan((fov * Math.PI) / 360);
+    const spanX = wide ? viewW * 2.6 : viewW * 1.8;
+    const spanY = wide ? viewW * 2.6 : viewH * 1.7;
+    const dome = new THREE.Group();
+    group.add(dome);
     const b = this.logoBox;
     const S = Math.min((0.62 * viewW) / b.w, (0.45 * viewH) / b.h);
     const lcx = b.x + b.w / 2;
@@ -3336,16 +3561,16 @@ float hillAt(vec2 p) {
       for (const [fx, fy] of sources) heap(eye.x + fx * viewW, eye.y + fy * viewH, clamp(this.w * 0.12, 54, 170), 1.2, false, true);
       this.logoSources = heaps.length;
       // Near clouds, the rest of the sky over.
-      for (let k = 0; k < 22; k++) {
-        const cx = eye.x + (Math.random() - 0.5) * viewW * 1.8;
-        const cy = eye.y + (Math.random() - 0.5) * viewH * 1.7;
+      for (let k = 0; k < (wide ? 46 : 22); k++) {
+        const cx = eye.x + (Math.random() - 0.5) * spanX;
+        const cy = eye.y + (Math.random() - 0.5) * spanY;
         // Away from the logo in the middle.
         if (Math.abs(cx - eye.x) < viewW * 0.34 && Math.abs(cy - eye.y) < viewH * 0.28) continue;
         heap(cx, cy, clamp(this.w * 0.085, 34, 120) * (0.6 + Math.random() * 0.7), 1.2, false, false);
       }
       // Far clouds, higher up.
-      for (let k = 0; k < 16; k++) {
-        heap(eye.x + (Math.random() - 0.5) * viewW * 2.6, eye.y + (Math.random() - 0.5) * viewH * 2.4, clamp(this.w * 0.065, 30, 90) * (0.7 + Math.random() * 0.5), 1.4, true, false);
+      for (let k = 0; k < (wide ? 34 : 16); k++) {
+        heap(eye.x + (Math.random() - 0.5) * (wide ? spanX : viewW * 2.6), eye.y + (Math.random() - 0.5) * (wide ? spanY : viewH * 2.4), clamp(this.w * 0.065, 30, 90) * (0.7 + Math.random() * 0.5), 1.4, true, false);
       }
     }
     // By day the big clouds around the logo become it. Each is made of the
@@ -3406,13 +3631,13 @@ float hillAt(vec2 p) {
     // The far sky: many faint stars, and a few brighter ones grouped in constellations.
     const field = [];
     // Well past the view too, so tipping up to it the stars don't stop at an edge.
-    for (let i = 0; i < 2000; i++) {
+    for (let i = 0; i < (wide ? 3600 : 2000); i++) {
       const u = Math.random() - 0.5;
       const v = Math.random() - 0.5;
-      // Past the view they dim away to nothing, as stars low in a hazy sky do.
-      const fade = 1 - smooth(clamp((Math.max(Math.abs(u), Math.abs(v)) * 2.4 - 0.5) / 0.65, 0, 1));
+      // Past the view they dim away to nothing, as stars low in a hazy sky do (exploring, as they near the square's edge: see updateNight).
+      const fade = wide ? 1 : 1 - smooth(clamp((Math.max(Math.abs(u), Math.abs(v)) * 2.4 - 0.5) / 0.65, 0, 1));
       field.push({
-        p: new THREE.Vector3(eye.x + u * viewW * 2.4, eye.y + v * viewH * 2.4, eye.z + D * 1.3),
+        p: new THREE.Vector3(eye.x + u * (wide ? spanX : viewW * 2.4), eye.y + v * (wide ? spanY : viewH * 2.4), eye.z + D * 1.3),
         col: WHITE.map((c) => c * (0.35 + Math.random() * 0.5) * fade),
         tw: 0.8 + Math.random() * 4,
         ph: Math.random() * TAU,
@@ -3478,7 +3703,7 @@ float hillAt(vec2 p) {
     const skyPlane = new THREE.Mesh(skyGeo, skyMat);
     skyPlane.position.set(eye.x, eye.y, eye.z + D * 1.45);
     skyPlane.renderOrder = -3;
-    group.add(skyPlane);
+    dome.add(skyPlane);
     disposables.push(skyGeo, skyMat);
     const glows = [skyPlane];
 
@@ -3552,14 +3777,14 @@ float hillAt(vec2 p) {
     }
 
     this.sky = {
-      group, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, puffs, logoPuffs, cloudMat, fpos: new Float32Array(logo.length * 3), field, fieldPts, drift, driftPts, glows, shoot,
+      group, dome, wide, spanX, spanY, mid: { x: eye.x, y: eye.y }, disposables, time, eye, fov, D, viewW, viewH, logo, logoPts, puffs, logoPuffs, cloudMat, fpos: new Float32Array(logo.length * 3), field, fieldPts, drift, driftPts, glows, shoot,
       heaps, planes: this.buildPlanes(group, disposables, atlas, tex, time, D), nextPlane: this.elapsed + 9 + Math.random() * 10,
       birds: this.buildBirds(group, disposables, time), nextBirds: this.elapsed + 7 + Math.random() * 6,
       blimp: time.dark ? this.buildBlimp(group, disposables) : null,
       banner: time.dark ? null : this.buildBanner(group, disposables),
       nextBlimp: this.elapsed + 25 + Math.random() * 35,
       peekers, nextPeek: this.elapsed + 5 + Math.random() * 4, orbs, encounter: null, nextEncounter: this.elapsed + 5 + Math.random() * 15,
-      ...this.buildSunAndMoon(group, disposables, tex, eye, D, viewW, viewH, time),
+      ...this.buildSunAndMoon(dome, disposables, tex, eye, D, viewW, viewH, time),
       gaze: new THREE.Vector3(gx, this.h - gy, eye.z + D),
     };
   }
@@ -3573,7 +3798,8 @@ float hillAt(vec2 p) {
   reshapeCloud(h, sky) {
     const big = (h.far ? clamp(this.w * 0.065, 30, 90) * (0.7 + Math.random() * 0.5) : clamp(this.w * 0.085, 34, 120) * (0.6 + Math.random() * 0.7)) * (h.source ? 1.2 : 1);
     const rb = big * h.scale;
-    h.cy = sky.eye.y + (Math.random() - 0.5) * sky.viewH * (h.far ? 2.4 : 1.7);
+    // Exploring, it keeps its place across the square (it comes back in at the far edge, out of sight).
+    if (!sky.wide) h.cy = sky.eye.y + (Math.random() - 0.5) * sky.viewH * (h.far ? 2.4 : 1.7);
     h.rx = rb * 1.4;
     h.ry = rb * 1.1;
     h.source = false;
@@ -3952,10 +4178,24 @@ float hillAt(vec2 p) {
     const unit = (sky.viewW / this.w) * 2;
     const fp = sky.fpos;
     // Where the drifting clouds have got to: they move right, coming round again.
-    const span = sky.viewW * 1.8;
-    const left = sky.eye.x - span / 2;
+    // Exploring, the sky goes along with the visitor (see buildSky): what is far off, the sky itself, the sun
+    // and the moon, stays overhead, rising if they rise above the clouds; the clouds and the stars, which
+    // they pass under (or over), wrap round them, thinning away toward the edges so none wraps in sight.
+    const E = this.explorer;
+    const midX = E ? E.x : sky.eye.x;
+    const midY = E ? E.y : sky.eye.y;
+    sky.mid.x = midX;
+    sky.mid.y = midY;
+    sky.dome.position.set(midX - sky.eye.x, midY - sky.eye.y, E ? Math.max(0, E.z - sky.eye.z - sky.D * 0.6) : 0);
+    const span = sky.spanX;
+    const left = midX - span / 2;
+    const spanY = sky.spanY;
+    const top = midY - spanY / 2;
     const move = this.reduced ? 0 : t * sky.viewW * 0.006;
     const driftX = (x, speed) => left + ((((x - left + move * speed) % span) + span) % span);
+    const wrapX = (x) => left + ((((x - left) % span) + span) % span);
+    const wrapY = (y) => (sky.wide ? top + ((((y - top) % spanY) + spanY) % spanY) : y);
+    const edge = (x, y) => (sky.wide ? 1 - smooth(clamp((Math.max(Math.abs(x - midX) / span, Math.abs(y - midY) / spanY) - 0.3) / 0.17, 0, 1)) : 1);
     if (sky.heaps) for (const h of sky.heaps) h.sum = h.n = 0;
     // A fresh press in the sky (not on its buttons) bursts the stars round it apart, once.
     const ptr = this.pointer;
@@ -4048,11 +4288,19 @@ float hillAt(vec2 p) {
     // Stars fade out as the sky lightens; a few linger at dawn and dusk.
     const stars = clamp(1 - time.light * 1.6, 0, 1);
     const fc = sky.fieldPts.geometry.attributes.color;
+    const fpos = sky.fieldPts.geometry.attributes.position;
     sky.field.forEach((s, i) => {
-      const tw = (this.reduced ? 0.8 : 0.5 + 0.5 * Math.sin(t * s.tw + s.ph) ** 2) * show * stars * (s.bright ? 1.3 : 1);
+      let tw = (this.reduced ? 0.8 : 0.5 + 0.5 * Math.sin(t * s.tw + s.ph) ** 2) * show * stars * (s.bright ? 1.3 : 1);
+      if (sky.wide) {
+        const x = wrapX(s.p.x);
+        const y = wrapY(s.p.y);
+        fpos.setXYZ(i, x, y, s.p.z);
+        tw *= edge(x, y);
+      }
       fc.setXYZ(i, (s.col[0] / 255) * tw, (s.col[1] / 255) * tw, (s.col[2] / 255) * tw);
     });
     fc.needsUpdate = true;
+    if (sky.wide) fpos.needsUpdate = true;
     this.knockSwell(sky.sun, t);
     if (sky.moon) {
       this.moonEye(t, show * stars);
@@ -4072,14 +4320,15 @@ float hillAt(vec2 p) {
     if (sky.driftPts) {
       for (const h of sky.heaps) {
         const hx = driftX(h.cx, h.speed);
-        if (h.wx !== undefined && hx < h.wx - span * 0.5) this.reshapeCloud(h, sky);
+        if (h.wx !== undefined && Math.abs(hx - h.wx) > span * 0.5) this.reshapeCloud(h, sky);
         h.wx = hx;
       }
       sky.drift.forEach((c) => {
         // A cloud's lobes move as one with it, so it wraps round whole.
         const H = c.cloud;
         c.x = H ? driftX(H.cx, H.speed) + (c.p.x - H.cx) : driftX(c.p.x, c.speed);
-        d.position.set(c.x, c.p.y, c.p.z);
+        c.y = H ? wrapY(H.cy) + (c.p.y - H.cy) : wrapY(c.p.y);
+        d.position.set(c.x, c.y, c.p.z);
         d.rotation.set(0, 0, c.rot);
         let r = c.r;
         let stretch = 1;
@@ -4090,7 +4339,7 @@ float hillAt(vec2 p) {
           const prog = h.sum / h.n;
           const hx = driftX(h.cx, h.speed);
           const pull = smooth(clamp(prog * 1.4, 0, 1));
-          d.position.set(lerp(c.x, h.tx + (c.x - hx) * 0.6, pull * 0.8), lerp(c.p.y, h.ty + (c.p.y - h.cy) * 0.6, pull * 0.8), c.p.z);
+          d.position.set(lerp(c.x, h.tx + (c.x - hx) * 0.6, pull * 0.8), lerp(c.y, h.ty + (c.p.y - h.cy) * 0.6, pull * 0.8), c.p.z);
           stretch = 1 + Math.sin(Math.PI * clamp(prog * 1.2, 0, 1)) * 0.6;
           r = Math.max(1e-3, c.r * (1 - smooth(clamp((prog - 0.15) * 1.6, 0, 1))));
           d.rotation.z = c.rot + Math.atan2(h.ty - h.cy, h.tx - hx) * 0.25 * pull;
@@ -4104,7 +4353,8 @@ float hillAt(vec2 p) {
             d.position.y += c.oy * per;
           }
         }
-        d.scale.set(r * c.sq[0] * stretch, r * c.sq[1], r * c.sq[2]);
+        const fade = Math.max(1e-3, edge(d.position.x, d.position.y));
+        d.scale.set(r * c.sq[0] * stretch * fade, r * c.sq[1] * fade, r * c.sq[2] * fade);
         d.updateMatrix();
         sky.driftPts[c.v].setMatrixAt(c.slot, d.matrix);
       });
@@ -4121,7 +4371,7 @@ float hillAt(vec2 p) {
       n.nextShoot -= dt;
       if (n.nextShoot <= 0 && !n.shot) {
         const a = Math.random() * TAU;
-        const from = new THREE.Vector3(sky.eye.x + (Math.random() - 0.5) * sky.viewW * 0.9, sky.eye.y + (Math.random() - 0.5) * sky.viewH * 0.9, sky.eye.z + sky.D * 1.25);
+        const from = new THREE.Vector3(sky.mid.x + (Math.random() - 0.5) * sky.viewW * 0.9, sky.mid.y + (Math.random() - 0.5) * sky.viewH * 0.9, sky.eye.z + sky.D * 1.25);
         n.shot = { from, dir: new THREE.Vector3(Math.cos(a), Math.sin(a), 0), len: sky.viewW * (0.08 + Math.random() * 0.08), speed: sky.viewW * (0.6 + Math.random() * 0.4), age: 0 };
       }
     }
@@ -4389,14 +4639,14 @@ float hillAt(vec2 p) {
     const k = depth / sky.D;
     if (!B.active && !this.reduced && n.dir > 0 && p >= 1 && t > sky.nextBlimp) {
       const dir = Math.random() < 0.5 ? 1 : -1;
-      const reach = sky.viewW * k * 0.85;
-      B.active = { x: sky.eye.x - dir * reach, y: sky.eye.y + (Math.random() - 0.5) * sky.viewH * k * 0.5, dir, speed: (reach * 2) / (45 + Math.random() * 20), reach, ph: Math.random() * TAU };
+      const reach = sky.viewW * k * (sky.wide ? 1.4 : 0.85);
+      B.active = { x: sky.mid.x - dir * reach, y: sky.mid.y + (Math.random() - 0.5) * sky.viewH * k * 0.5, dir, speed: (reach * 2) / (45 + Math.random() * 20), reach, ph: Math.random() * TAU };
     }
     const A = B.active;
     B.holder.visible = !!A && show > 0.05;
     if (!A) return;
     A.x += A.dir * A.speed * dt;
-    if ((A.x - sky.eye.x) * A.dir > A.reach) {
+    if ((A.x - sky.mid.x) * A.dir > A.reach) {
       B.active = null;
       B.holder.visible = false;
       sky.nextBlimp = t + 120 + Math.random() * 120;
@@ -4405,7 +4655,7 @@ float hillAt(vec2 p) {
     // About a quarter of the view long, bobbing a little as it goes.
     const half = sky.viewW * k * 0.14;
     B.holder.position.set(A.x, A.y + Math.sin(t * 0.4 + A.ph) * half * 0.04, sky.eye.z + depth + Math.sin(t * 0.3 + A.ph) * half * 0.05);
-    B.holder.scale.setScalar(half);
+    B.holder.scale.setScalar(half * this.skyFar(A.x, A.y, A.reach));
     B.body.scale.x = A.dir;
     B.holder.rotation.z = Math.sin(t * 0.25 + A.ph) * 0.03;
     // The ticker: the logo slides in from the right and out to the left, about a screen's width every 3 seconds.
@@ -4624,14 +4874,14 @@ float hillAt(vec2 p) {
     const k = depth / sky.D;
     if (!B.active && !this.reduced && n.dir > 0 && p >= 1 && t > sky.nextBlimp) {
       const dir = Math.random() < 0.5 ? 1 : -1;
-      const reach = sky.viewW * k * 1.15;
-      B.active = { x: sky.eye.x - dir * reach, y: sky.eye.y + (Math.random() - 0.5) * sky.viewH * k * 0.5, dir, speed: (reach * 2) / (24 + Math.random() * 8), reach, ph: Math.random() * TAU };
+      const reach = sky.viewW * k * (sky.wide ? 1.6 : 1.15);
+      B.active = { x: sky.mid.x - dir * reach, y: sky.mid.y + (Math.random() - 0.5) * sky.viewH * k * 0.5, dir, speed: (reach * 2) / (24 + Math.random() * 8), reach, ph: Math.random() * TAU };
     }
     const A = B.active;
     B.holder.visible = !!A && show > 0.05;
     if (!A) return;
     A.x += A.dir * A.speed * dt;
-    if ((A.x - sky.eye.x) * A.dir > A.reach) {
+    if ((A.x - sky.mid.x) * A.dir > A.reach) {
       B.active = null;
       B.holder.visible = false;
       sky.nextBlimp = t + 120 + Math.random() * 120;
@@ -4640,7 +4890,7 @@ float hillAt(vec2 p) {
     const size = sky.viewW * k * 0.11;
     const bob = Math.sin(t * 0.7 + A.ph);
     B.holder.position.set(A.x, A.y + bob * size * 0.06, sky.eye.z + depth);
-    B.holder.scale.setScalar(size);
+    B.holder.scale.setScalar(size * this.skyFar(A.x, A.y, A.reach));
     B.plane.scale.x = A.dir;
     // A gentle rock of the wings and a nod with the bob.
     B.plane.rotation.x = Math.sin(t * 0.9 + A.ph) * 0.14;
@@ -4764,13 +5014,13 @@ float hillAt(vec2 p) {
     const depth = sky.D * 0.35;
     const k = depth / sky.D;
     const unit = (sky.viewW / this.w) * k;
-    const cx = sky.eye.x;
-    const cy = sky.eye.y;
+    const cx = sky.mid.x;
+    const cy = sky.mid.y;
     if (!B.flock && !this.reduced && n.dir > 0 && p >= 1 && t > sky.nextBirds) {
       const count = 3 + Math.floor(Math.random() * 6);
       const a = Math.random() * TAU;
       const dir = new THREE.Vector2(Math.cos(a), Math.sin(a));
-      const R0 = sky.viewW * k * 0.7;
+      const R0 = sky.viewW * k * (sky.wide ? 1.4 : 0.7);
       const side = (Math.random() - 0.5) * sky.viewH * k * 0.6;
       const span = (26 + Math.random() * 14) * unit;
       const vee = Math.random() < 0.5;
@@ -4801,7 +5051,7 @@ float hillAt(vec2 p) {
       const bob = Math.sin(t * 1.3 + i * 1.7) * F.span * 0.15;
       b.g.position.set(F.pos.x + c * sl.x - s2 * (sl.y + bob), F.pos.y + s2 * sl.x + c * (sl.y + bob), sky.eye.z + depth);
       b.g.rotation.set(0, 0, heading);
-      b.g.scale.setScalar(F.span);
+      b.g.scale.setScalar(F.span * this.skyFar(F.pos.x, F.pos.y, F.R0));
       b.g.visible = show > 0.05;
       // Beat, beat, beat... and now and then a glide on still wings.
       if (t > b.glideAt) {
@@ -4831,11 +5081,11 @@ float hillAt(vec2 p) {
     if (!P) return;
     const k = P.depth / sky.D;
     const unit = (sky.viewW / this.w) * k;
-    const cx = sky.eye.x;
-    const cy = sky.eye.y;
+    const cx = sky.mid.x;
+    const cy = sky.mid.y;
     if (!P.active && !this.reduced && n.dir > 0 && p >= 1 && t > sky.nextPlane) {
       const a = Math.random() * TAU;
-      const R0 = sky.viewW * k * 0.75;
+      const R0 = sky.viewW * k * (sky.wide ? 1.5 : 0.75);
       const side = (Math.random() - 0.5) * sky.viewH * k * 0.7;
       const dir = new THREE.Vector2(Math.cos(a), Math.sin(a));
       const from = new THREE.Vector2(cx - dir.x * R0 - dir.y * side, cy - dir.y * R0 + dir.x * side);
@@ -4848,12 +5098,13 @@ float hillAt(vec2 p) {
       const z = sky.eye.z + P.depth;
       P.plane.position.set(A.pos.x, A.pos.y, z);
       P.plane.rotation.set(0, 0, heading);
-      P.plane.scale.setScalar(A.len);
+      const far = this.skyFar(A.pos.x, A.pos.y, A.R0);
+      P.plane.scale.setScalar(A.len * far);
       P.plane.visible = !sky.time.dark && show > 0.05;
       const across = (x, y) => new THREE.Vector3(A.pos.x + Math.cos(heading) * x * A.len - Math.sin(heading) * y * A.len, A.pos.y + Math.sin(heading) * x * A.len + Math.cos(heading) * y * A.len, z - 2);
       if (P.lights) {
         const L = P.lights;
-        const px = unit * 7;
+        const px = unit * 7 * far;
         L.red.position.copy(across(-0.18, -0.5));
         L.green.position.copy(across(-0.18, 0.5));
         L.strobe.position.copy(across(-0.5, 0));
@@ -4876,6 +5127,7 @@ float hillAt(vec2 p) {
             const q = P.puffs[P.next];
             P.next = (P.next + 1) % P.puffs.length;
             q.age = 0;
+            q.far = far;
             q.pos = across(-0.15, y);
             q.pos.z += 6;
             q.drift = new THREE.Vector2(-Math.sin(heading) * y, Math.cos(heading) * y).multiplyScalar(unit * 6);
@@ -4911,7 +5163,7 @@ float hillAt(vec2 p) {
         q.pos.y += q.drift.y * dt;
         g.position.setXYZ(i, q.pos.x, q.pos.y, q.pos.z);
         g.size.setX(i, lerp(4, 30, Math.sqrt(f)));
-        g.alpha.setX(i, 0.85 * (1 - f) ** 1.6);
+        g.alpha.setX(i, 0.85 * (1 - f) ** 1.6 * (q.far === undefined ? 1 : q.far));
       });
       g.position.needsUpdate = true;
       g.size.needsUpdate = true;
@@ -4926,12 +5178,24 @@ float hillAt(vec2 p) {
     else this.nightLights(t, dt, show, p);
   }
 
+  /*
+   * Exploring, things crossing the sky start and end far off round the
+   * visitor: shrunk away to nothing out there, so none appears or vanishes
+   * in sight. 1 near; 0 at reach. Always 1 in the sky view.
+   */
+  skyFar(x, y, reach) {
+    const sky = this.sky;
+    if (!sky.wide) return 1;
+    const d = Math.hypot(x - sky.mid.x, y - sky.mid.y);
+    return Math.max(1e-3, 1 - smooth(clamp((d - reach * 0.55) / (reach * 0.4), 0, 1)));
+  }
+
   /* Where a puff of cloud is now: one of the logo's, or one drifting across the sky. */
   puffAt(host, out) {
     const sky = this.sky;
     if (host.drift) {
       const c = sky.drift[host.i];
-      return out.set(c.x === undefined ? c.p.x : c.x, c.p.y, c.p.z);
+      return out.set(c.x === undefined ? c.p.x : c.x, c.y === undefined ? c.p.y : c.y, c.p.z);
     }
     const fp = sky.fpos;
     return out.set(fp[host.i * 3], fp[host.i * 3 + 1], fp[host.i * 3 + 2]);
@@ -4957,7 +5221,7 @@ float hillAt(vec2 p) {
           for (let k = 0; k < 12 && !host; k++) {
             const i = (Math.random() * sky.drift.length) | 0;
             const c = sky.drift[i];
-            if (!c.far && !c.heap && Math.abs((c.x === undefined ? c.p.x : c.x) - sky.eye.x) < sky.viewW * 0.42 && Math.abs(c.p.y - sky.eye.y) < sky.viewH * 0.4) host = { drift: true, i, r: c.r };
+            if (!c.far && !c.heap && Math.abs((c.x === undefined ? c.p.x : c.x) - sky.mid.x) < sky.viewW * 0.42 && Math.abs((c.y === undefined ? c.p.y : c.y) - sky.mid.y) < sky.viewH * 0.4) host = { drift: true, i, r: c.r };
           }
         }
         if (!host) {
@@ -4998,7 +5262,7 @@ float hillAt(vec2 p) {
       // First it looks about, darting; then it finds the viewer and stays on them.
       if (age < e.life * 0.45) {
         if (t > e.dartAt) {
-          e.darting = new THREE.Vector3((Math.random() - 0.5) * sky.viewW, (Math.random() - 0.5) * sky.viewH, sky.eye.z);
+          e.darting = new THREE.Vector3(sky.mid.x + (Math.random() - 0.5) * sky.viewW, sky.mid.y + (Math.random() - 0.5) * sky.viewH, sky.eye.z);
           e.dartAt = t + 0.35 + Math.random() * 0.6;
         }
         e.ball.lookAt(e.darting);
@@ -5022,7 +5286,7 @@ float hillAt(vec2 p) {
     const plane = sky.D * 1.05;
     const world = (nx, ny, depth) => {
       const k = depth / sky.D;
-      return new THREE.Vector3(sky.eye.x + nx * sky.viewW * 0.5 * k, sky.eye.y - ny * sky.viewH * 0.5 * k, sky.eye.z + depth);
+      return new THREE.Vector3(sky.mid.x + nx * sky.viewW * 0.5 * k, sky.mid.y - ny * sky.viewH * 0.5 * k, sky.eye.z + depth);
     };
     if (!sky.encounter && n.dir > 0 && p >= 1 && n.since > 4 && t > sky.nextEncounter) {
       const count = Math.random() < 0.8 ? 1 : 2;

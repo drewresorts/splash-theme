@@ -187,6 +187,71 @@ html.pollen-dream-open body {
   background: color-mix(in srgb, var(--pd-plate) 80%, transparent);
 }
 
+/* ---------- The wind: a note at the top, an arrow pointing the way ---------- */
+
+.pollen-dream__alert {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--pd-plate) 80%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: pollen-dream-note 1.6s ease-in-out infinite;
+}
+
+/* An arrow drawn in CSS: a line with a head, pointing up (ahead) before it turns. */
+.pollen-dream__alert-arrow {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  transition: transform 0.15s linear;
+}
+
+.pollen-dream__alert-arrow::before,
+.pollen-dream__alert-arrow::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+}
+
+.pollen-dream__alert-arrow::before {
+  top: 2px;
+  bottom: 0;
+  width: 1.5px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.pollen-dream__alert-arrow::after {
+  top: 1px;
+  width: 7px;
+  height: 7px;
+  border-top: 1.5px solid currentColor;
+  border-left: 1.5px solid currentColor;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+@keyframes pollen-dream-note {
+  50% {
+    opacity: 0.65;
+  }
+}
+
+@media (max-width: 749px) {
+  /* Below the buttons on a phone. */
+  .pollen-dream__alert {
+    top: calc(max(16px, env(safe-area-inset-top)) + 44px);
+  }
+}
+
 /* ---------- Touch controls ---------- */
 
 .pollen-dream__touch {
@@ -247,7 +312,8 @@ html.pollen-dream-open body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pollen-dream__screen {
+  .pollen-dream__screen,
+  .pollen-dream__alert {
     animation: none;
   }
 }
