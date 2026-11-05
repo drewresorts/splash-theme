@@ -12,9 +12,9 @@
     "garden_world_logo": "shopify://shop_images/spellout-black.png",
     "garden_world_logo_mobile": "shopify://shop_images/duet_web_menu_star.png",
     "logo_width": 90,
-    "type_header_font": "assistant_n4",
+    "type_header_font": "inter_n4",
     "heading_scale": 100,
-    "type_body_font": "assistant_n4",
+    "type_body_font": "inter_n4",
     "body_scale": 100,
     "page_width": 1200,
     "spacing_sections": 0,
@@ -257,9 +257,9 @@
           }
         }
       },
-      "type_header_font": "assistant_n4",
+      "type_header_font": "inter_n4",
       "heading_scale": 100,
-      "type_body_font": "assistant_n4",
+      "type_body_font": "inter_n4",
       "body_scale": 100,
       "page_width": 1200,
       "spacing_sections": 0,

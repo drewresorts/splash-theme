@@ -2,7 +2,7 @@
  * Pollen Dream (assets/pollen-dream.js): exploring the splash's garden in
  * the first person. A see-through layer over the garden (which fills the
  * screen meanwhile) holding the controls and the screens, in the site's interface
- * language: monospace capitals and ocean ink, plain, with no effects.
+ * language: one plain typeface and ocean ink, titles in spaced lowercase.
  */
 html.pollen-dream-open,
 html.pollen-dream-open body {
@@ -14,14 +14,14 @@ html.pollen-dream-open body {
   --pd-plate: #ffffff;
   --pd-hero: #f04e62;
   --pd-accent: #a62749;
-  --pd-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  --pd-type: var(--duet-type, sans-serif);
   position: fixed;
   inset: 0;
   z-index: 2147483000;
   overflow: hidden;
   background: transparent;
   color: var(--pd-ink);
-  font-family: var(--pd-mono);
+  font-family: var(--pd-type);
   font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -105,8 +105,8 @@ html.pollen-dream-open body {
   font-size: clamp(24px, 5vw, 40px);
   font-weight: 400;
   line-height: 1.1;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
 }
 
 .pollen-dream__lead {

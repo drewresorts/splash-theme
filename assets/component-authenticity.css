@@ -50,7 +50,7 @@
 .authenticity-card__label,
 .authenticity-card__facts dt,
 .authenticity-card__status {
-  font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  font-family: var(--duet-type, sans-serif);
   font-size: 1.1rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;

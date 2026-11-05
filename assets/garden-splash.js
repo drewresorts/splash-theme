@@ -6502,7 +6502,7 @@ float hillAt(vec2 p) {
         `${String(Math.round(f.p * 100)).padStart(3, '0')}%`,
         f.eye ? (this.pointer.active ? 'WATCHING' : 'AWAKE') : f.star ? 'GLYPH' : 'BLIND',
       ].join('  ');
-      g.font = '500 10px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+      g.font = '500 10px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif';
       const tw = g.measureText(label).width;
       const lx = clamp(f.sx - h, 4, this.w - tw - 12);
       const ly = clamp(f.sy + h + 6, 4, this.h - 20);

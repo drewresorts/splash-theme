@@ -39,10 +39,10 @@
   }
 }
 
-/* Small uppercase monospace labels, as on the splash page. */
+/* Small spaced uppercase labels, as on the splash page. */
 .garden-label {
   margin: 0;
-  font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  font-family: var(--duet-type, sans-serif);
   font-size: 1.1rem;
   line-height: 1.4;
   letter-spacing: 0.14em;

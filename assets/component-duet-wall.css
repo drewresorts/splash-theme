@@ -52,7 +52,7 @@
   padding: 0.6em 0.9em;
   background: rgba(255, 255, 255, 0.86);
   color: #191f6b;
-  font: 1.6vmin/1.3 ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  font: 1.6vmin/1.3 var(--duet-type, sans-serif);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   opacity: 0;
@@ -93,7 +93,7 @@
   padding: 0.5em 0.8em;
   background: rgba(255, 255, 255, 0.86);
   color: #191f6b;
-  font: 12px/1.3 ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  font: 12px/1.3 var(--duet-type, sans-serif);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   pointer-events: none;
@@ -113,7 +113,7 @@
   margin: 0;
   padding: 2rem;
   color: #fff;
-  font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace;
+  font: 14px/1.5 var(--duet-type, sans-serif);
   text-align: center;
 }
 
@@ -163,7 +163,7 @@ html.wall-remote-open body {
 .wall-remote {
   --wr-ink: #191f6b;
   --wr-hero: #f04e62;
-  --wr-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  --wr-type: var(--duet-type, sans-serif);
   position: fixed;
   inset: 0;
   z-index: 2147482000;
@@ -173,7 +173,7 @@ html.wall-remote-open body {
   background: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(6px);
   color: var(--wr-ink);
-  font-family: var(--wr-mono);
+  font-family: var(--wr-type);
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -251,9 +251,9 @@ html.wall-remote-open body {
   font-family: inherit;
   font-size: clamp(22px, 4vw, 32px);
   font-weight: 400;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   line-height: 1.1;
-  text-transform: uppercase;
+  text-transform: lowercase;
 }
 
 .wall-remote__close {

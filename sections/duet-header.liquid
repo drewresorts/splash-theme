@@ -402,7 +402,7 @@
 
 {% stylesheet %}
   .duet-header {
-    --dh-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    --dh-type: var(--duet-type, sans-serif);
     position: sticky;
     top: 0;
     z-index: 30;
@@ -523,7 +523,7 @@
   }
 
   .duet-header__logo-text {
-    font-family: var(--dh-mono);
+    font-family: var(--dh-type);
     font-size: 1.8rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -542,7 +542,7 @@
     border: 0;
     background: none;
     color: inherit;
-    font-family: var(--dh-mono);
+    font-family: var(--dh-type);
     font-size: 1.1rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -657,7 +657,7 @@
     padding: 9.6rem max(1.6rem, 8vw);
     background: color-mix(in srgb, var(--dh-panel, #fff) 97%, transparent);
     color: var(--dh-ink, #191f6b);
-    font-family: var(--dh-mono);
+    font-family: var(--dh-type);
     overflow-y: auto;
     opacity: 0;
     visibility: hidden;
@@ -729,9 +729,9 @@
     color: inherit;
     font-family: inherit;
     font-size: clamp(2rem, 3.2vw, 3.2rem);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     text-align: left;
-    text-transform: uppercase;
+    text-transform: lowercase;
     text-decoration: none;
     cursor: pointer;
   }

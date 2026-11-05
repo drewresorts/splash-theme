@@ -4,8 +4,9 @@
  * the lines Dawn draws itself (accordions, the footer, the cart, account
  * tables, quotes) are taken out. What a border did, space, a light tint or
  * the fogged glass does now: buttons are solid, fields and option pills are
- * soft fills. Headings and buttons take the splash's monospace capitals,
- * plain, with no effects. Focus outlines stay, for keyboards.
+ * soft fills. One plain typeface (snippets/duet-type.liquid): titles in
+ * spaced-out lowercase, buttons in spaced capitals, no effects. Focus
+ * outlines stay, for keyboards.
  */
 
 :root:root {
@@ -21,22 +22,22 @@
   --variant-pills-border-width: 0px;
 }
 
-/* ---------- Type: the splash's monospace capitals ---------- */
+/* ---------- Type: titles in spaced lowercase, labels and buttons in spaced capitals ---------- */
 
 :is(#MainContent, .drawer, cart-notification, .shopify-section-group-footer-group) :is(h1, h2, .h0, .h1, .h2, .title, .product__title > *, .main-page-title) {
-  font-family: var(--duet-mono);
+  font-family: var(--duet-heading);
   font-weight: 400;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
 }
 
 :is(#MainContent, .drawer, cart-notification, .shopify-section-group-footer-group) :is(h3, h4, .h3, .h4, .caption-with-letter-spacing, .form__label, .price, .badge) {
-  font-family: var(--duet-mono);
+  font-family: var(--duet-type);
   letter-spacing: 0.1em;
 }
 
 :is(.button, .shopify-challenge__button, .customer button, button.shopify-payment-button__button--unbranded) {
-  font-family: var(--duet-mono);
+  font-family: var(--duet-type);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }

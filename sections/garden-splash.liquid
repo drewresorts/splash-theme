@@ -291,7 +291,7 @@
 
 {% stylesheet %}
   .garden-splash {
-    --gs-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    --gs-type: var(--duet-type, sans-serif);
     position: relative;
     display: block;
     width: 100%;
@@ -302,7 +302,7 @@
     isolation: isolate;
     background: transparent;
     color: var(--gs-ink, #b9e5fb);
-    font-family: var(--gs-mono);
+    font-family: var(--gs-type);
     cursor: default;
     touch-action: none;
     user-select: none;
@@ -521,7 +521,7 @@
     left: 50%;
     bottom: calc(100% + 8px);
     color: var(--gs-ink, #191f6b);
-    font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    font-family: var(--duet-type, sans-serif);
     font-size: 11px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -817,8 +817,8 @@
     padding: 14px 0;
     color: inherit;
     font-size: clamp(20px, 3.2vw, 32px);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    text-transform: lowercase;
     text-decoration: none;
   }
 

@@ -1,8 +1,8 @@
 /*
  * The About page sections (sections/duet-mission.liquid,
  * duet-authenticity.liquid, duet-location.liquid), in the site's interface
- * language: monospace capitals and ocean ink, plain, with no effects on
- * titles. No borders or rules anywhere: space, type and the fogged glass
+ * language: one plain typeface and ocean ink, titles in spaced lowercase,
+ * no effects. No borders or rules anywhere: space, type and the fogged glass
  * set things apart. Photos and videos (snippets/duet-media.liquid) run
  * large and frameless between the written blocks, so pictures and words
  * read as two different things; the story section (sections/duet-story)
@@ -12,7 +12,7 @@
   --da-ink: #191f6b;
   --da-hero: #f04e62;
   --da-teal: #66a4c8;
-  --da-mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  --da-type: var(--duet-type, sans-serif);
   color: var(--da-ink);
 }
 
@@ -32,7 +32,7 @@
 
 .duet-about__eyebrow {
   margin: 0;
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: 1.1rem;
   letter-spacing: 0.24em;
   text-transform: uppercase;
@@ -42,12 +42,12 @@
 .duet-about__title {
   margin: 0;
   color: inherit;
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: clamp(2.6rem, 4.4vw, 4.4rem);
   font-weight: 400;
   line-height: 1.1;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
 }
 
 .duet-about__text {
@@ -86,7 +86,7 @@
 .duet-about__item h3 {
   margin: 0;
   color: inherit;
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: 1.3rem;
   font-weight: 400;
   letter-spacing: 0.16em;
@@ -94,7 +94,7 @@
 }
 
 .duet-about__num {
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: 1.1rem;
   letter-spacing: 0.2em;
   color: var(--da-hero);
@@ -111,7 +111,7 @@
   border: 0;
   background: var(--da-ink);
   color: #fff;
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: 1.2rem;
   letter-spacing: 0.14em;
   text-decoration: none;
@@ -150,17 +150,17 @@
 .duet-about__promise-title {
   margin: 0;
   color: inherit;
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: clamp(2rem, 3vw, 2.8rem);
   font-weight: 400;
   line-height: 1.25;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
 }
 
 .duet-about__subhead {
   margin: 0;
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: 1.3rem;
   font-weight: 400;
   letter-spacing: 0.2em;
@@ -180,7 +180,7 @@
 .duet-about__placeholder {
   padding: 1.2rem;
   background: rgba(25, 31, 107, 0.06);
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: 1.2rem;
   opacity: 0.7;
 }
@@ -321,13 +321,13 @@
   max-width: 32rem;
   padding: 1rem 1.4rem;
   background: rgba(255, 255, 255, 0.85);
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: 1.2rem;
   text-align: center;
 }
 
 .duet-media__caption {
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: 1.1rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -359,12 +359,12 @@
 .duet-story__words h3 {
   margin: 0;
   color: inherit;
-  font-family: var(--da-mono);
+  font-family: var(--da-type);
   font-size: clamp(2rem, 2.6vw, 2.8rem);
   font-weight: 400;
   line-height: 1.2;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
 }
 
 .duet-story__words .duet-about__text {

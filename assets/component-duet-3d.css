@@ -2,7 +2,7 @@
  * Products in 3D (assets/duet-3d.js): the shop grid of turning models
  * (sections/duet-shop-3d.liquid) and the 3D product page
  * (sections/duet-product-3d.liquid). Clean and white on the site's glass,
- * no borders, the splash's monospace type.
+ * no borders, the site's one plain typeface.
  */
 
 /* The one canvas every model is drawn on: over the page, under the header, taking no clicks. */

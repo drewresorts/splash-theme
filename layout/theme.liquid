@@ -281,7 +281,7 @@
     {% endstyle %}
 
     {{ 'base.css' | asset_url | stylesheet_tag }}
-    {% render 'duet-mono-font' %}
+    {% render 'duet-type' %}
     {{ 'duet-clean.css' | asset_url | stylesheet_tag }}
     {%- if settings.garden_motif -%}
       {{ 'garden-kit.css' | asset_url | stylesheet_tag }}
