@@ -1,7 +1,7 @@
 /*
  * The About page sections (sections/duet-mission.liquid,
  * duet-authenticity.liquid, duet-location.liquid), in the site's interface
- * language: monospace capitals, ocean ink, the fuchsia/teal double edge on
+ * language: monospace capitals and ocean ink, plain, with no effects on
  * titles. No borders or rules anywhere: space, type and the fogged glass
  * set things apart. Photos and videos (snippets/duet-media.liquid) run
  * large and frameless between the written blocks, so pictures and words
@@ -48,7 +48,6 @@
   line-height: 1.1;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  text-shadow: 2px 0 rgba(240, 78, 98, 0.55), -2px 0 rgba(102, 164, 200, 0.55);
 }
 
 .duet-about__text {
@@ -157,7 +156,6 @@
   line-height: 1.25;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  text-shadow: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
 }
 
 .duet-about__subhead {
@@ -367,7 +365,6 @@
   line-height: 1.2;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  text-shadow: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
 }
 
 .duet-story__words .duet-about__text {

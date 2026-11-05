@@ -5,11 +5,10 @@
  * tables, quotes) are taken out. What a border did, space, a light tint or
  * the fogged glass does now: buttons are solid, fields and option pills are
  * soft fills. Headings and buttons take the splash's monospace capitals,
- * headings its coral/teal double edge. Focus outlines stay, for keyboards.
+ * plain, with no effects. Focus outlines stay, for keyboards.
  */
 
 :root:root {
-  --duet-edge: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
   --media-border-width: 0px;
   --product-card-border-width: 0rem;
   --collection-card-border-width: 0rem;
@@ -29,7 +28,6 @@
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  text-shadow: var(--duet-edge);
 }
 
 :is(#MainContent, .drawer, cart-notification, .shopify-section-group-footer-group) :is(h3, h4, .h3, .h4, .caption-with-letter-spacing, .form__label, .price, .badge) {

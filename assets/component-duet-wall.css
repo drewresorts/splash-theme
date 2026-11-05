@@ -254,7 +254,6 @@ html.wall-remote-open body {
   letter-spacing: 0.08em;
   line-height: 1.1;
   text-transform: uppercase;
-  text-shadow: 2px 0 rgba(240, 78, 98, 0.55), -2px 0 rgba(102, 164, 200, 0.55);
 }
 
 .wall-remote__close {

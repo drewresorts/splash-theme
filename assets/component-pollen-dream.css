@@ -2,8 +2,7 @@
  * Pollen Dream (assets/pollen-dream.js): exploring the splash's garden in
  * the first person. A see-through layer over the garden (which fills the
  * screen meanwhile) holding the controls and the screens, in the site's interface
- * language: monospace capitals, ocean ink and the fuchsia/teal double edge
- * on titles.
+ * language: monospace capitals and ocean ink, plain, with no effects.
  */
 html.pollen-dream-open,
 html.pollen-dream-open body {
@@ -108,7 +107,6 @@ html.pollen-dream-open body {
   line-height: 1.1;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  text-shadow: 2px 0 rgba(240, 78, 98, 0.6), -2px 0 rgba(102, 164, 200, 0.6);
 }
 
 .pollen-dream__lead {

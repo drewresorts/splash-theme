@@ -133,7 +133,8 @@ duet-product-3d.is-3d .duet-p3d__poster {
 
 .duet-shop3d__card:hover .duet-shop3d__link,
 .duet-shop3d__link:focus-visible {
-  text-shadow: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
 }
 
 .duet-shop3d__link:focus-visible {

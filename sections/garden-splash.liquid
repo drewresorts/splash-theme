@@ -758,10 +758,11 @@
     cursor: pointer;
   }
 
-  /* No box: the word alone, its double edge showing on hover. */
+  /* No box: the word alone, underlined on hover. */
   .garden-splash__nav-close:hover,
   .garden-splash__nav-close:focus-visible {
-    text-shadow: 2px 0 rgba(240, 78, 98, 0.6), -2px 0 rgba(102, 164, 200, 0.6);
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
   }
 
   .garden-splash__nav-close:focus-visible {
@@ -819,7 +820,6 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     text-decoration: none;
-    text-shadow: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
   }
 
   .garden-splash__nav-item > .garden-splash__nav-link::before {

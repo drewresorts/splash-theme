@@ -688,10 +688,11 @@
     cursor: pointer;
   }
 
-  /* No box: the word alone, its double edge showing on hover. */
+  /* No box: the word alone, underlined on hover. */
   .duet-header__close:hover,
   .duet-header__close:focus-visible {
-    text-shadow: 2px 0 rgba(240, 78, 98, 0.6), -2px 0 rgba(102, 164, 200, 0.6);
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
   }
 
   .duet-header__close:focus-visible {
@@ -732,7 +733,6 @@
     text-align: left;
     text-transform: uppercase;
     text-decoration: none;
-    text-shadow: 2px 0 rgba(240, 78, 98, 0.5), -2px 0 rgba(102, 164, 200, 0.5);
     cursor: pointer;
   }
 
