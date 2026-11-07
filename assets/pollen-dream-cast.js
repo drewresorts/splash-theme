@@ -54,10 +54,12 @@ class Letter {
     model.traverse((o) => {
       if (!o.isMesh) return;
       o.frustumCulled = false;
-      // Lit like the garden's own flowers (its plastic, shiny material), in the letter's own color.
+      // Lit like the garden's own flowers (its plastic, shiny material), in the letter's own colors: its
+      // painted texture where it has one (kept, not disposed, with the old material), else its flat color.
       if (garden && garden.makeMaterial) {
         const old = o.material;
-        o.material = garden.makeMaterial({ color: old.color.clone(), shininess: 60, specular: 0x333333, flatShading: false });
+        o.material = garden.makeMaterial({ color: old.color.clone(), map: old.map || null, shininess: 60, specular: 0x333333, flatShading: false });
+        old.map = null;
         old.dispose();
       }
     });
@@ -328,7 +330,11 @@ export async function addCast(garden, base) {
     garden.scene.remove(group);
     group.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
-      if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+      if (o.material)
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+          if (m.map) m.map.dispose();
+          m.dispose();
+        });
     });
     if (garden.explorer) {
       garden.explorer.third = 0;
