@@ -206,13 +206,73 @@ export function addWorld(garden, cast) {
     if (inLake(x, y)) h = Math.max(h, water);
     return FLOOR_Z + h;
   };
-  // Circles in the way (trunks, the cabin, rocks), up to a height.
-  const blocks = [];
-  const block = (x, y, r, top = Infinity) => {
-    const b = { x, y, r, top };
-    blocks.push(b);
-    return b;
+  /*
+   * What is solid. Each collider answers two questions: push(x, y, feet, r),
+   * where to move a body of radius r standing at (x, y) with its feet at
+   * height feet (above FLOOR_Z) so it no longer overlaps (null if it doesn't),
+   * and hits(x, y, z), whether a point (absolute z) is inside it (for the
+   * camera). Heights are above FLOOR_Z: a body overlaps only where its feet
+   * to its head (feet + BODY) meet the collider's bottom to top. revert: a
+   * collider that stops the D where it was rather than sliding it along
+   * (the giant stars: see assets/pollen-dream-treasure.js).
+   */
+  const BODY = size * 0.9; // the D's height, near enough
+  const RADIUS = size * 0.3; // and its girth
+  const colliders = [];
+  const addCollider = (c) => {
+    colliders.push(c);
+    return c;
   };
+  const overlapsHeight = (feet, bottom, top) => feet < top && feet + BODY > bottom;
+  // A round thing (a trunk, a post, a rock); at = an object whose x, y it follows as it moves (a goat).
+  const circle = (x, y, r, bottom = -Infinity, top = Infinity, at = null) =>
+    addCollider({
+      push(px, py, feet, rad) {
+        if (!overlapsHeight(feet, bottom, top)) return null;
+        const cx = at ? at.x : x;
+        const cy = at ? at.y : y;
+        const dx = px - cx;
+        const dy = py - cy;
+        const d = Math.hypot(dx, dy);
+        const m = r + rad;
+        if (d >= m) return null;
+        return d < 1e-6 ? [cx + m, cy] : [cx + (dx / d) * m, cy + (dy / d) * m];
+      },
+      hits(px, py, z) {
+        const zr = z - FLOOR_Z;
+        const cx = at ? at.x : x;
+        const cy = at ? at.y : y;
+        return zr > bottom && zr < top && (px - cx) ** 2 + (py - cy) ** 2 < r * r;
+      },
+    });
+  // A box (a wall, a cabin), turned by ang, hl along it and hw across.
+  const box = (x, y, ang, hl, hw, bottom = -Infinity, top = Infinity) => {
+    const ca = Math.cos(ang);
+    const sa = Math.sin(ang);
+    return addCollider({
+      push(px, py, feet, rad) {
+        if (!overlapsHeight(feet, bottom, top)) return null;
+        let u = (px - x) * ca + (py - y) * sa;
+        let v = -(px - x) * sa + (py - y) * ca;
+        const ou = hl + rad - Math.abs(u);
+        const ov = hw + rad - Math.abs(v);
+        if (ou <= 0 || ov <= 0) return null;
+        // Out the nearer side.
+        if (ou < ov) u = (u < 0 ? -1 : 1) * (hl + rad);
+        else v = (v < 0 ? -1 : 1) * (hw + rad);
+        return [x + u * ca - v * sa, y + u * sa + v * ca];
+      },
+      hits(px, py, z) {
+        const zr = z - FLOOR_Z;
+        if (zr <= bottom || zr >= top) return false;
+        const u = (px - x) * ca + (py - y) * sa;
+        const v = -(px - x) * sa + (py - y) * ca;
+        return Math.abs(u) < hl && Math.abs(v) < hw;
+      },
+    });
+  };
+  // The old way to say it: a round thing from the ground up to a height.
+  const block = (x, y, r, top = Infinity) => circle(x, y, r, -Infinity, top);
 
   /* ---------- the lake ---------- */
 
@@ -248,6 +308,7 @@ export function addWorld(garden, cast) {
       const p = mesh(postGeo, W.darkWood);
       p.rotation.x = Math.PI / 2;
       p.position.set(shore.x + dIn.x * along - dIn.y * side * size * 0.6, shore.y + dIn.y * along + dIn.x * side * size * 0.6, FLOOR_Z + dockZ - size * 0.4);
+      circle(p.position.x, p.position.y, size * 0.08, -Infinity, dockZ + size * 0.3);
     }
   }
   // The ship, broadside to the dock, a way out.
@@ -298,6 +359,16 @@ export function addWorld(garden, cast) {
   flagS.position.set(shipL * 0.05 - size * 0.4, 0, deckH + size * 5.05);
   const deckZ = water + deckH;
   rect(ship.x, ship.y, shipAng, (shipL / 2) * 0.8, (shipB / 2) * 0.82, deckZ);
+  // On deck: the little cabin at the stern, the mast.
+  {
+    const ca = Math.cos(shipAng);
+    const sa = Math.sin(shipAng);
+    const at = (lx, ly) => [ship.x + lx * ca - ly * sa, ship.y + lx * sa + ly * ca];
+    const [cxs, cys] = at(-shipL * 0.32, 0);
+    box(cxs, cys, shipAng, size * 0.7, shipB * 0.3, deckZ - 4, deckZ + size * 0.8);
+    const [mxs, mys] = at(shipL * 0.05, 0);
+    circle(mxs, mys, size * 0.1, deckZ - 4, deckZ + size * 5);
+  }
   // The gangplank, down from the deck toward the dock.
   const plankLen = size * 3;
   const gpTop = { x: ship.x - dIn.x * shipB * 0.42, y: ship.y - dIn.y * shipB * 0.42 };
@@ -351,6 +422,7 @@ export function addWorld(garden, cast) {
   const dinner = mesh(geo(new THREE.ConeGeometry(size * 0.22, size * 0.3, 10, 1, true)), W.gold);
   dinner.rotation.x = -Math.PI / 2;
   dinner.position.set(bellAt.x, bellAt.y, FLOOR_Z + land(bellAt.x, bellAt.y) + size * 1.55);
+  circle(bellAt.x, bellAt.y, size * 0.08);
   const frogs = FROGS.map((F, k) => {
     const a = (k - 1.5) * 0.55;
     const ox = -dIn.x * Math.cos(a) + side.x * Math.sin(a);
@@ -361,6 +433,7 @@ export function addWorld(garden, cast) {
     const stone = mesh(geo(new THREE.IcosahedronGeometry(size * 0.38, 0)), W.rock);
     stone.scale.set(1.2, 1, 0.55);
     stone.position.set(x, y, z + size * 0.1);
+    circle(x, y, size * 0.42, -Infinity, z - FLOOR_Z + size * 0.5);
     const g = new THREE.Group();
     g.position.set(x, y, z + size * 0.32);
     g.rotation.z = headingOf(bellAt.x - x, bellAt.y - y) + Math.PI;
@@ -438,7 +511,8 @@ export function addWorld(garden, cast) {
       d.updateMatrix();
       upper.setMatrixAt(k, d.matrix);
       trees.push({ x, y, z, h });
-      block(x, y, size * 0.22);
+      // The trunk, up to where the branches start (above that, they are soft).
+      circle(x, y, size * 0.17, -Infinity, z - FLOOR_Z + h * 0.45);
       k++;
     }
     for (const m of [trunks, lower, upper]) {
@@ -480,6 +554,16 @@ export function addWorld(garden, cast) {
   roofF.rotation.set(Math.PI / 2, Math.PI / 4, 0);
   roofF.position.z = platH + size * 2.5;
   rect(FOREST.x, FOREST.y, Math.atan2(fOut.y, fOut.x), platHalf, platHalf, fortZ - FLOOR_Z + platH);
+  // Up on the platform: its walls (the gap toward the ladder open), its posts.
+  const platTop = fortZ - FLOOR_Z + platH;
+  for (const [x, y, w, h] of [[0, -platHalf, platHalf * 2, size * 0.12], [-platHalf, 0, size * 0.12, platHalf * 2], [platHalf, 0, size * 0.12, platHalf * 2], [-platHalf * 0.6, platHalf, platHalf * 0.8, size * 0.12], [platHalf * 0.6, platHalf, platHalf * 0.8, size * 0.12]]) {
+    const c = fortG.localToWorld(new THREE.Vector3(x, y, 0));
+    box(c.x, c.y, fortG.rotation.z, w / 2, h / 2, platTop - 4, platTop + size * 0.7);
+  }
+  for (const [x, y] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const c = fortG.localToWorld(new THREE.Vector3(x * platHalf * 0.95, y * platHalf * 0.95, 0));
+    circle(c.x, c.y, size * 0.09, platTop - 4, platTop + size * 2);
+  }
   const ladderG = new THREE.Group();
   fortG.add(ladderG);
   ladderG.visible = false;
@@ -507,6 +591,10 @@ export function addWorld(garden, cast) {
   mesh(geo(new THREE.TorusGeometry(size * 0.09, size * 0.03, 6, 12)), W.gold, keyMesh).position.set(-size * 0.12, 0, 0);
   mesh(geo(new THREE.BoxGeometry(size * 0.28, size * 0.04, size * 0.04)), W.gold, keyMesh).position.set(size * 0.08, 0, 0);
   const chestWorld = () => chest.getWorldPosition(new THREE.Vector3());
+  {
+    const c = chestWorld();
+    box(c.x, c.y, fortG.rotation.z, size * 0.35, size * 0.23, platTop - 4, platTop + size * 0.5);
+  }
   // Owls: the mother on the fort's edge by the ladder, three owlets out in the trees.
   const owl = (s) => {
     const g = new THREE.Group();
@@ -532,6 +620,8 @@ export function addWorld(garden, cast) {
   const motherAt = fortLocal(size * 0.6, platHalf * 0.9, platH + size * 0.75);
   const motherAside = fortLocal(platHalf * 0.85, platHalf * 0.4, platH + size * 0.75);
   mother.position.copy(motherAt);
+  // The mother owl, wherever she sits on the platform.
+  circle(0, 0, size * 0.3, platTop - 4, platTop + size, mother.position);
   const owlets = [];
   {
     const sorted = trees
@@ -623,6 +713,8 @@ export function addWorld(garden, cast) {
     const p = mesh(geo(new THREE.CylinderGeometry(size * 0.12, size * 0.12, size * 1.8, 6)), W.darkWood, gateG);
     p.rotation.x = Math.PI / 2;
     p.position.set(s * size * 1.15, 0, size * 0.9);
+    const w = gateG.localToWorld(new THREE.Vector3(s * size * 1.15, 0, 0));
+    circle(w.x, w.y, size * 0.13);
   }
   const doors = [-1, 1].map((s) => {
     const hinge = new THREE.Group();
@@ -660,7 +752,7 @@ export function addWorld(garden, cast) {
   doorG.position.set(-size * 0.4, cd / 2 + 1, 0);
   cabG.add(doorG);
   mesh(geo(new THREE.BoxGeometry(size * 0.8, size * 0.08, size * 1.25)), W.darkWood, doorG).position.set(size * 0.4, 0, size * 0.62);
-  block(MOUNT.x, MOUNT.y, size * 1.75);
+  box(MOUNT.x, MOUNT.y, cabG.rotation.z, cw / 2, cd / 2);
   const cabLocal = (x, y, z) => cabG.localToWorld(new THREE.Vector3(x, y, z));
   const bellBeam = mesh(geo(new THREE.BoxGeometry(size * 1.8, size * 0.1, size * 0.1)), W.darkWood, cabG);
   bellBeam.position.set(cw * 0.3, cd / 2 + size * 0.35, size * 1.45);
@@ -690,6 +782,7 @@ export function addWorld(garden, cast) {
     const pole = mesh(geo(new THREE.CylinderGeometry(size * 0.03, size * 0.03, size * 2.4, 5)), W.darkWood);
     pole.rotation.x = Math.PI / 2;
     pole.position.set(x + size * 0.5, y, z + size * 1.2);
+    circle(x + size * 0.5, y, size * 0.05);
     const flag = mesh(geo(new THREE.PlaneGeometry(size * 0.9, size * 0.55)), mat(B.color, { side: THREE.DoubleSide }));
     flag.rotation.x = Math.PI / 2;
     flag.position.set(x + size * 0.95, y, z + size * 2.1);
@@ -715,7 +808,9 @@ export function addWorld(garden, cast) {
     }
     const a = Math.random() * TAU;
     const r = MOUNT.r * (0.2 + Math.random() * 0.55);
-    return { g, head: h, x: MOUNT.x + Math.cos(a) * r, y: MOUNT.y + Math.sin(a) * r, tx: null, ty: null, wait: Math.random() * 3, heading: Math.random() * TAU, bleat: 0 };
+    const goat = { g, head: h, x: MOUNT.x + Math.cos(a) * r, y: MOUNT.y + Math.sin(a) * r, tx: null, ty: null, wait: Math.random() * 3, heading: Math.random() * TAU, bleat: 0 };
+    circle(0, 0, size * 0.3, -Infinity, Infinity, goat);
+    return goat;
   });
 
   /* ---------- the signpost ---------- */
@@ -775,14 +870,15 @@ export function addWorld(garden, cast) {
   // places: where everything is, for anything built on top of this world (and for testing it).
   const places = { LAKE, FOREST, MOUNT, shore, dockEnd, ship, bellAt, frogs, ladderBase, gateAt, owlets, cairns, mOut, fOut, dIn };
   // land, block, top: the land's height (above FLOOR_Z), a way to put something in the D's way, and the highest thing to stand on at a point (absolute), for what is added to this world (assets/pollen-dream-treasure.js).
-  const world = { group, state, places, size, land, block, top: (x, y) => garden.exploreFloor(x, y, 1e9), prompt: null, act: () => act(), remove: () => remove(), bag: () => bag() };
+  const world = { group, state, places, size, land, block, addCollider, BODY, top: (x, y) => garden.exploreFloor(x, y, 1e9), prompt: null, act: () => act(), remove: () => remove(), bag: () => bag() };
   const tell = (text, s) => cast && cast.tell && cast.tell(text, s);
 
   // The letters, put in their places once they are in.
   const homes = {
     U: () => ({ x: ship.x + Math.cos(shipAng) * size * 1.2, y: ship.y + Math.sin(shipAng) * size * 1.2, z: FLOOR_Z + deckZ }),
+    // On the ladder side of the platform, beside the trunk: there to meet the D as it climbs up.
     E: () => {
-      const p = fortLocal(platHalf * 0.4, -platHalf * 0.3, platH);
+      const p = fortLocal(-size * 0.95, platHalf * 0.42, platH);
       return { x: p.x, y: p.y, z: p.z };
     },
     T: () => {
@@ -920,7 +1016,8 @@ export function addWorld(garden, cast) {
         if (T) T.hidden = false;
       }
     } else {
-      state.bellStep = 0;
+      // Wrong: start again, though a first note rung counts as the start.
+      state.bellStep = tune[0] === k ? 1 : 0;
       tell(SAY.bellsWrong, 3.5);
     }
   }
@@ -964,14 +1061,32 @@ export function addWorld(garden, cast) {
   /* ---------- each frame ---------- */
 
   let last = null;
-  const blockedAt = (x, y, ex) => {
+  // Out on the lake, where the water is deep and there is nothing to stand on.
+  const deep = (x, y) => inLake(x, y) && land(x, y) < water - 8 && garden.hillAt(x, y) <= land(x, y) + 0.01;
+  // The camera keeps out of anything solid (see garden-splash.js updateExplore).
+  garden.cameraBlocked = (x, y, z) => colliders.some((c) => c.hits(x, y, z));
+  /*
+   * Moving the D out of whatever it has walked into: slid along round things
+   * and walls; stopped where it was by those that revert (or nudged out, if
+   * the thing moved into it).
+   */
+  const resolve = (ex) => {
     const feet = ex.z - ex.eye - FLOOR_Z;
-    // Out on the lake, where the water is deep and there is nothing to stand on.
-    if (inLake(x, y) && garden.hillAt(x, y) <= land(x, y) + 0.01 && land(x, y) < water - 8) return true;
-    for (const b of blocks) {
-      if (feet < b.top && (x - b.x) ** 2 + (y - b.y) ** 2 < b.r * b.r) return true;
+    for (let pass = 0; pass < 2; pass++) {
+      for (const c of colliders) {
+        const out = c.push(ex.x, ex.y, feet, RADIUS);
+        if (!out) continue;
+        if (c.revert && last && !c.push(last.x, last.y, feet, RADIUS)) {
+          ex.x = last.x;
+          ex.y = last.y;
+        } else {
+          ex.x = out[0];
+          ex.y = out[1];
+        }
+        ex.vx *= 0.5;
+        ex.vy *= 0.5;
+      }
     }
-    return false;
   };
   const crossesFence = (x0, y0, x1, y1) => {
     const d0 = Math.hypot(x0 - MOUNT.x, y0 - MOUNT.y);
@@ -988,20 +1103,27 @@ export function addWorld(garden, cast) {
     const t = (state.clock += dt);
     const feet = ex.z - ex.eye;
 
-    // Keeping the D where it can be: not in deep water, through the fence only at the open gate, not in a trunk.
-    // A jump farther than any step (put somewhere new): that is where it is now.
+    // Keeping the D where it can be: out of deep water, through the fence only at the open gate, and out of
+    // everything solid. A jump farther than any step (put somewhere new): that is where it is now.
     if (last && Math.hypot(ex.x - last.x, ex.y - last.y) > size * 3) last = null;
-    if (ex.intro >= 1 && ex.mode === 'walk') {
-      const bad = blockedAt(ex.x, ex.y, ex) || (last && crossesFence(last.x, last.y, ex.x, ex.y));
-      if (bad && last) {
-        ex.x = last.x;
-        ex.y = last.y;
-        if (ex.z < last.z) ex.z = last.z;
-        ex.vx = ex.vy = 0;
-        if (ex.vz < 0) ex.vz = 0;
-      } else if (!bad) last = { x: ex.x, y: ex.y, z: ex.z };
-    } else if (ex.mode !== 'walk' && !blockedAt(ex.x, ex.y, ex) && !inLake(ex.x, ex.y)) {
-      last = { x: ex.x, y: ex.y, z: ex.z };
+    if (ex.intro >= 1 && ex.mode !== 'scripted') {
+      resolve(ex);
+      if (ex.mode === 'walk' && last) {
+        const bad = (x, y) => deep(x, y) || crossesFence(last.x, last.y, x, y);
+        if (bad(ex.x, ex.y)) {
+          // Along the shore or the fence, rather than stopping dead: whichever way still works.
+          if (!bad(ex.x, last.y)) ex.y = last.y;
+          else if (!bad(last.x, ex.y)) ex.x = last.x;
+          else {
+            ex.x = last.x;
+            ex.y = last.y;
+            ex.vx = ex.vy = 0;
+          }
+          if (ex.z < last.z) ex.z = last.z;
+          if (ex.vz < 0) ex.vz = 0;
+        }
+      }
+      if (ex.mode !== 'walk' ? !deep(ex.x, ex.y) && !inLake(ex.x, ex.y) : !deep(ex.x, ex.y)) last = { x: ex.x, y: ex.y, z: ex.z };
     }
 
     // The letters, in their places.
@@ -1231,6 +1353,7 @@ export function addWorld(garden, cast) {
     garden.surfaceAt = null;
     garden.exploreFloor = null;
     garden.exploreBlocked = null;
+    garden.cameraBlocked = null;
     garden.setLandFeatures([]);
     return null;
   }

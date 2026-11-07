@@ -91,6 +91,74 @@ export async function addTreasure(garden, cast, world, base) {
   }
   starGeo.computeBoundingBox();
   const starH = starGeo.boundingBox.max.z;
+  /*
+   * Its shape for colliding: the triangles of its front face, flat in its own
+   * plane (x across, z up), and how thick it is (y). Anything inside the
+   * outline and within the thickness is inside the star.
+   */
+  const outline = [];
+  const thick = { lo: starGeo.boundingBox.min.y, hi: starGeo.boundingBox.max.y };
+  {
+    const pos = starGeo.attributes.position;
+    const idx = starGeo.index;
+    const n = idx ? idx.count : pos.count;
+    const at = (i) => (idx ? idx.getX(i) : i);
+    const front = thick.lo + (thick.hi - thick.lo) * 0.01;
+    for (let i = 0; i < n; i += 3) {
+      const a = at(i);
+      const b = at(i + 1);
+      const c = at(i + 2);
+      if (pos.getY(a) > front || pos.getY(b) > front || pos.getY(c) > front) continue;
+      outline.push([pos.getX(a), pos.getZ(a), pos.getX(b), pos.getZ(b), pos.getX(c), pos.getZ(c)]);
+    }
+  }
+  const inTri = (x, z, t) => {
+    const d1 = (x - t[2]) * (t[1] - t[3]) - (t[0] - t[2]) * (z - t[3]);
+    const d2 = (x - t[4]) * (t[3] - t[5]) - (t[2] - t[4]) * (z - t[5]);
+    const d3 = (x - t[0]) * (t[5] - t[1]) - (t[4] - t[0]) * (z - t[1]);
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  };
+  const inOutline = (x, z) => outline.some((t) => inTri(x, z, t));
+  /* A star as something solid: its own shape, turning as it turns. */
+  const starCollider = (S) => {
+    // A point (x, y, absolute z) in the star's own frame, its scale taken out.
+    const local = (x, y, z) => {
+      const k = S.m.scale.x;
+      const a = S.m.rotation.z;
+      const dx = x - S.x;
+      const dy = y - S.y;
+      return [(dx * Math.cos(a) + dy * Math.sin(a)) / k, (-dx * Math.sin(a) + dy * Math.cos(a)) / k, (z - S.z) / k];
+    };
+    return {
+      revert: true,
+      push(px, py, feet, rad) {
+        const reachR = S.H * 0.65;
+        if (Math.abs(px - S.x) > reachR || Math.abs(py - S.y) > reachR) return null;
+        const k = S.m.scale.x;
+        const r = rad / k;
+        const mid = (thick.lo + thick.hi) / 2;
+        const half = (thick.hi - thick.lo) / 2 + r;
+        // The body at its feet, its middle and its head, and a little to either side of each.
+        for (const h of [0.1, 0.5, 0.9]) {
+          const [lx, ly, lz] = local(px, py, FLOOR_Z + feet + world.BODY * h);
+          if (Math.abs(ly - mid) >= half) continue;
+          if (inOutline(lx, lz) || inOutline(lx - r, lz) || inOutline(lx + r, lz)) {
+            // Out of the face it is nearer (what a turning arm does to whoever is in its way).
+            const ny = mid + (ly < mid ? -half : half);
+            const a = S.m.rotation.z;
+            const ox = (lx * Math.cos(a) - ny * Math.sin(a)) * k;
+            const oy = (lx * Math.sin(a) + ny * Math.cos(a)) * k;
+            return [S.x + ox, S.y + oy];
+          }
+        }
+        return null;
+      },
+      hits(px, py, z) {
+        const [lx, ly, lz] = local(px, py, z);
+        return ly > thick.lo && ly < thick.hi && inOutline(lx, lz);
+      },
+    };
+  };
   const starMat = keep(garden.makeMaterial({ color: starPart.color, shininess: 60, specular: 0x553338 }));
   const stars = [];
   {
@@ -114,8 +182,10 @@ export async function addTreasure(garden, cast, world, base) {
       m.position.set(x, y, z);
       m.rotation.z = rnd() * TAU;
       group.add(m);
-      world.block(x, y, size * 0.7);
-      stars.push({ x, y, z, H, m, spin: (0.04 + rnd() * 0.08) * (rnd() < 0.5 ? -1 : 1) });
+      const S = { x, y, z, H, m, spin: (0.04 + rnd() * 0.08) * (rnd() < 0.5 ? -1 : 1) };
+      stars.push(S);
+      if (world.addCollider) world.addCollider(starCollider(S));
+      else world.block(x, y, size * 0.7);
     }
   }
 

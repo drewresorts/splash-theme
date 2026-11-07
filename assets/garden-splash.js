@@ -3200,6 +3200,22 @@ float landAt(vec2 p) {
       }
       // Behind a character it keeps up at about head height at least, above the grass, not down among the blades.
       pz = Math.max(pz, FLOOR_Z + this.hillAt(px, py) + E.eye * 0.9);
+      // Something solid, or a hill, between the character and the camera: the camera comes in in front of it.
+      const tz = E.z;
+      for (let k = 1; k <= 14; k++) {
+        const f = k / 14;
+        const qx = lerp(E.x, px, f);
+        const qy = lerp(E.y, py, f);
+        const qz = lerp(tz, pz, f);
+        const inHill = qz < FLOOR_Z + this.hillAt(qx, qy, true) + 6;
+        if (inHill || (this.cameraBlocked && this.cameraBlocked(qx, qy, qz))) {
+          const g = Math.max(0.12, (k - 1.4) / 14);
+          px = lerp(E.x, px, g);
+          py = lerp(E.y, py, g);
+          pz = Math.max(lerp(tz, pz, g), FLOOR_Z + this.hillAt(px, py) + E.eye * 0.6);
+          break;
+        }
+      }
     }
     c.position.set(px, py, pz);
     c.rotation.set(Math.PI / 2 + E.pitch, 0, E.yaw);
