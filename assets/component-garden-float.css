@@ -1,0 +1,99 @@
+/*
+ * Floating product grid: each product is only its image, bobbing gently
+ * over the page with no card, border or text, so the garden background
+ * shows through everywhere around it. See snippets/card-floating.liquid.
+ */
+
+/* Every section on a page with the garden background lets it show through. */
+body:has(.garden-background) #MainContent .gradient,
+.garden-floating-grid,
+.garden-floating-grid .gradient {
+  background: transparent;
+}
+
+.garden-floating-grid .product-grid {
+  row-gap: 2.4rem;
+}
+
+.garden-floating-grid .grid__item {
+  min-width: 0;
+}
+
+.garden-float {
+  position: relative;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  animation: garden-float 6s ease-in-out var(--float-delay, 0s) infinite;
+  will-change: transform;
+}
+
+.garden-float__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* A soft shadow on the bed below, so the item reads as hovering above it. */
+  filter: drop-shadow(0 22px 14px rgba(25, 31, 107, 0.22));
+  transition: transform 0.35s ease;
+}
+
+.garden-float__placeholder {
+  aspect-ratio: 1;
+  fill: rgba(var(--color-foreground), 0.35);
+}
+
+.garden-float:hover .garden-float__img,
+.garden-float:focus-visible .garden-float__img {
+  transform: translateY(-6px) scale(1.04);
+}
+
+.garden-float:focus-visible {
+  outline: 1px solid rgb(var(--color-foreground));
+  outline-offset: 4px;
+}
+
+@keyframes garden-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+/* Words that remain on the page sit on soft plates of the page color, to stay legible over the flowers. */
+body:has(.garden-background) .garden-collection-header__inner > *,
+.garden-floating-grid .facets-container,
+.garden-floating-grid .facets-wrapper,
+.garden-floating-grid .product-count,
+.garden-floating-grid .pagination-wrapper {
+  background: rgba(var(--color-background), 0.82);
+}
+
+body:has(.garden-background) .garden-collection-header__inner > * {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.4rem 0.8rem;
+  margin-left: -0.8rem;
+}
+
+body:has(.garden-background) .garden-collection-header__inner > .garden-collection-header__links {
+  background: none;
+  padding: 0;
+  margin-left: 0;
+}
+
+body:has(.garden-background) .garden-chip:not([aria-current='page']) {
+  background: rgba(var(--color-background), 0.82);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .garden-float {
+    animation: none;
+  }
+
+  .garden-float__img {
+    transition: none;
+  }
+}

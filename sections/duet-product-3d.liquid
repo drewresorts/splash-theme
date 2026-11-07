@@ -1,0 +1,261 @@
+{%- comment -%}
+  The 3D product page (templates/product.3d.json; the 3D shop grid opens
+  products here). The product's 3D model is the main view: it turns
+  slowly, and dragging (or the arrow keys) turns it by hand. Its photos sit
+  under it, and the 3D button brings the model back. A product without a
+  3D file shows its photos instead. Beside it, the details as blocks, in
+  any order: brand, title, price, options, buy buttons, text, description
+  and fold-out tabs. Arriving from the grid, the model flies into place
+  and the details come up out of the background (assets/duet-3d.js).
+
+  The model is the product's first 3D media with a .glb file (Products →
+  the product → Media). Adding to cart uses the theme's own product form
+  (assets/product-form.js), so the cart opens as it does everywhere else.
+{%- endcomment -%}
+{{ 'component-duet-3d.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'product-form.js' | asset_url }}" defer="defer"></script>
+<script type="module" src="{{ 'duet-3d.js' | asset_url }}"></script>
+
+{%- liquid
+  assign current = product.selected_or_first_available_variant
+  assign model_url = ''
+  assign model_media = product.media | where: 'media_type', 'model' | first
+  if model_media
+    for source in model_media.sources
+      if source.format == 'glb'
+        assign model_url = source.url
+        break
+      endif
+    endfor
+  endif
+  assign photos = product.media | where: 'media_type', 'image'
+  assign poster = product.featured_image
+  if model_media and model_media.preview_image
+    assign poster = model_media.preview_image
+  endif
+  assign product_form_id = 'DuetProduct3dForm-' | append: section.id
+-%}
+
+<section class="duet-p3d" id="DuetProduct3d-{{ section.id }}">
+  <div class="duet-p3d__layout">
+    <duet-product-3d class="duet-p3d__media" data-model="{{ model_url }}">
+      <div
+        class="duet-p3d__stage"
+        data-p3d-stage
+        {% if model_url != blank %}
+          tabindex="0" role="img" aria-label="{{ product.title | escape }}, in 3D: drag, or use the arrow keys, to turn it"
+        {% endif %}
+      >
+        {%- if model_url != blank and poster -%}
+          {{ poster | image_url: width: 1200 | image_tag: class: 'duet-p3d__poster', loading: 'eager', widths: '400, 800, 1200', sizes: '(min-width: 990px) 56vw, 100vw', alt: '' }}
+          <img class="duet-p3d__photo" data-p3d-photo alt="" width="1600" height="1600" hidden>
+        {%- elsif poster -%}
+          {{ poster | image_url: width: 1600 | image_tag: class: 'duet-p3d__photo', data-p3d-photo: '', loading: 'eager', widths: '400, 800, 1200, 1600', sizes: '(min-width: 990px) 56vw, 100vw', alt: poster.alt }}
+        {%- else -%}
+          {{ 'product-apparel-1' | placeholder_svg_tag: 'duet-p3d__photo' }}
+        {%- endif -%}
+      </div>
+
+      {%- if model_url != blank -%}
+        <p class="duet-p3d__hint" aria-hidden="true">Drag to turn</p>
+      {%- endif -%}
+
+      {%- if photos.size > 1 or model_url != blank and photos.size > 0 -%}
+        <ul class="duet-p3d__thumbs" aria-label="Views of {{ product.title | escape }}">
+          {%- if model_url != blank -%}
+            <li>
+              <button type="button" class="duet-p3d__thumb" data-p3d-thumb="3d" aria-pressed="true" aria-label="3D model">3D</button>
+            </li>
+          {%- endif -%}
+          {%- for media in photos -%}
+            <li>
+              <button
+                type="button"
+                class="duet-p3d__thumb"
+                data-p3d-thumb="photo"
+                data-src="{{ media.preview_image | image_url: width: 1600 }}"
+                data-srcset="{{ media.preview_image | image_url: width: 800 }} 800w, {{ media.preview_image | image_url: width: 1600 }} 1600w"
+                data-alt="{{ media.alt | escape }}"
+                aria-pressed="{% if model_url == blank and forloop.first %}true{% else %}false{% endif %}"
+                aria-label="Photo {{ forloop.index }}"
+              >
+                {{ media.preview_image | image_url: width: 160 | image_tag: loading: 'lazy', alt: '' }}
+              </button>
+            </li>
+          {%- endfor -%}
+        </ul>
+      {%- endif -%}
+    </duet-product-3d>
+
+    <div class="duet-p3d__info">
+      {%- for block in section.blocks -%}
+        {%- case block.type -%}
+          {%- when '@app' -%}
+            <div style="--i: {{ forloop.index0 }}">{% render block %}</div>
+          {%- when 'vendor' -%}
+            <p class="duet-p3d__vendor" style="--i: {{ forloop.index0 }}" {{ block.shopify_attributes }}>{{ product.vendor | escape }}</p>
+          {%- when 'title' -%}
+            <h1 class="duet-p3d__title" style="--i: {{ forloop.index0 }}" {{ block.shopify_attributes }}>{{ product.title | escape }}</h1>
+          {%- when 'price' -%}
+            <div style="--i: {{ forloop.index0 }}" {{ block.shopify_attributes }}>
+              <p class="duet-p3d__prices">
+                <span class="duet-p3d__price" data-p3d-price>{{ current.price | money }}</span>
+                <s data-p3d-compare{% unless current.compare_at_price > current.price %} hidden{% endunless %}>
+                  {%- if current.compare_at_price > current.price -%}{{ current.compare_at_price | money }}{%- endif -%}
+                </s>
+              </p>
+              {%- if block.settings.note != blank -%}
+                <p class="duet-p3d__note">{{ block.settings.note | escape }}</p>
+              {%- endif -%}
+            </div>
+          {%- when 'variant_picker' -%}
+            {%- unless product.has_only_default_variant -%}
+              <duet-variant-picker
+                class="duet-p3d__options"
+                style="--i: {{ forloop.index0 }}"
+                data-add="{{ 'products.product.add_to_cart' | t }}"
+                data-sold-out="{{ 'products.product.sold_out' | t }}"
+                data-unavailable="{{ 'products.product.unavailable' | t }}"
+                {{ block.shopify_attributes }}
+              >
+                {%- for option in product.options_with_values -%}
+                  <fieldset>
+                    <legend>{{ option.name | escape }}</legend>
+                    {%- for value in option.values -%}
+                      {%- assign input_id = section.id | append: '-' | append: option.position | append: '-' | append: forloop.index0 -%}
+                      <input
+                        type="radio"
+                        id="{{ input_id }}"
+                        name="{{ option.name | escape }}-{{ section.id }}"
+                        value="{{ value | escape }}"
+                        {% if option.selected_value == value %}
+                          checked
+                        {% endif %}
+                      >
+                      <label for="{{ input_id }}">{{ value | escape }}</label>
+                    {%- endfor -%}
+                  </fieldset>
+                {%- endfor -%}
+                <script type="application/json">
+                  [
+                    {%- for v in product.variants -%}
+                      {"id": {{ v.id }}, "options": {{ v.options | json }}, "price": {{ v.price | money | json }}, "compare": {% if v.compare_at_price > v.price %}{{ v.compare_at_price | money | json }}{% else %}null{% endif %}, "available": {{ v.available | json }}}{% unless forloop.last %},{% endunless %}
+                    {%- endfor -%}
+                  ]
+                </script>
+              </duet-variant-picker>
+            {%- endunless -%}
+          {%- when 'buy_buttons' -%}
+            <product-form class="product-form duet-p3d__form" data-section-id="{{ section.id }}" style="--i: {{ forloop.index0 }}" {{ block.shopify_attributes }}>
+              <p class="product-form__error-message-wrapper duet-p3d__error" role="alert" hidden>
+                <span class="product-form__error-message"></span>
+              </p>
+              {%- form 'product', product, id: product_form_id, class: 'form duet-p3d__form', novalidate: 'novalidate', data-type: 'add-to-cart-form' -%}
+                <input type="hidden" name="id" value="{{ current.id }}" class="product-variant-id">
+                <button
+                  type="submit"
+                  name="add"
+                  class="button button--full-width duet-p3d__add"
+                  {% unless current.available %}
+                    aria-disabled="true"
+                  {% endunless %}
+                >
+                  <span>
+                    {%- if current.available -%}
+                      {{ 'products.product.add_to_cart' | t }}
+                    {%- else -%}
+                      {{ 'products.product.sold_out' | t }}
+                    {%- endif -%}
+                  </span>
+                  {%- render 'loading-spinner' -%}
+                </button>
+                {%- if block.settings.show_dynamic_checkout -%}
+                  {{ form | payment_button }}
+                {%- endif -%}
+              {%- endform -%}
+            </product-form>
+          {%- when 'text' -%}
+            {%- if block.settings.text != blank -%}
+              <div class="duet-p3d__text rte" style="--i: {{ forloop.index0 }}" {{ block.shopify_attributes }}>{{ block.settings.text }}</div>
+            {%- endif -%}
+          {%- when 'description' -%}
+            {%- if product.description != blank -%}
+              <div class="duet-p3d__text rte" style="--i: {{ forloop.index0 }}" {{ block.shopify_attributes }}>{{ product.description }}</div>
+            {%- endif -%}
+          {%- when 'tab' -%}
+            {%- if block.settings.heading != blank -%}
+              <details class="duet-p3d__tab" style="--i: {{ forloop.index0 }}" {{ block.shopify_attributes }}>
+                <summary>{{ block.settings.heading | escape }}</summary>
+                <div class="rte">
+                  {{- block.settings.content -}}
+                  {%- if block.settings.page != blank -%}{{ block.settings.page.content }}{%- endif -%}
+                </div>
+              </details>
+            {%- endif -%}
+        {%- endcase -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Product in 3D",
+  "tag": "div",
+  "class": "section",
+  "blocks": [
+    { "type": "@app" },
+    { "type": "vendor", "name": "Brand", "limit": 1, "settings": [] },
+    { "type": "title", "name": "Title", "limit": 1, "settings": [] },
+    {
+      "type": "price",
+      "name": "Price",
+      "limit": 1,
+      "settings": [
+        { "type": "text", "id": "note", "label": "Small print under the price", "default": "Taxes and shipping worked out at checkout." }
+      ]
+    },
+    { "type": "variant_picker", "name": "Options", "limit": 1, "settings": [] },
+    {
+      "type": "buy_buttons",
+      "name": "Buy buttons",
+      "limit": 1,
+      "settings": [
+        { "type": "checkbox", "id": "show_dynamic_checkout", "label": "Show the express checkout button", "default": true, "info": "Shop Pay, Apple Pay and the like, set in Settings → Payments." }
+      ]
+    },
+    {
+      "type": "text",
+      "name": "Text",
+      "settings": [
+        { "type": "richtext", "id": "text", "label": "Text", "default": "<p>Every piece is reviewed for authenticity before it's listed.</p>" }
+      ]
+    },
+    { "type": "description", "name": "Description", "limit": 1, "settings": [] },
+    {
+      "type": "tab",
+      "name": "Fold-out tab",
+      "settings": [
+        { "type": "text", "id": "heading", "label": "Heading", "default": "Shipping and returns" },
+        { "type": "richtext", "id": "content", "label": "Text" },
+        { "type": "page", "id": "page", "label": "Or the text of a page" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Product in 3D",
+      "blocks": [
+        { "type": "vendor" },
+        { "type": "title" },
+        { "type": "price" },
+        { "type": "variant_picker" },
+        { "type": "buy_buttons" },
+        { "type": "text" },
+        { "type": "description" },
+        { "type": "tab" }
+      ]
+    }
+  ]
+}
+{% endschema %}

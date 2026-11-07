@@ -1,0 +1,202 @@
+{%- comment -%}
+  The email sign-up on the coming-soon (password) page: a slim bar of
+  fogged glass along the bottom of the screen, over the garden splash.
+  Signs visitors up as newsletter customers (Customers → Subscribed), the
+  same as the store's other newsletter forms.
+{%- endcomment -%}
+<div
+  class="coming-soon-signup"
+  id="ComingSoonSignup-{{ section.id }}"
+  style="--css-ink: {{ section.settings.ink_color | default: '#191F6B' }};"
+>
+  {%- form 'customer', id: 'ComingSoonForm', class: 'coming-soon-signup__form' -%}
+    <input type="hidden" name="contact[tags]" value="newsletter">
+    {%- if section.settings.heading != blank -%}
+      <p class="coming-soon-signup__heading" id="ComingSoonHeading-{{ section.id }}">{{ section.settings.heading | escape }}</p>
+    {%- endif -%}
+    {%- if form.posted_successfully? -%}
+      <p class="coming-soon-signup__message" role="status" tabindex="-1" autofocus>
+        {{- section.settings.success_text | default: 'Thanks. We will let you know.' | escape -}}
+      </p>
+    {%- else -%}
+      <div class="coming-soon-signup__row">
+        <label class="visually-hidden" for="ComingSoonEmail-{{ section.id }}">{{ 'newsletter.label' | t }}</label>
+        <input
+          id="ComingSoonEmail-{{ section.id }}"
+          class="coming-soon-signup__input"
+          type="email"
+          name="contact[email]"
+          value="{{ form.email }}"
+          autocorrect="off"
+          autocapitalize="off"
+          autocomplete="email"
+          placeholder="{{ section.settings.placeholder | default: 'Email' | escape }}"
+          required
+          {% if section.settings.heading != blank %}aria-describedby="ComingSoonHeading-{{ section.id }}"{% endif %}
+          {% if form.errors %}aria-invalid="true"{% endif %}
+        >
+        <button type="submit" class="coming-soon-signup__button" name="commit">
+          {{- section.settings.button_label | default: 'Sign up' | escape -}}
+        </button>
+      </div>
+      {%- if form.errors -%}
+        <p class="coming-soon-signup__message coming-soon-signup__message--error" role="alert">
+          {{- form.errors.translated_fields.email | capitalize }} {{ form.errors.messages.email -}}
+        </p>
+      {%- endif -%}
+    {%- endif -%}
+  {%- endform -%}
+</div>
+
+{% stylesheet %}
+  .coming-soon-signup {
+    position: fixed;
+    left: 50%;
+    bottom: max(1.6rem, env(safe-area-inset-bottom));
+    z-index: 25;
+    width: min(52rem, calc(100% - 3.2rem));
+    transform: translateX(-50%);
+    color: var(--css-ink, #191f6b);
+    font-family: var(--duet-type, sans-serif);
+  }
+
+  /* Above the splash's color swatches when they show. */
+  body:has(.garden-splash__schemes) .coming-soon-signup {
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 6rem);
+  }
+
+  /* Out of the way while the menu, the night sky or the game is up. */
+  body:has(garden-splash.is-nav-open, garden-splash.is-night) .coming-soon-signup,
+  html.pollen-dream-open .coming-soon-signup {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .coming-soon-signup__form {
+    display: grid;
+    gap: 0.8rem;
+    padding: 1.2rem 1.4rem;
+    background: rgba(255, 255, 255, 0.6);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    transition: opacity 0.3s ease;
+  }
+
+  .coming-soon-signup__heading,
+  .coming-soon-signup__message {
+    margin: 0;
+    font-size: 1.1rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  .coming-soon-signup__message--error {
+    text-transform: none;
+    letter-spacing: 0.04em;
+  }
+
+  .coming-soon-signup__row {
+    display: flex;
+    gap: 0.8rem;
+  }
+
+  .coming-soon-signup__input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 4.4rem;
+    margin: 0;
+    padding: 0 1.2rem;
+    border: 0;
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.85);
+    color: inherit;
+    font: inherit;
+    font-size: 1.4rem;
+    letter-spacing: 0.06em;
+  }
+
+  .coming-soon-signup__input::placeholder {
+    color: inherit;
+    opacity: 0.55;
+  }
+
+  .coming-soon-signup__button {
+    flex: 0 0 auto;
+    height: 4.4rem;
+    margin: 0;
+    padding: 0 1.8rem;
+    border: 0;
+    border-radius: 0;
+    background: var(--css-ink, #191f6b);
+    color: #fff;
+    font: inherit;
+    font-size: 1.1rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .coming-soon-signup__button:hover {
+    opacity: 0.85;
+  }
+
+  .coming-soon-signup__input:focus-visible,
+  .coming-soon-signup__button:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 2px;
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Coming soon sign-up",
+  "tag": "section",
+  "class": "section-coming-soon-signup",
+  "limit": 1,
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "An email sign-up along the bottom of the coming-soon page, over the garden. Sign-ups appear in Customers as subscribed to email marketing."
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Be the first to know when we open"
+    },
+    {
+      "type": "text",
+      "id": "placeholder",
+      "label": "Email field text",
+      "default": "Email"
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button",
+      "default": "Sign up"
+    },
+    {
+      "type": "text",
+      "id": "success_text",
+      "label": "Message after signing up",
+      "default": "Thanks. We will let you know."
+    },
+    {
+      "type": "color",
+      "id": "ink_color",
+      "label": "Text color",
+      "default": "#191F6B"
+    }
+  ],
+  "enabled_on": {
+    "templates": ["password", "index", "page"]
+  },
+  "presets": [
+    {
+      "name": "Coming soon sign-up"
+    }
+  ]
+}
+{% endschema %}

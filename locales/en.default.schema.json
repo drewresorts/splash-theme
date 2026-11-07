@@ -2397,6 +2397,10 @@
             "heading_3": {
               "label": "Heading",
               "default": "Heading"
+            },
+            "content": {
+              "label": "Content",
+              "info": "Choose an icon or add an image for each pairing"
             }
           }
         }
@@ -3474,6 +3478,112 @@
       },
       "presets": {
         "name": "Collapsible content"
+      }
+    },
+    "product_live_stream": {
+      "name": "Live stream",
+      "settings": {
+        "intro": {
+          "content": "A live video behind the page, with the store menu and a clock."
+        },
+        "menu": {
+          "label": "Menu"
+        },
+        "nav_logo": {
+          "label": "Logo in the menu",
+          "info": "Leave blank to show the store name."
+        },
+        "nav_logo_width": {
+          "label": "Logo width"
+        },
+        "youtube_url": {
+          "label": "YouTube link",
+          "info": "The video that plays behind the page, muted."
+        },
+        "overlay_color": {
+          "label": "Color over the video"
+        },
+        "overlay_opacity": {
+          "label": "Strength of the color over the video"
+        },
+        "accent_shop_color": {
+          "label": "Shop link color"
+        },
+        "show_live_clock": {
+          "label": "Show the live clock"
+        },
+        "size_active_bg": {
+          "label": "Chosen size background"
+        }
+      },
+      "blocks": {
+        "stream": {
+          "name": "Stream",
+          "settings": {
+            "youtube_url": {
+              "label": "YouTube link"
+            }
+          }
+        }
+      }
+    },
+    "collections_live": {
+      "name": "Live stream collections",
+      "settings": {
+        "intro": {
+          "content": "A live video behind the page, with the store menu and a clock."
+        },
+        "menu": {
+          "label": "Menu"
+        },
+        "nav_logo": {
+          "label": "Logo in the menu",
+          "info": "Leave blank to show the store name."
+        },
+        "nav_logo_width": {
+          "label": "Logo width"
+        },
+        "youtube_url": {
+          "label": "YouTube link",
+          "info": "The video that plays behind the page, muted."
+        },
+        "overlay_color": {
+          "label": "Color over the video"
+        },
+        "overlay_opacity": {
+          "label": "Strength of the color over the video"
+        },
+        "accent_shop_color": {
+          "label": "Shop link color"
+        },
+        "show_live_clock": {
+          "label": "Show the live clock"
+        },
+        "show_second_link_decor": {
+          "label": "Decorate the second link"
+        },
+        "vertical_title": {
+          "label": "Side title"
+        },
+        "vertical_title_color": {
+          "label": "Side title color"
+        },
+        "sort": {
+          "label": "Sort collections by"
+        },
+        "columns_desktop": {
+          "label": "Columns on desktop"
+        }
+      },
+      "blocks": {
+        "stream": {
+          "name": "Stream",
+          "settings": {
+            "youtube_url": {
+              "label": "YouTube link"
+            }
+          }
+        }
       }
     }
   },

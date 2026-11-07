@@ -1,0 +1,52 @@
+{%- comment -%}
+  Certificates of authenticity for paid orders: one card per certified item,
+  showing what it is, its serial, when the customer took ownership, and the
+  state of its on-chain token.
+
+  Data:
+  - Product metafield duet.authenticity_enabled (true/false): the product
+    comes with a certificate.
+  - Order metafield duet.authenticity (JSON list), written by the
+    authenticity app once a token is minted. Each entry:
+      line_item_id, unit, product_title, variant_title, serial, edition,
+      status (minting | ready | transferring | in_wallet | revoked), token_id, chain,
+      contract, explorer_url, image, purchased_at, minted_at, holder,
+      transfer_url
+  A paid order's certified items with no entry yet show as "Being minted".
+
+  Accepts:
+  - orders: {Array} orders to list (e.g. customer.orders)
+  - order: {Object} a single order, instead of orders
+  - heading: {String} optional heading
+
+  Usage:
+  {% render 'authenticity-certificates', orders: customer.orders, heading: 'Certificates of authenticity' %}
+  {% render 'authenticity-certificates', order: order %}
+{%- endcomment -%}
+{%- liquid
+  assign date_format = '%B %-d, %Y · %-I:%M %p %Z'
+-%}
+{%- capture cards -%}
+  {%- for o in orders -%}
+    {%- render 'authenticity-order-cards', o: o, date_format: date_format -%}
+  {%- endfor -%}
+  {%- if order -%}
+    {%- render 'authenticity-order-cards', o: order, date_format: date_format -%}
+  {%- endif -%}
+{%- endcapture -%}
+
+{%- if cards contains 'authenticity-card' -%}
+  {{ 'component-authenticity.css' | asset_url | stylesheet_tag }}
+  <section class="authenticity" id="certificates" aria-labelledby="AuthenticityHeading">
+    <h2 class="authenticity__heading" id="AuthenticityHeading">
+      {{- heading | default: 'Certificates of authenticity' -}}
+    </h2>
+    <p class="authenticity__intro">
+      Each certified piece comes with a digital certificate recorded on the blockchain. It proves the piece is
+      authentic and that you own it, from the moment you paid for it.
+    </p>
+    <ul class="authenticity__list" role="list">
+      {{ cards }}
+    </ul>
+  </section>
+{%- endif -%}

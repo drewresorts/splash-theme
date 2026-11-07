@@ -1,0 +1,178 @@
+{%- comment -%}
+  Story: photos, video and words in turn, in the About page's look. Each
+  block is a picture (photo or video, snippets/duet-media.liquid) or some
+  words (a small label, a title, text and a button). A picture set beside
+  the words sits next to the block before or after it, in two columns; a
+  picture across the whole row runs nearly edge to edge. Pictures are big
+  and frameless, words narrow and set in, so the two read apart. On phones
+  everything stacks. Styles: assets/component-duet-about.css.
+{%- endcomment -%}
+{{ 'component-duet-about.css' | asset_url | stylesheet_tag }}
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+{%- endstyle -%}
+
+<section class="duet-about duet-story gradient section-{{ section.id }}-padding"{% if section.settings.heading != blank %} aria-labelledby="DuetStory-{{ section.id }}"{% endif %}>
+  <div class="duet-about__inner">
+    {%- if section.settings.eyebrow != blank or section.settings.heading != blank or section.settings.text != blank -%}
+      <div class="duet-about__head">
+        {%- if section.settings.eyebrow != blank -%}
+          <p class="duet-about__eyebrow">{{ section.settings.eyebrow | escape }}</p>
+        {%- endif -%}
+        {%- if section.settings.heading != blank -%}
+          <h2 id="DuetStory-{{ section.id }}" class="duet-about__title">{{ section.settings.heading | escape }}</h2>
+        {%- endif -%}
+        {%- if section.settings.text != blank -%}
+          <div class="duet-about__text">{{ section.settings.text }}</div>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+
+    {%- if section.blocks.size > 0 -%}
+      <div class="duet-story__grid">
+        {%- for block in section.blocks -%}
+          {%- if block.type == 'photo' or block.type == 'video' -%}
+            <div class="duet-story__cell--{{ block.settings.width | default: 'half' }}" {{ block.shopify_attributes }}>
+              {%- if block.settings.width == 'full' -%}
+                {%- render 'duet-media', block: block -%}
+              {%- else -%}
+                {%- render 'duet-media', block: block, sizes: '(min-width: 750px) 50vw, 100vw' -%}
+              {%- endif -%}
+            </div>
+          {%- else -%}
+            <div class="duet-story__words" {{ block.shopify_attributes }}>
+              {%- if block.settings.eyebrow != blank -%}
+                <p class="duet-about__eyebrow">{{ block.settings.eyebrow | escape }}</p>
+              {%- endif -%}
+              {%- if block.settings.title != blank -%}
+                <h3>{{ block.settings.title | escape }}</h3>
+              {%- endif -%}
+              {%- if block.settings.text != blank -%}
+                <div class="duet-about__text">{{ block.settings.text }}</div>
+              {%- endif -%}
+              {%- if block.settings.button_label != blank and block.settings.button_link != blank -%}
+                <a class="duet-about__button" href="{{ block.settings.button_link }}">{{ block.settings.button_label | escape }}</a>
+              {%- endif -%}
+            </div>
+          {%- endif -%}
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Story: photos and words",
+  "tag": "div",
+  "class": "section",
+  "settings": [
+    { "type": "text", "id": "eyebrow", "label": "Small label above the heading" },
+    { "type": "text", "id": "heading", "label": "Heading", "default": "Our story" },
+    { "type": "richtext", "id": "text", "label": "Introduction" },
+    { "type": "range", "id": "padding_top", "label": "Space above", "min": 0, "max": 160, "step": 4, "unit": "px", "default": 64 },
+    { "type": "range", "id": "padding_bottom", "label": "Space below", "min": 0, "max": 160, "step": 4, "unit": "px", "default": 64 }
+  ],
+  "blocks": [
+    {
+      "type": "words",
+      "name": "Words",
+      "settings": [
+        { "type": "text", "id": "eyebrow", "label": "Small label" },
+        { "type": "text", "id": "title", "label": "Title", "default": "A title" },
+        { "type": "richtext", "id": "text", "label": "Text", "default": "<p>A few sentences to sit beside the picture.</p>" },
+        { "type": "text", "id": "button_label", "label": "Button text" },
+        { "type": "url", "id": "button_link", "label": "Button link" }
+      ]
+    },
+    {
+      "type": "photo",
+      "name": "Photo",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "Photo" },
+        { "type": "text", "id": "caption", "label": "Caption" },
+        { "type": "url", "id": "link", "label": "Link" },
+        {
+          "type": "select",
+          "id": "width",
+          "label": "Width",
+          "default": "half",
+          "options": [
+            { "value": "full", "label": "Whole row, nearly edge to edge" },
+            { "value": "half", "label": "Beside the words next to it" }
+          ]
+        },
+        {
+          "type": "select",
+          "id": "ratio",
+          "label": "Shape",
+          "default": "natural",
+          "options": [
+            { "value": "natural", "label": "As the photo is" },
+            { "value": "16_9", "label": "Wide (16:9)" },
+            { "value": "4_3", "label": "Landscape (4:3)" },
+            { "value": "1_1", "label": "Square" },
+            { "value": "3_4", "label": "Portrait (3:4)" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "video",
+      "name": "Video",
+      "settings": [
+        { "type": "video", "id": "video", "label": "Video file" },
+        { "type": "video_url", "id": "video_url", "label": "Or a YouTube or Vimeo link", "accept": ["youtube", "vimeo"] },
+        { "type": "checkbox", "id": "autoplay", "label": "Play on its own", "default": true, "info": "Muted and looping, like a moving photo. Off: it waits with its play button." },
+        { "type": "text", "id": "caption", "label": "Caption" },
+        {
+          "type": "select",
+          "id": "width",
+          "label": "Width",
+          "default": "half",
+          "options": [
+            { "value": "full", "label": "Whole row, nearly edge to edge" },
+            { "value": "half", "label": "Beside the words next to it" }
+          ]
+        },
+        {
+          "type": "select",
+          "id": "ratio",
+          "label": "Shape",
+          "default": "16_9",
+          "options": [
+            { "value": "natural", "label": "As the video is (uploaded files)" },
+            { "value": "16_9", "label": "Wide (16:9)" },
+            { "value": "4_3", "label": "Landscape (4:3)" },
+            { "value": "1_1", "label": "Square" },
+            { "value": "3_4", "label": "Portrait (3:4)" }
+          ]
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Story: photos and words",
+      "blocks": [
+        { "type": "photo", "settings": { "width": "half" } },
+        { "type": "words" },
+        { "type": "words", "settings": { "title": "Another title" } },
+        { "type": "video", "settings": { "width": "half" } },
+        { "type": "photo", "settings": { "width": "full", "ratio": "16_9" } }
+      ]
+    }
+  ]
+}
+{% endschema %}
