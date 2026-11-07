@@ -20,7 +20,11 @@
  * a mountain, each reached by solving a puzzle there, each puzzle giving
  * what the next place needs. Walk up to one and say hi (the E key, or the
  * button): it joins you. Find all three and they line up beside you: D U E T.
- * The same key or button does whatever else there is to do nearby.
+ * The same key or button does whatever else there is to do nearby. Coins lie
+ * about the world to be collected (assets/pollen-dream-treasure.js), and giant
+ * stars stand in the fields; with all the letters found, the coins earn a
+ * discount in the shop (Theme settings → Pollen Dream game: codes for so many
+ * coins, passed in as opts.rewards by snippets/pollen-dream-launcher.liquid).
  *
  * Now and then a gust of wind rises nearby (garden-splash.js updateGusts):
  * a note at the top says so and an arrow points the way. Walk into it and
@@ -52,6 +56,15 @@ const STRINGS = {
   lifted: 'Carried up on the wind',
   gliding: 'Gliding down',
   sayHi: 'Say hi',
+  reward: 'Reward',
+  rewardTitle: 'You found everyone!',
+  rewardCoins: (n, of) => `${n} of ${of} coins`,
+  rewardGot: (label) => `That’s ${label} in the shop.`,
+  rewardNext: (n, label) => `Collect ${n} coins for ${label}. There are more out there.`,
+  rewardThanks: 'Thanks for playing.',
+  rewardUse: 'Use it in the shop',
+  rewardMore: 'Keep exploring',
+  codeLabel: 'Your code',
 };
 
 let current = null;
@@ -204,9 +217,72 @@ class Explore {
       .then((world) => {
         if (!world) return;
         if (this.closed) world.remove();
-        else this.world = world;
+        else {
+          this.world = world;
+          this.loadTreasure();
+        }
       })
       .catch((e) => console.error('pollen-dream: the world could not load', e));
+  }
+
+  /* The coins and the giant stars (assets/pollen-dream-treasure.js). */
+  loadTreasure() {
+    import('./pollen-dream-treasure.js')
+      .then((m) => m.addTreasure(this.garden, this.cast, this.world, import.meta.url))
+      .then((t) => {
+        if (!t) return;
+        if (this.closed) t.remove();
+        else this.treasure = t;
+      })
+      .catch((e) => console.error('pollen-dream: the coins could not load', e));
+  }
+
+  /*
+   * The rewards for coins, as set in the theme: [{ coins, code, label }], the
+   * codes base64-encoded in the page (see snippets/pollen-dream-launcher.liquid),
+   * the most coins last.
+   */
+  rewards() {
+    if (this.tiers) return this.tiers;
+    const list = Array.isArray(this.opts.rewards) ? this.opts.rewards : [];
+    this.tiers = list
+      .map((r) => {
+        let code = '';
+        try {
+          code = window.atob(r.code || '');
+        } catch (e) {
+          code = '';
+        }
+        return { coins: Number(r.coins) || 0, code: code.trim(), label: String(r.label || '') };
+      })
+      .filter((r) => r.code)
+      .sort((a, b) => a.coins - b.coins);
+    return this.tiers;
+  }
+
+  /* All the letters found: what the coins collected so far earn, with a link that applies the code in the shop. */
+  showReward() {
+    const ui = this.ui;
+    const T = this.treasure;
+    const n = T ? T.count : 0;
+    const of = T ? T.total : 0;
+    const tiers = this.rewards();
+    let got = null;
+    for (const r of tiers) if (n >= r.coins) got = r;
+    const next = tiers.find((r) => n < r.coins);
+    ui.rewardCoins.textContent = STRINGS.rewardCoins(n, of);
+    ui.rewardText.textContent = got ? STRINGS.rewardGot(got.label) : next ? STRINGS.rewardNext(next.coins, next.label) : STRINGS.rewardThanks;
+    if (got && next) ui.rewardText.textContent += ' ' + STRINGS.rewardNext(next.coins, next.label);
+    ui.rewardCode.hidden = !got;
+    ui.rewardLink.hidden = !got;
+    if (got) {
+      ui.rewardCodeText.textContent = got.code;
+      const root = rootPath();
+      ui.rewardLink.href = `${root}discount/${encodeURIComponent(got.code)}?redirect=${encodeURIComponent(root + 'collections/all')}`;
+    }
+    ui.rewardChip.hidden = false;
+    if (document.pointerLockElement === this.surface) document.exitPointerLock();
+    this.show('reward');
   }
 
   /* Says hi to the letter the D is next to, if any; or else does what there is to do nearby. */
@@ -231,7 +307,13 @@ class Explore {
       }
     }
     // Which letters are found so far, and what the D is carrying.
-    const bag = C ? ['D', ...C.found].sort((a, b) => 'DUET'.indexOf(a) - 'DUET'.indexOf(b)).join(' ') + (this.world ? this.world.bag().map((b) => ` · ${b}`).join('') : '') : '';
+    const T = this.treasure;
+    const bag = C ? ['D', ...C.found].sort((a, b) => 'DUET'.indexOf(a) - 'DUET'.indexOf(b)).join(' ') + (T ? ` · ● ${T.count}/${T.total}` : '') + (this.world ? this.world.bag().map((b) => ` · ${b}`).join('') : '') : '';
+    // All found, once the line-up is over: the reward.
+    if (C && C.done && C.lineup <= 0 && !this.rewardSeen && this.state === 'play') {
+      this.rewardSeen = true;
+      this.showReward();
+    }
     if (bag !== this.bagShown) {
       this.bagShown = bag;
       ui.bag.textContent = bag;
@@ -268,6 +350,8 @@ class Explore {
     cancelAnimationFrame(this.raf);
     this.abort.abort();
     if (document.pointerLockElement === this.surface) document.exitPointerLock();
+    if (this.treasure) this.treasure.remove();
+    this.treasure = null;
     if (this.world) this.world.remove();
     this.world = null;
     if (this.cast) this.cast.remove();
@@ -298,6 +382,7 @@ class Explore {
       <p class="pollen-dream__alert" data-alert role="status" hidden><span class="pollen-dream__alert-arrow" data-alert-arrow aria-hidden="true"></span><span data-alert-text></span></p>
       <div class="pollen-dream__hud" data-hud hidden>
         <button type="button" class="pollen-dream__chip" data-action="motion" aria-pressed="false" hidden>${S.motion}</button>
+        <button type="button" class="pollen-dream__chip" data-action="reward" hidden>${S.reward}</button>
         <button type="button" class="pollen-dream__chip" data-action="pause">${S.pause}</button>
         <button type="button" class="pollen-dream__chip" data-action="exit">${S.exit}</button>
       </div>
@@ -318,6 +403,17 @@ class Explore {
           <button type="button" class="pollen-dream__button" data-action="exit">${S.exit}</button>
         </div>
       </section>
+      <section class="pollen-dream__screen" data-screen="reward" hidden>
+        <h2 class="pollen-dream__title">${S.rewardTitle}</h2>
+        <p data-reward-coins></p>
+        <p data-reward-text></p>
+        <p class="pollen-dream__code" data-reward-code hidden><span>${S.codeLabel}</span><strong data-reward-code-text></strong></p>
+        <div class="pollen-dream__actions">
+          <a class="pollen-dream__button pollen-dream__button--primary" data-reward-link hidden>${S.rewardUse}</a>
+          <button type="button" class="pollen-dream__button" data-action="resume">${S.rewardMore}</button>
+          <button type="button" class="pollen-dream__button" data-action="exit">${S.exit}</button>
+        </div>
+      </section>
       <section class="pollen-dream__screen" data-screen="error" hidden>
         <h2 class="pollen-dream__title">${S.failed}</h2>
         <p>${S.failedHelp}</p>
@@ -329,7 +425,7 @@ class Explore {
     this.root = root;
     const q = (s) => root.querySelector(s);
     this.surface = q('[data-surface]');
-    this.ui = { bag: q('[data-bag]'), talk: q('[data-action="talk"]'), talkText: q('[data-talk-text]'), talkKey: q('[data-talk-key]'), say: q('[data-say]'), sayWho: q('[data-say-who]'), sayText: q('[data-say-text]'), alert: q('[data-alert]'), alertText: q('[data-alert-text]'), alertArrow: q('[data-alert-arrow]'), hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]'), motion: q('[data-action="motion"]') };
+    this.ui = { rewardChip: q('[data-action="reward"]'), rewardCoins: q('[data-reward-coins]'), rewardText: q('[data-reward-text]'), rewardCode: q('[data-reward-code]'), rewardCodeText: q('[data-reward-code-text]'), rewardLink: q('[data-reward-link]'), bag: q('[data-bag]'), talk: q('[data-action="talk"]'), talkText: q('[data-talk-text]'), talkKey: q('[data-talk-key]'), say: q('[data-say]'), sayWho: q('[data-say-who]'), sayText: q('[data-say-text]'), alert: q('[data-alert]'), alertText: q('[data-alert-text]'), alertArrow: q('[data-alert-arrow]'), hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]'), motion: q('[data-action="motion"]') };
   }
 
   show(state) {
@@ -369,6 +465,7 @@ class Explore {
         else if (act === 'exit') this.close();
         else if (act === 'motion') this.toggleMotion();
         else if (act === 'talk') this.talk();
+        else if (act === 'reward') this.showReward();
       },
       on
     );
@@ -392,7 +489,7 @@ class Explore {
         if (e.key !== 'Escape') return;
         e.stopPropagation();
         if (this.state === 'play') this.pause();
-        else if (this.state === 'paused') this.play();
+        else if (this.state === 'paused' || this.state === 'reward') this.play();
         else this.close();
       },
       { signal: this.abort.signal, capture: true }

@@ -252,6 +252,27 @@ html.pollen-dream-open body {
   }
 }
 
+/* ---------- The reward: the code, and the link to the shop ---------- */
+
+.pollen-dream__code {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.pollen-dream__code strong {
+  padding: 10px 18px;
+  background: color-mix(in srgb, var(--pd-ink) 8%, transparent);
+  font-size: 18px;
+  letter-spacing: 0.24em;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.pollen-dream a.pollen-dream__button {
+  text-decoration: none;
+}
+
 /* ---------- The letters: saying hi, and what they say ---------- */
 
 /* The letters found so far, and what the D carries: top left. */

@@ -773,8 +773,9 @@ export function addWorld(garden, cast) {
     clock: 0,
   };
   // places: where everything is, for anything built on top of this world (and for testing it).
-  const places = { LAKE, FOREST, MOUNT, shore, dockEnd, ship, bellAt, frogs, ladderBase, gateAt, owlets, mOut, fOut, dIn };
-  const world = { group, state, places, prompt: null, act: () => act(), remove: () => remove(), bag: () => bag() };
+  const places = { LAKE, FOREST, MOUNT, shore, dockEnd, ship, bellAt, frogs, ladderBase, gateAt, owlets, cairns, mOut, fOut, dIn };
+  // land, block, top: the land's height (above FLOOR_Z), a way to put something in the D's way, and the highest thing to stand on at a point (absolute), for what is added to this world (assets/pollen-dream-treasure.js).
+  const world = { group, state, places, size, land, block, top: (x, y) => garden.exploreFloor(x, y, 1e9), prompt: null, act: () => act(), remove: () => remove(), bag: () => bag() };
   const tell = (text, s) => cast && cast.tell && cast.tell(text, s);
 
   // The letters, put in their places once they are in.

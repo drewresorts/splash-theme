@@ -6,6 +6,7 @@
   (garden-splash.js sends "duet:egg").
   On a page without the splash it opens on the home page. Its name and
   whether it can be opened at all come from the Duet header section.
+  Coin rewards (Theme settings → Pollen Dream game) are passed to it here.
   Nothing of it loads until then. Rendered by layout/theme.liquid when
   Theme settings → Pollen Dream is on.
 {%- endcomment -%}
@@ -17,6 +18,18 @@
       game: {{ 'pollen-dream.js' | asset_url | json }},
       css: {{ 'component-pollen-dream.css' | asset_url | json }},
     };
+    // Coin rewards (Theme settings → Pollen Dream game): the codes base64-encoded, out of plain sight in the page.
+    var rewards = [
+      {%- for i in (1..3) -%}
+        {%- assign coins_key = 'game_reward_' | append: i | append: '_coins' -%}
+        {%- assign code_key = 'game_reward_' | append: i | append: '_code' -%}
+        {%- assign label_key = 'game_reward_' | append: i | append: '_label' -%}
+        {%- assign code = settings[code_key] | strip -%}
+        {%- if code != blank -%}
+          { coins: {{ settings[coins_key] | json }}, code: {{ code | base64_encode | json }}, label: {{ settings[label_key] | json }} },
+        {%- endif -%}
+      {%- endfor -%}
+    ];
     var busy = false;
 
     function header() {
@@ -46,6 +59,7 @@
             returnFocus: returnTo,
             title: h ? h.dataset.gameName : '',
             source: garden || formedGarden(),
+            rewards: rewards,
           });
         })
         .catch(function (e) {

@@ -1619,13 +1619,80 @@
         "id": "garden_game",
         "label": "Enable the Pollen Dream game",
         "default": true,
-        "info": "Explore the home page's 3D garden in the first person, on foot: the flowers, the fields and the sky above. Opened from the splash and shop menus; any menu link to /#pollen-dream opens it too. It loads only when a visitor starts it."
+        "info": "Explore the home page's garden and the world round it as the D of Duet: find the U, the E and the T, hidden at a lake, in a forest and up a mountain, solving a puzzle at each, and collect coins along the way. Opened from the splash and shop menus; any menu link to /#pollen-dream opens it too. It loads only when a visitor starts it."
       },
       {
         "type": "text",
         "id": "garden_game_label",
         "label": "Menu label",
         "default": "Pollen Dream"
+      },
+      {
+        "type": "paragraph",
+        "content": "Coin rewards: players who find all the letters see the discount code for the most coins they collected, with a button that applies it in the shop. Create each code first in Discounts (one use per customer is a good idea), then enter it here. The codes are hidden in the page but not secret: treat them as a friendly reward, not a vault."
+      },
+      {
+        "type": "range",
+        "id": "game_reward_1_coins",
+        "label": "Reward 1: coins needed",
+        "min": 5,
+        "max": 150,
+        "step": 5,
+        "default": 30
+      },
+      {
+        "type": "text",
+        "id": "game_reward_1_code",
+        "label": "Reward 1: discount code",
+        "info": "Leave empty to skip this reward."
+      },
+      {
+        "type": "text",
+        "id": "game_reward_1_label",
+        "label": "Reward 1: what it gives",
+        "default": "5% off"
+      },
+      {
+        "type": "range",
+        "id": "game_reward_2_coins",
+        "label": "Reward 2: coins needed",
+        "min": 5,
+        "max": 150,
+        "step": 5,
+        "default": 70
+      },
+      {
+        "type": "text",
+        "id": "game_reward_2_code",
+        "label": "Reward 2: discount code",
+        "info": "Leave empty to skip this reward."
+      },
+      {
+        "type": "text",
+        "id": "game_reward_2_label",
+        "label": "Reward 2: what it gives",
+        "default": "10% off"
+      },
+      {
+        "type": "range",
+        "id": "game_reward_3_coins",
+        "label": "Reward 3: coins needed",
+        "min": 5,
+        "max": 150,
+        "step": 5,
+        "default": 120
+      },
+      {
+        "type": "text",
+        "id": "game_reward_3_code",
+        "label": "Reward 3: discount code",
+        "info": "Leave empty to skip this reward."
+      },
+      {
+        "type": "text",
+        "id": "game_reward_3_label",
+        "label": "Reward 3: what it gives",
+        "default": "15% off"
       }
     ]
   }
