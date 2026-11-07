@@ -21,12 +21,14 @@ import { GLTFLoader } from './three-gltf-loader.js';
 
 const FILES = { D: 'pollen-dream-letter-d.glb', U: 'pollen-dream-letter-u.glb', E: 'pollen-dream-letter-e.glb', T: 'pollen-dream-letter-t.glb' };
 const ORDER = ['D', 'U', 'E', 'T'];
-// Where the others wait, from where the D starts: [angle off straight ahead (radians, left positive), distance in garden spans].
+// Where the others wait, from where the D starts, when nothing else puts them anywhere (the world,
+// assets/pollen-dream-world.js, hides them in its places): [angle off straight ahead (radians, left positive), distance in garden spans].
 const PLACES = { U: [0.75, 0.75], E: [-1.15, 0.95], T: [2.7, 1.25] };
+// What each says on being found: the first line, or the second if it is the last of the three.
 const LINES = {
-  U: ['There you are, D!', 'I’ll stick with you.'],
-  E: ['D! I knew you’d come.', 'Lead the way.'],
-  T: ['Took you long enough.', 'Now we can spell something.'],
+  U: ['Ahoy, D! You found me. I’m coming with you.', 'Ahoy, D! That’s all of us. Now we can spell something.'],
+  E: ['You climbed all the way up here? Let’s go!', 'You climbed all the way up! Now we can spell something.'],
+  T: ['That was the right tune. Let’s go!', 'The right tune! That’s all of us. Now we can spell something.'],
 };
 const DONE = 'D · U · E · T';
 const REACH = 1.6; // how near (in letter heights) to say hi
@@ -139,6 +141,9 @@ export async function addCast(garden, base) {
   const group = new THREE.Group();
   garden.scene.add(group);
   const ground = (x, y) => FLOOR_Z + garden.hillAt(x, y);
+  // Where something at height z stands at (x, y): on whatever is under it there (the world's own decks and
+  // platforms, or the water, which the letters wade on), else the land.
+  const floorAt = (x, y, z) => (garden.exploreFloor ? garden.exploreFloor(x, y, z) : ground(x, y));
   const span = Math.max(garden.w, garden.h);
   // Where the D starts (the end of the glide down from the page), and straight ahead from there.
   const start = E.to || { x: E.x, y: E.y };
@@ -152,6 +157,10 @@ export async function addCast(garden, base) {
     lineup: 0,
     talk: () => talk(),
     remove: () => remove(),
+    // A line on screen for a few seconds (the world's hints and puzzles use it too).
+    tell: (text, seconds = 3.5, who = '') => {
+      cast.say = { who, text, until: clock + seconds };
+    },
   };
 
   const add = (name, gltf) => {
@@ -234,7 +243,16 @@ export async function addCast(garden, base) {
       const dx = D.x - L.x;
       const dy = D.y - L.y;
       const dist = Math.hypot(dx, dy);
+      // Only what is at about the same height counts as near (not a letter up on a platform overhead).
+      const level = Math.abs(D.z - L.z) < size * 0.9;
       let lpace = 0;
+      // Hidden away (shut in somewhere, see the world): not seen, not met.
+      L.root.visible = !L.hidden;
+      L.shadow.visible = !L.hidden;
+      if (L.hidden) {
+        L.mixer.update(dt);
+        continue;
+      }
       if (L.state === 'waiting') {
         // Turns to watch the D come near, and waves now and then once it is close.
         if (dist < span * 0.7) L.heading = turn(L.heading, headingOf(dx, dy), 1 - Math.exp(-dt * 3));
@@ -243,10 +261,10 @@ export async function addCast(garden, base) {
           L.wave();
           L.nextWave = 5 + Math.random() * 4;
         }
-        if (dist < size * REACH && ex.intro >= 1 && (!near || dist < near.dist)) near = { name, dist };
+        if (level && dist < size * REACH && ex.intro >= 1 && (!near || dist < near.dist)) near = { name, dist };
         // Nobody walks through anybody.
         const min = size * 0.75;
-        if (dist < min && dist > 1e-3) {
+        if (level && dist < min && dist > 1e-3) {
           ex.x = L.x + (dx / dist) * min;
           ex.y = L.y + (dy / dist) * min;
         }
@@ -286,7 +304,7 @@ export async function addCast(garden, base) {
         }
         if (face !== null && gap < size * 0.9) L.heading = turn(L.heading, face, 1 - Math.exp(-dt * 7));
       }
-      L.z = ground(L.x, L.y);
+      L.z = floorAt(L.x, L.y, L.z);
       L.pose(lpace, false, dt);
       L.place(L.z);
     }

@@ -218,6 +218,12 @@ const LOOK_LIMIT = 1.55; // up and down, all but straight overhead and underfoot
  * setExploreMode().
  */
 const EXPLORE_MODES = {
+  /* Moved by something else for a while (E.script(dt, E): climbing a ladder, say); it sets the mode back when done. */
+  scripted(G, E, dt) {
+    if (E.script) E.script(dt, E);
+    else E.mode = 'walk';
+  },
+
   walk(G, E, dt, span) {
     const inp = E.input;
     // A smaller garden (a phone's) is crossed at a slower pace.
@@ -2806,6 +2812,13 @@ class GardenSplash extends HTMLElement {
       uR: { value: 1400 },
       uTime: { value: 0 },
       uWind: { value: 0 },
+      // Places shaped into the land (see setLandFeatures): x, y, radius, height; and their kinds.
+      uFeat: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
+      uFeatK: { value: new THREE.Vector3() },
+      uWater: { value: -1e6 },
+      uRockC: { value: new THREE.Color(0x6f7275) },
+      uSnowC: { value: new THREE.Color(0xf2f5fa) },
+      uSandC: { value: new THREE.Color(0xb9a77e) },
     };
     const HILL = `
 uniform vec2 uCenter; uniform float uFlat; uniform float uAmp; uniform float uS; uniform float uFloor;
@@ -2816,25 +2829,45 @@ float hillAt(vec2 p) {
   float h = sin(q.x * 0.8 + 1.3) * cos(q.y * 0.65 - 0.7) + 0.5 * sin((q.x + q.y) * 1.4 + 2.1) + 0.25 * cos(q.x * 2.9 - q.y * 2.3);
   return amp * (h * 0.5 + 0.35);
 }
+uniform vec4 uFeat[3]; uniform vec3 uFeatK; uniform float uWater;
+// The hills, with the places shaped into them: a lake's basin, a mountain, a flattened forest floor.
+float landAt(vec2 p) {
+  float h = hillAt(p);
+  for (int i = 0; i < 3; i++) {
+    vec4 f = uFeat[i];
+    float k = uFeatK[i];
+    if (k < 0.5) continue;
+    float s = clamp(length(p - f.xy) / f.z, 0.0, 1.0);
+    if (k < 1.5) h = mix(h, f.w, 1.0 - smoothstep(0.72, 1.0, s));
+    else if (k < 2.5) h = mix(h, h * 0.25, 1.0 - smoothstep(0.0, 0.45, s)) + f.w * (1.0 - smoothstep(0.07, 1.0, s));
+    else h = mix(h, h * 0.3, 1.0 - smoothstep(0.65, 1.0, s));
+  }
+  return h;
+}
 `;
     const FADE = '#include <dithering_fragment>\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, uAir, smoothstep(uNear, uFar, distance(vGroundXY, uCam)));';
+    // The ground's own: a mountain stays in sight from far off, as a landmark, instead of fading into the air with the rest.
+    const FADE_LAND = '#include <dithering_fragment>\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, uAir, smoothstep(uNear, uFar, distance(vGroundXY, uCam)) * (1.0 - 0.85 * smoothstep(0.8, 2.6, vHill)));';
 
     // The ground: flat under the bed, hills beyond, faceted like everything else.
     const groundGeo = new THREE.PlaneGeometry(span * 70, span * 70, touch ? 160 : 240, touch ? 160 : 240);
     const groundMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 3, specular: 0x0a0a0a, flatShading: true, fog: false });
     groundMat.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, u);
+      // aPatch: 0 on the big ground, 1 on a finer patch laid over a place (see setLandFeatures); aSkirt drops a patch's rim out of sight.
       shader.vertexShader = shader.vertexShader
-        .replace('void main() {', HILL + 'varying vec2 vGroundXY;\nvarying float vHill;\nvoid main() {')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vec2 gW = (modelMatrix * vec4(transformed, 1.0)).xy;\n  float gHill = hillAt(gW);\n  transformed.z += gHill;\n  vGroundXY = gW;\n  vHill = gHill / max(uAmp, 1.0);');
+        .replace('void main() {', HILL + 'attribute float aPatch;\nattribute float aSkirt;\nvarying vec2 vGroundXY;\nvarying float vHill;\nvarying float vPatch;\nvoid main() {')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vec2 gW = (modelMatrix * vec4(transformed, 1.0)).xy;\n  float gHill = landAt(gW);\n  transformed.z += gHill - aSkirt * 90.0;\n  vGroundXY = gW;\n  vHill = gHill / max(uAmp, 1.0);\n  vPatch = aPatch;');
       shader.fragmentShader = shader.fragmentShader
-        .replace('void main() {', 'uniform vec2 uCam; uniform float uNear; uniform float uFar; uniform vec3 uAir; uniform float uS;\nuniform vec3 uSoilC; uniform vec3 uMeadow;\nvarying vec2 vGroundXY;\nvarying float vHill;\nvoid main() {')
+        .replace('void main() {', 'uniform vec2 uCam; uniform float uNear; uniform float uFar; uniform vec3 uAir; uniform float uS;\nuniform vec3 uSoilC; uniform vec3 uMeadow; uniform vec3 uRockC; uniform vec3 uSnowC; uniform vec3 uSandC;\nuniform vec4 uFeat[3]; uniform vec3 uFeatK;\nvarying vec2 vGroundXY;\nvarying float vHill;\nvarying float vPatch;\nvoid main() {\n  if (vPatch < 0.5) {\n    for (int i = 0; i < 3; i++) {\n      if (uFeatK[i] > 0.5 && distance(vGroundXY, uFeat[i].xy) < uFeat[i].z * 1.08) discard;\n    }\n  }')
         .replace(
           '#include <color_fragment>',
-          '#include <color_fragment>\n  vec2 gq = vGroundXY * uS;\n  float gn = sin(gq.x * 1.9 + 0.4 + sin(gq.y * 1.3)) * sin(gq.y * 1.6 - 1.1 + sin(gq.x * 1.1)) + 0.4 * sin(gq.x * 3.3 - gq.y * 2.6 + 2.0 * sin(gq.y * 0.9 + gq.x * 0.4));\n  diffuseColor.rgb = mix(uSoilC, uMeadow, clamp(0.55 + 0.22 * gn + 0.45 * vHill, 0.0, 1.0));'
+          '#include <color_fragment>\n  vec2 gq = vGroundXY * uS;\n  float gn = sin(gq.x * 1.9 + 0.4 + sin(gq.y * 1.3)) * sin(gq.y * 1.6 - 1.1 + sin(gq.x * 1.1)) + 0.4 * sin(gq.x * 3.3 - gq.y * 2.6 + 2.0 * sin(gq.y * 0.9 + gq.x * 0.4));\n  diffuseColor.rgb = mix(uSoilC, uMeadow, clamp(0.55 + 0.22 * gn + 0.45 * clamp(vHill, -1.0, 1.2), 0.0, 1.0));\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSandC, smoothstep(-0.02, -0.12, vHill));\n  diffuseColor.rgb = mix(diffuseColor.rgb, uRockC, smoothstep(1.5, 2.1, vHill + 0.15 * gn));\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSnowC, smoothstep(3.0, 3.4, vHill + 0.2 * gn));'
         )
-        .replace('#include <dithering_fragment>', FADE);
+        .replace('#include <dithering_fragment>', FADE_LAND);
     };
+    groundGeo.setAttribute('aPatch', new THREE.Float32BufferAttribute(new Float32Array(groundGeo.attributes.position.count), 1));
+    groundGeo.setAttribute('aSkirt', new THREE.Float32BufferAttribute(new Float32Array(groundGeo.attributes.position.count), 1));
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.renderOrder = -2;
 
@@ -2902,10 +2935,12 @@ float hillAt(vec2 p) {
             'vec2 gAcross = vec2(cos(gRot), sin(gRot));',
             'vec2 gLean = vec2(-gAcross.y, gAcross.x);',
             'float gT = position.y;',
-            'float gH = aRnd.z * aBlade.z * gFade;',
+            'float gLand = landAt(gBase);',
+            // None under water, and none high up on a mountain's rock.
+            'float gH = aRnd.z * aBlade.z * gFade * (1.0 - step(gLand, uWater + 3.0)) * (1.0 - smoothstep(uAmp * 1.5, uAmp * 1.9, gLand));',
             'float gSway = sin(uTime * (1.3 + aRnd.w) + gBase.x * 0.006 + gBase.y * 0.004) * 0.3 + uWind;',
             'vec2 gp = gBase + gOff + gAcross * position.x * aRnd.y * gFade + (gLean * 0.3 + vec2(gSway, gSway * 0.3)) * gT * gT * gH;',
-            'vec3 transformed = vec3(gp, uFloor + hillAt(gBase) - 1.0 + gT * gH);',
+            'vec3 transformed = vec3(gp, uFloor + gLand - 1.0 + gT * gH);',
             'vGroundXY = gp;',
             'vec3 gTip = (aCol.w > 0.5 && aBlade.w > 0.5) ? aCol.rgb : uGrassTip * (0.8 + 0.4 * aRnd.w);',
             'vGrass = mix(uGrassBase, gTip, (aCol.w > 0.5 && aBlade.w > 0.5) ? smoothstep(0.6, 1.0, gT) : gT);',
@@ -2924,7 +2959,87 @@ float hillAt(vec2 p) {
     group.add(ground, grass);
     group.visible = false;
     this.scene.add(group);
-    this.terrain = { group, ground, grass, u, N, parts: [groundGeo, groundMat, grassGeo, grassMat] };
+    this.terrain = { group, ground, grass, u, N, groundMat, patches: [], parts: [groundGeo, groundMat, grassGeo, grassMat] };
+  }
+
+  /*
+   * Places shaped into the land while exploring (assets/pollen-dream-world.js):
+   * up to three of { x, y, r, h, kind }, kind 'basin' (a lake's bed, at height
+   * h), 'peak' (a mountain h high, flat on top) or 'flat' (the hills smoothed
+   * down, for a forest). water: the height of a lake's surface (no grass below
+   * it). Each place gets a finer patch of ground of its own, laid over the big
+   * one, so the land there is as smooth as the things standing on it expect.
+   * An empty list takes them away again.
+   */
+  setLandFeatures(list, opts = {}) {
+    if (!this.terrain) this.buildLand();
+    const L = this.terrain;
+    const u = L.u;
+    const KIND = { basin: 1, peak: 2, flat: 3 };
+    this.landFeatures = (list || []).slice(0, 3);
+    for (let i = 0; i < 3; i++) {
+      const f = this.landFeatures[i];
+      u.uFeat.value[i].set(f ? f.x : 0, f ? f.y : 0, f ? f.r : 1, f ? f.h : 0);
+      u.uFeatK.value.setComponent(i, f ? KIND[f.kind] || 0 : 0);
+    }
+    u.uWater.value = opts.water === undefined ? -1e6 : opts.water;
+    for (const m of L.patches) {
+      L.group.remove(m);
+      m.geometry.dispose();
+    }
+    if (!L.patchMat) {
+      // The ground's own material, drawn over the big ground where the two overlap at a patch's rim.
+      const pm = L.groundMat.clone();
+      pm.onBeforeCompile = L.groundMat.onBeforeCompile;
+      pm.polygonOffset = true;
+      pm.polygonOffsetFactor = -1;
+      pm.polygonOffsetUnits = -4;
+      L.patchMat = pm;
+      L.parts.push(pm);
+    }
+    L.patches = this.landFeatures.map((f) => {
+      const m = new THREE.Mesh(this.landPatch(f.r * 1.15), L.patchMat);
+      m.position.set(f.x, f.y, FLOOR_Z - 1);
+      m.renderOrder = -2;
+      m.frustumCulled = false;
+      L.group.add(m);
+      return m;
+    });
+  }
+
+  /* A round patch of ground R across from its middle: rings out to the edge, and a skirt below the rim. */
+  landPatch(R) {
+    const rings = 72;
+    const segs = 128;
+    const pos = [0, 0, 0];
+    const patch = [1];
+    const skirt = [0];
+    for (let i = 1; i <= rings + 1; i++) {
+      const r = (Math.min(i, rings) / rings) * R;
+      for (let j = 0; j < segs; j++) {
+        const a = (j / segs) * TAU;
+        pos.push(Math.cos(a) * r, Math.sin(a) * r, 0);
+        patch.push(1);
+        skirt.push(i > rings ? 1 : 0);
+      }
+    }
+    const idx = [];
+    for (let j = 0; j < segs; j++) idx.push(0, 1 + j, 1 + ((j + 1) % segs));
+    for (let i = 1; i <= rings; i++) {
+      const a0 = 1 + (i - 1) * segs;
+      const b0 = 1 + i * segs;
+      for (let j = 0; j < segs; j++) {
+        const j1 = (j + 1) % segs;
+        idx.push(a0 + j, b0 + j, b0 + j1, a0 + j, b0 + j1, a0 + j1);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(pos.length).fill(0).map((_, k) => (k % 3 === 2 ? 1 : 0)), 3));
+    geo.setAttribute('aPatch', new THREE.Float32BufferAttribute(patch, 1));
+    geo.setAttribute('aSkirt', new THREE.Float32BufferAttribute(skirt, 1));
+    geo.setIndex(idx);
+    return geo;
   }
 
   /* The land's colors for this garden and season, and where it sits under the bed. */
@@ -2962,8 +3077,8 @@ float hillAt(vec2 p) {
     col.needsUpdate = true;
   }
 
-  /* The height of the land at (x, y), as the ground's shader works it out. */
-  hillAt(x, y) {
+  /* The height of the land at (x, y), as the ground's shader works it out (bare: the land alone, without what stands on it). */
+  hillAt(x, y, bare = false) {
     const L = this.terrain;
     if (!L) return 0;
     const u = L.u;
@@ -2972,8 +3087,23 @@ float hillAt(vec2 p) {
     const amp = e * e * (3 - 2 * e) * u.uAmp.value;
     const qx = x * u.uS.value;
     const qy = y * u.uS.value;
-    const h = Math.sin(qx * 0.8 + 1.3) * Math.cos(qy * 0.65 - 0.7) + 0.5 * Math.sin((qx + qy) * 1.4 + 2.1) + 0.25 * Math.cos(qx * 2.9 - qy * 2.3);
-    return amp * (h * 0.5 + 0.35);
+    const n = Math.sin(qx * 0.8 + 1.3) * Math.cos(qy * 0.65 - 0.7) + 0.5 * Math.sin((qx + qy) * 1.4 + 2.1) + 0.25 * Math.cos(qx * 2.9 - qy * 2.3);
+    let h = amp * (n * 0.5 + 0.35);
+    // The places shaped into it, as the shader's landAt.
+    if (this.landFeatures) {
+      for (const f of this.landFeatures) {
+        const s = clamp(Math.hypot(x - f.x, y - f.y) / f.r, 0, 1);
+        const sm = (a, b, v) => {
+          const t = clamp((v - a) / (b - a), 0, 1);
+          return t * t * (3 - 2 * t);
+        };
+        if (f.kind === 'basin') h = lerp(h, f.h, 1 - sm(0.72, 1, s));
+        else if (f.kind === 'peak') h = lerp(h, h * 0.25, 1 - sm(0, 0.45, s)) + f.h * (1 - sm(0.07, 1, s));
+        else if (f.kind === 'flat') h = lerp(h, h * 0.3, 1 - sm(0.65, 1, s));
+      }
+    }
+    // And what stands on it to be walked on (a deck, a platform: see assets/pollen-dream-world.js).
+    return this.surfaceAt && !bare ? this.surfaceAt(x, y, h) : h;
   }
 
   stopExplore() {
@@ -3068,7 +3198,8 @@ float hillAt(vec2 p) {
         px += E.pan.x;
         py += E.pan.y;
       }
-      pz = Math.max(pz, FLOOR_Z + this.hillAt(px, py) + 14);
+      // Behind a character it keeps up at about head height at least, above the grass, not down among the blades.
+      pz = Math.max(pz, FLOOR_Z + this.hillAt(px, py) + E.eye * 0.9);
     }
     c.position.set(px, py, pz);
     c.rotation.set(Math.PI / 2 + E.pitch, 0, E.yaw);
@@ -3122,6 +3253,11 @@ float hillAt(vec2 p) {
       const a = E.yaw + Math.PI / 2 + (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.9);
       const d = span * (0.3 + Math.random() * 0.3);
       G = this.updraft = { x: E.x + Math.cos(a) * d, y: E.y + Math.sin(a) * d, R: span * 0.07, H: span * 0.8, age: 0, life: 26 + Math.random() * 10, out: 0, rider: false };
+      // Not out on a lake, or anywhere else it couldn't be walked into (see assets/pollen-dream-world.js): another time.
+      if (this.exploreBlocked && this.exploreBlocked(G.x, G.y)) {
+        G = this.updraft = null;
+        this.nextUpdraft = t + 4;
+      }
     }
     W.group.visible = !!G;
     if (!G) return;

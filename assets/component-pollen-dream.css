@@ -254,6 +254,22 @@ html.pollen-dream-open body {
 
 /* ---------- The letters: saying hi, and what they say ---------- */
 
+/* The letters found so far, and what the D carries: top left. */
+.pollen-dream__bag {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  margin: 0;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--pd-plate) 80%, transparent);
+  letter-spacing: 0.2em;
+  pointer-events: none;
+}
+
+.pollen-dream__bag:empty {
+  display: none;
+}
+
 .pollen-dream__talk {
   position: absolute;
   left: 50%;

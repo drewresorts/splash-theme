@@ -15,9 +15,12 @@
  *   Phone: move the phone itself to look round (where the phone allows it),
  *   or drag anywhere; the thumb stick walks (pushed all the way, runs); Jump.
  *
- * Out in the fields wait the U, the E and the T. Walk up to one and say hi
- * (the E key, or the Say hi button): it joins you. Find all three and they
- * line up beside you: D U E T.
+ * The U, the E and the T are hidden out in the world (assets/pollen-dream-world.js):
+ * on a ship out on a lake, up in a tree fort in a forest, shut in a cabin on
+ * a mountain, each reached by solving a puzzle there, each puzzle giving
+ * what the next place needs. Walk up to one and say hi (the E key, or the
+ * button): it joins you. Find all three and they line up beside you: D U E T.
+ * The same key or button does whatever else there is to do nearby.
  *
  * Now and then a gust of wind rises nearby (garden-splash.js updateGusts):
  * a note at the top says so and an arrow points the way. Walk into it and
@@ -186,29 +189,53 @@ class Explore {
       .then((cast) => {
         if (!cast) return;
         if (this.closed) cast.remove();
-        else this.cast = cast;
+        else {
+          this.cast = cast;
+          this.loadWorld();
+        }
       })
       .catch((e) => console.error('pollen-dream: the letters could not load', e));
   }
 
-  /* Says hi to the letter the D is next to, if any. */
+  /* The places the letters hide in (assets/pollen-dream-world.js). Without it they wait in the fields near the start. */
+  loadWorld() {
+    import('./pollen-dream-world.js')
+      .then((m) => m.addWorld(this.garden, this.cast))
+      .then((world) => {
+        if (!world) return;
+        if (this.closed) world.remove();
+        else this.world = world;
+      })
+      .catch((e) => console.error('pollen-dream: the world could not load', e));
+  }
+
+  /* Says hi to the letter the D is next to, if any; or else does what there is to do nearby. */
   talk() {
     if (this.state !== 'play' || !this.cast) return;
-    this.cast.talk();
+    if (this.cast.prompt) this.cast.talk();
+    else if (this.world && this.world.prompt) this.world.act();
   }
 
   /* The Say hi prompt beside a letter, and what the letters say. */
   castNote() {
     const C = this.cast;
     const ui = this.ui;
-    const prompt = C && this.state === 'play' ? C.prompt : null;
+    const playing = C && this.state === 'play';
+    const prompt = playing ? (C.prompt ? `${STRINGS.sayHi} · ${C.prompt}` : this.world && this.world.prompt) || null : null;
     if (prompt !== this.promptShown) {
       this.promptShown = prompt;
       ui.talk.hidden = !prompt;
       if (prompt) {
-        ui.talkText.textContent = `${STRINGS.sayHi} · ${prompt}`;
+        ui.talkText.textContent = prompt;
         ui.talkKey.hidden = this.touch;
       }
+    }
+    // Which letters are found so far, and what the D is carrying.
+    const bag = C ? ['D', ...C.found].sort((a, b) => 'DUET'.indexOf(a) - 'DUET'.indexOf(b)).join(' ') + (this.world ? this.world.bag().map((b) => ` · ${b}`).join('') : '') : '';
+    if (bag !== this.bagShown) {
+      this.bagShown = bag;
+      ui.bag.textContent = bag;
+      ui.bag.hidden = !bag || this.state !== 'play';
     }
     const say = C && C.say;
     const key = say ? say.who + say.text : '';
@@ -241,6 +268,8 @@ class Explore {
     cancelAnimationFrame(this.raf);
     this.abort.abort();
     if (document.pointerLockElement === this.surface) document.exitPointerLock();
+    if (this.world) this.world.remove();
+    this.world = null;
     if (this.cast) this.cast.remove();
     this.cast = null;
     if (this.garden) this.garden.stopExplore();
@@ -264,6 +293,7 @@ class Explore {
     root.innerHTML = `
       <div class="pollen-dream__surface" data-surface aria-hidden="true"></div>
       <button type="button" class="pollen-dream__talk" data-action="talk" hidden><kbd class="pollen-dream__key" data-talk-key>E</kbd><span data-talk-text></span></button>
+      <p class="pollen-dream__bag" data-bag aria-live="polite"></p>
       <p class="pollen-dream__say" data-say role="status" hidden><span class="pollen-dream__say-who" data-say-who></span><span data-say-text></span></p>
       <p class="pollen-dream__alert" data-alert role="status" hidden><span class="pollen-dream__alert-arrow" data-alert-arrow aria-hidden="true"></span><span data-alert-text></span></p>
       <div class="pollen-dream__hud" data-hud hidden>
@@ -299,7 +329,7 @@ class Explore {
     this.root = root;
     const q = (s) => root.querySelector(s);
     this.surface = q('[data-surface]');
-    this.ui = { talk: q('[data-action="talk"]'), talkText: q('[data-talk-text]'), talkKey: q('[data-talk-key]'), say: q('[data-say]'), sayWho: q('[data-say-who]'), sayText: q('[data-say-text]'), alert: q('[data-alert]'), alertText: q('[data-alert-text]'), alertArrow: q('[data-alert-arrow]'), hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]'), motion: q('[data-action="motion"]') };
+    this.ui = { bag: q('[data-bag]'), talk: q('[data-action="talk"]'), talkText: q('[data-talk-text]'), talkKey: q('[data-talk-key]'), say: q('[data-say]'), sayWho: q('[data-say-who]'), sayText: q('[data-say-text]'), alert: q('[data-alert]'), alertText: q('[data-alert-text]'), alertArrow: q('[data-alert-arrow]'), hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]'), motion: q('[data-action="motion"]') };
   }
 
   show(state) {
