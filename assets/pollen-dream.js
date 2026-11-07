@@ -1,7 +1,8 @@
 /**
  * Pollen Dream
  *
- * Exploring the splash's own garden in the first person: on foot through
+ * Exploring the splash's own garden as the D of DUET, seen from just behind
+ * it (the letters: assets/pollen-dream-cast.js): on foot through
  * the grass and the flowers of the logo, across the hills, under the sky
  * of the sky view (the "d" easter egg), all of it one world at the
  * visitor's time of day. The bee, the season's weather, the planes, the
@@ -13,6 +14,10 @@
  *   to jump, Shift to run.
  *   Phone: move the phone itself to look round (where the phone allows it),
  *   or drag anywhere; the thumb stick walks (pushed all the way, runs); Jump.
+ *
+ * Out in the fields wait the U, the E and the T. Walk up to one and say hi
+ * (the E key, or the Say hi button): it joins you. Find all three and they
+ * line up beside you: D U E T.
  *
  * Now and then a gust of wind rises nearby (garden-splash.js updateGusts):
  * a note at the top says so and an arrow points the way. Walk into it and
@@ -43,6 +48,7 @@ const STRINGS = {
   gust: 'Wind rising nearby',
   lifted: 'Carried up on the wind',
   gliding: 'Gliding down',
+  sayHi: 'Say hi',
 };
 
 let current = null;
@@ -165,11 +171,55 @@ class Explore {
       return;
     }
     this.garden = garden;
+    this.loadCast();
     this.bindInput();
     if (asked) asked.then((ok) => !this.closed && this.motionReady(ok));
     // No instructions: straight in. The controls are the usual ones, there to be found.
     this.play();
     this.tick();
+  }
+
+  /* The letters (assets/pollen-dream-cast.js): the D to play, and the others to find. Without them it stays first person. */
+  loadCast() {
+    import('./pollen-dream-cast.js')
+      .then((m) => m.addCast(this.garden, import.meta.url))
+      .then((cast) => {
+        if (!cast) return;
+        if (this.closed) cast.remove();
+        else this.cast = cast;
+      })
+      .catch((e) => console.error('pollen-dream: the letters could not load', e));
+  }
+
+  /* Says hi to the letter the D is next to, if any. */
+  talk() {
+    if (this.state !== 'play' || !this.cast) return;
+    this.cast.talk();
+  }
+
+  /* The Say hi prompt beside a letter, and what the letters say. */
+  castNote() {
+    const C = this.cast;
+    const ui = this.ui;
+    const prompt = C && this.state === 'play' ? C.prompt : null;
+    if (prompt !== this.promptShown) {
+      this.promptShown = prompt;
+      ui.talk.hidden = !prompt;
+      if (prompt) {
+        ui.talkText.textContent = `${STRINGS.sayHi} · ${prompt}`;
+        ui.talkKey.hidden = this.touch;
+      }
+    }
+    const say = C && C.say;
+    const key = say ? say.who + say.text : '';
+    if (key !== this.sayShown) {
+      this.sayShown = key;
+      ui.say.hidden = !say;
+      ui.say.classList.toggle('is-done', !!(say && say.done));
+      ui.sayWho.textContent = say && say.who ? say.who : '';
+      ui.sayWho.hidden = !(say && say.who);
+      ui.sayText.textContent = say ? say.text : '';
+    }
   }
 
   loadCss() {
@@ -191,6 +241,8 @@ class Explore {
     cancelAnimationFrame(this.raf);
     this.abort.abort();
     if (document.pointerLockElement === this.surface) document.exitPointerLock();
+    if (this.cast) this.cast.remove();
+    this.cast = null;
     if (this.garden) this.garden.stopExplore();
     if (this.root) this.root.remove();
     document.documentElement.classList.remove('pollen-dream-open');
@@ -211,6 +263,8 @@ class Explore {
     root.tabIndex = -1;
     root.innerHTML = `
       <div class="pollen-dream__surface" data-surface aria-hidden="true"></div>
+      <button type="button" class="pollen-dream__talk" data-action="talk" hidden><kbd class="pollen-dream__key" data-talk-key>E</kbd><span data-talk-text></span></button>
+      <p class="pollen-dream__say" data-say role="status" hidden><span class="pollen-dream__say-who" data-say-who></span><span data-say-text></span></p>
       <p class="pollen-dream__alert" data-alert role="status" hidden><span class="pollen-dream__alert-arrow" data-alert-arrow aria-hidden="true"></span><span data-alert-text></span></p>
       <div class="pollen-dream__hud" data-hud hidden>
         <button type="button" class="pollen-dream__chip" data-action="motion" aria-pressed="false" hidden>${S.motion}</button>
@@ -245,7 +299,7 @@ class Explore {
     this.root = root;
     const q = (s) => root.querySelector(s);
     this.surface = q('[data-surface]');
-    this.ui = { alert: q('[data-alert]'), alertText: q('[data-alert-text]'), alertArrow: q('[data-alert-arrow]'), hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]'), motion: q('[data-action="motion"]') };
+    this.ui = { talk: q('[data-action="talk"]'), talkText: q('[data-talk-text]'), talkKey: q('[data-talk-key]'), say: q('[data-say]'), sayWho: q('[data-say-who]'), sayText: q('[data-say-text]'), alert: q('[data-alert]'), alertText: q('[data-alert-text]'), alertArrow: q('[data-alert-arrow]'), hud: q('[data-hud]'), touch: q('[data-touch]'), stick: q('[data-stick]'), knob: q('[data-knob]'), motion: q('[data-action="motion"]') };
   }
 
   show(state) {
@@ -284,6 +338,7 @@ class Explore {
         else if (act === 'pause') this.pause();
         else if (act === 'exit') this.close();
         else if (act === 'motion') this.toggleMotion();
+        else if (act === 'talk') this.talk();
       },
       on
     );
@@ -327,6 +382,7 @@ class Explore {
         if (this.state !== 'play' || !KEYS.includes(e.code)) return;
         e.preventDefault();
         e.stopPropagation();
+        if (e.code === 'KeyE' && !e.repeat) this.talk();
         this.keys.add(e.code);
       },
       capture
@@ -638,6 +694,7 @@ class Explore {
     if (this.closed) return;
     this.send();
     this.windNote();
+    this.castNote();
     this.raf = requestAnimationFrame(() => this.tick());
   }
 

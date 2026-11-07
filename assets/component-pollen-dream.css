@@ -252,6 +252,83 @@ html.pollen-dream-open body {
   }
 }
 
+/* ---------- The letters: saying hi, and what they say ---------- */
+
+.pollen-dream__talk {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 0;
+  background: color-mix(in srgb, var(--pd-plate) 85%, transparent);
+  color: var(--pd-ink);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+
+.pollen-dream__key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  background: var(--pd-ink);
+  color: var(--pd-plate);
+  font: inherit;
+  font-size: 11px;
+}
+
+.pollen-dream__say {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(28px, env(safe-area-inset-bottom)) + 56px);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: min(90vw, 420px);
+  margin: 0;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--pd-plate) 85%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.pollen-dream__say-who {
+  font-weight: 700;
+}
+
+/* All four found: the word, big. */
+.pollen-dream__say.is-done {
+  bottom: auto;
+  top: 22%;
+  padding: 14px 22px;
+  font-size: clamp(18px, 5vw, 36px);
+  letter-spacing: 0.3em;
+  white-space: nowrap;
+}
+
+@media (max-width: 749px) {
+  /* Between the stick and the Jump button on a phone. */
+  .pollen-dream__talk {
+    bottom: calc(max(20px, env(safe-area-inset-bottom)) + 128px);
+  }
+
+  .pollen-dream__say {
+    bottom: calc(max(20px, env(safe-area-inset-bottom)) + 184px);
+  }
+}
+
 /* ---------- Touch controls ---------- */
 
 .pollen-dream__touch {

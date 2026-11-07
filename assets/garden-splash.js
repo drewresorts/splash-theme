@@ -2708,7 +2708,9 @@ class GardenSplash extends HTMLElement {
    * to the clouds. A mode is a function in EXPLORE_MODES that moves the
    * visitor each frame from explorer.input, so new ways of moving slot in
    * beside them. Functions in this.exploreHooks run every frame after the
-   * move (hook(dt, explorer, garden)): the place for things to find and do.
+   * move (hook(dt, explorer, garden)), from the start: the place for things
+   * to find and do (assets/pollen-dream-cast.js adds the characters this
+   * way, and sets explorer.third for a camera behind the visitor's own).
    * Only the splash's own formed garden can be explored.
    */
   canExplore() {
@@ -3046,9 +3048,29 @@ float hillAt(vec2 p) {
         E.y -= (oy / d) * back;
       }
       this.updateGusts(dt, E);
-      for (const hook of this.exploreHooks) hook(dt, E, this);
     }
-    c.position.set(E.x, E.y, E.z + E.bob);
+    // Hooks run from the start, the glide down from the page included, so what they add is in place as it ends.
+    for (const hook of this.exploreHooks) hook(dt, E, this);
+    // Third person (E.third: how far behind; set by assets/pollen-dream-cast.js once the character is in):
+    // the camera rides behind the visitor's character and a little above, pulled back as the glide down
+    // from the page ends, and never down in the ground. Otherwise it is at the visitor's eyes.
+    let px = E.x;
+    let py = E.y;
+    let pz = E.z + E.bob;
+    if (E.third) {
+      const back = E.third * smooth(E.intro);
+      const cp = Math.cos(E.pitch);
+      px += Math.sin(E.yaw) * cp * back;
+      py -= Math.cos(E.yaw) * cp * back;
+      pz = E.z - Math.sin(E.pitch) * back;
+      // E.pan slides the camera sideways (the letters lining up beside the visitor's own, say).
+      if (E.pan) {
+        px += E.pan.x;
+        py += E.pan.y;
+      }
+      pz = Math.max(pz, FLOOR_Z + this.hillAt(px, py) + 14);
+    }
+    c.position.set(px, py, pz);
     c.rotation.set(Math.PI / 2 + E.pitch, 0, E.yaw);
     // A little wider on foot, and wider still carried up on the wind; eased from one to the next.
     const fov = E.mode === 'walk' ? 75 : E.mode === 'lift' ? 82 : 72;
