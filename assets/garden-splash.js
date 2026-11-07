@@ -2726,6 +2726,8 @@ class GardenSplash extends HTMLElement {
     Object.assign(this.night, { t: 1, dir: 1, since: 0 });
     this.updraft = null;
     this.nextUpdraft = this.elapsed + 9 + Math.random() * 6;
+    // The weather starts again all round the visitor (see updateWeather).
+    if (this.weather) for (const k of Object.values(this.weather.kinds)) k.p.forEach((q) => (q.live = false));
     this.skyView = { z: 1, tz: 1, ax: 0, ay: 0, tax: 0, tay: 0 };
     // The land: hills rolling away from the bed, meadow, grass (see buildLand).
     if (!this.terrain) this.buildLand();
@@ -2978,6 +2980,8 @@ float hillAt(vec2 p) {
     this.updraft = null;
     if (this.windColumn) this.windColumn.group.visible = false;
     if (this.terrain) this.terrain.group.visible = false;
+    // What was falling round the visitor out on the land starts again over the bed.
+    if (this.weather) for (const k of Object.values(this.weather.kinds)) k.p.forEach((q) => (q.live = false));
     this.classList.remove('is-exploring');
     const c = this.camera;
     c.rotation.order = 'XYZ';
@@ -5717,6 +5721,10 @@ float hillAt(vec2 p) {
     heads += 8;
     // On a flower head there is room for only so much before the rest slides off onto the soil.
     const room = { snow: 16, rain: 5, leaves: 2, petals: 3 };
+    // Exploring, the weather is all round the visitor wherever they go, out to this far, and comes down from high above them.
+    const E = this.explorer;
+    const span = Math.max(this.w, this.h);
+    const REACH = { snow: 0.6, rain: 0.45, leaves: 0.9, petals: 0.8, pollen: 0.4 };
 
     for (const [name, kind] of Object.entries(W.kinds)) {
       const want = Math.round(kind.n * clamp(level[name], 0, 1));
@@ -5729,7 +5737,30 @@ float hillAt(vec2 p) {
           q.live = true;
           q.checked = false;
           q.on = null;
-          if (rising) {
+          if (E) {
+            const reach = span * REACH[name];
+            const a = Math.random() * TAU;
+            const r = reach * Math.sqrt(Math.random());
+            const gx = E.x + Math.cos(a) * r;
+            const gy = E.y + Math.sin(a) * r;
+            const floor = FLOOR_Z + this.hillAt(gx, gy);
+            q.t0 = t;
+            q.gx = gx;
+            q.gy = gy;
+            if (rising) {
+              q.x = gx;
+              q.y = gy;
+              q.z = floor + 15 + Math.random() * 160;
+            } else {
+              const above = Math.max(E.z, floor + E.eye);
+              const high = name === 'rain' ? 300 + Math.random() * 500 : name === 'snow' ? 450 + Math.random() * 300 : 1100 + Math.random() * 900;
+              // Anywhere on the way down when the weather first starts, from high up after that.
+              q.z = q.first ? above + high : lerp(floor + 40, above + high, Math.random());
+              const fall = (q.z - floor) / (name === 'rain' ? 1200 : name === 'snow' ? 80 : 75);
+              q.x = gx - W.wind * (name === 'rain' ? 1.5 : name === 'snow' ? 0.6 : 1.4) * fall;
+              q.y = gy;
+            }
+          } else if (rising) {
             // Pollen: anywhere in view at first, after that up off the flowers.
             q.z = lerp(30, this.camDist * 0.45, Math.random());
             const b = this.weatherBox(q.z);
@@ -5740,10 +5771,7 @@ float hillAt(vec2 p) {
             // Aim for anywhere on the ground in view.
             const gx = lerp(ground.x0 - 30, ground.x1 + 30, Math.random());
             const gy = lerp(ground.y0 - 30, ground.y1 + 30, Math.random());
-            if (blown && q.first && this.explorer) {
-              // Seen from the ground, they come down from high overhead.
-              q.z = FLOOR_Z + 1600 + Math.random() * 900;
-            } else if (blown && q.first) {
+            if (blown && q.first) {
               // From high above, starting just out of sight: seen from above, a falling leaf drifts in
               // from the edge of the view as it comes down (or, over the middle, drops in past the camera).
               const f = Math.max(Math.abs(gx - this.w / 2) / (this.w / 2), Math.abs(gy - this.h / 2) / (this.h / 2));
@@ -5788,28 +5816,41 @@ float hillAt(vec2 p) {
         q.y += vy * dt;
         q.z += vz * dt;
 
+        // Exploring, what is coming down too far from the visitor (they have moved on) goes, to come down again near them.
+        const away = E && q.gx !== undefined && Math.hypot(q.gx - E.x, q.gy - E.y) > span * REACH[name] * 1.4;
         if (rising) {
           const b = this.weatherBox(q.z);
-          if (q.y > b.y1 + 40 || q.x < b.x0 - 120 || q.x > b.x1 + 120) q.live = false;
+          if (E ? away || !(t - q.t0 <= 25) : q.y > b.y1 + 40 || q.x < b.x0 - 120 || q.x > b.x1 + 120) q.live = false;
           else kind.o.geometry.attributes.position.setXYZ(shown++, q.x, q.y, q.z);
           continue;
         }
-
-        // Once down among the flowers: is there a head under it with room left?
-        if (!q.checked && q.z < heads) {
-          q.checked = true;
-          const f = this.headUnder(q.x, q.y);
-          q.on = f && (f.wl || 0) < room[name] * (name === 'snow' ? f.r / 30 : 1) ? f : null;
-        }
-        const landZ = q.on ? q.on.z + q.on.lift + 3 : FLOOR_Z + 0.5;
-        if (q.z <= landZ) {
-          this.land(name, q, t);
+        if (away) {
           q.live = false;
           continue;
         }
-        if (q.x < ground.x0 - 400 || q.x > ground.x1 + 400) {
-          q.live = false;
-          continue;
+        // Out on the land, away from the bed, it comes down into the grass and is lost in it; only on the bed does it settle and build up.
+        if (E && !(q.x > 0 && q.x < this.w && q.y > 0 && q.y < this.h)) {
+          if (q.z <= FLOOR_Z + this.hillAt(q.x, q.y) + (name === 'rain' ? 0 : 6)) {
+            q.live = false;
+            continue;
+          }
+        } else {
+          // Once down among the flowers: is there a head under it with room left?
+          if (!q.checked && q.z < heads) {
+            q.checked = true;
+            const f = this.headUnder(q.x, q.y);
+            q.on = f && (f.wl || 0) < room[name] * (name === 'snow' ? f.r / 30 : 1) ? f : null;
+          }
+          const landZ = q.on ? q.on.z + q.on.lift + 3 : FLOOR_Z + 0.5;
+          if (q.z <= landZ) {
+            this.land(name, q, t);
+            q.live = false;
+            continue;
+          }
+          if (!E && (q.x < ground.x0 - 400 || q.x > ground.x1 + 400)) {
+            q.live = false;
+            continue;
+          }
         }
 
         if (name === 'rain') {
