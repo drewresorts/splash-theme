@@ -758,7 +758,6 @@ class GardenSplash extends HTMLElement {
     this.logoTrigger = this.querySelector('[data-garden-logo-trigger]');
     this.nav = this.querySelector('[data-garden-nav]');
     this.schemeButtons = Array.from(this.querySelectorAll('[data-garden-scheme]'));
-    this.schemeLabel = this.querySelector('[data-garden-scheme-name]');
     this.followScheme = this.dataset.followScheme === 'true';
 
     this.readConfig();
@@ -889,6 +888,8 @@ class GardenSplash extends HTMLElement {
   }
 
   disconnectedCallback() {
+    window.clearTimeout(this.nudgeAt);
+    window.clearTimeout(this.nudgeEnd);
     this.running = false;
     cancelAnimationFrame(this.raf);
     clearTimeout(this.resizeTimer);
@@ -1087,7 +1088,6 @@ class GardenSplash extends HTMLElement {
     this.heroColor = sc.center;
     this.heroAccent = sc.accent;
     this.schemeButtons.forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
-    if (this.schemeLabel && this.schemeButtons[i]) this.schemeLabel.textContent = this.schemeButtons[i].title || '';
   }
 
   /*
@@ -1127,6 +1127,7 @@ class GardenSplash extends HTMLElement {
       if (C.opens === 'game' && !this.eggEnabled()) continue;
       this.picks = [{ i, at: now }];
       this.gestured = true;
+      this.hintNext(null);
       // A moment to see the last color land, then it opens.
       window.setTimeout(() => {
         if (C.opens === 'sky') {
@@ -1135,6 +1136,43 @@ class GardenSplash extends HTMLElement {
       }, 600);
       return;
     }
+    // Not there yet: two colors (or more) into one, a nudge toward the next.
+    let next = null;
+    let left = 0;
+    for (const C of COMBINATIONS) {
+      if (C.opens === 'sky' && (this.night || !this.arranged)) continue;
+      if (C.opens === 'game' && !this.eggEnabled()) continue;
+      const lead = C.fromStart ? 1 : 0;
+      for (let m = C.colors.length - 1; m >= 2 + lead && next === null; m--) {
+        const tail = picks.slice(-m);
+        const timed = tail.slice(lead);
+        if (tail.length === m && tail.every((p, k) => p.i === C.colors[k]) && timed.every((p) => now - p.at < 30000)) {
+          next = C.colors[m];
+          left = 30000 - (now - Math.min(...timed.map((p) => p.at)));
+        }
+      }
+      if (next !== null) break;
+    }
+    this.hintNext(next, left);
+  }
+
+  /*
+   * The next color of a combination under way, given away a little: its
+   * swatch bounces while the pointer is over the swatches, and on its own
+   * after a few moments' pause (the CSS: .is-next, .is-nudging). Gone when
+   * the time for the combination runs out (ms), or with null.
+   */
+  hintNext(i, ms = 0) {
+    window.clearTimeout(this.nudgeAt);
+    window.clearTimeout(this.nudgeEnd);
+    const target = i === null ? null : this.schemeButtons[i];
+    this.schemeButtons.forEach((b) => {
+      b.classList.toggle('is-next', b === target);
+      b.classList.remove('is-nudging');
+    });
+    if (!target) return;
+    this.nudgeAt = window.setTimeout(() => target.classList.add('is-nudging'), 3500);
+    this.nudgeEnd = window.setTimeout(() => this.hintNext(null), Math.max(0, ms));
   }
 
   /* ---------------- logo silhouette ---------------- */

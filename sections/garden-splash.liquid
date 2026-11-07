@@ -139,7 +139,6 @@
       paints the swatches.
     {%- endcomment -%}
     <div class="garden-splash__schemes" role="group" aria-label="Flower colors" data-garden-ui>
-      <span class="garden-splash__scheme-name" aria-live="polite" data-garden-scheme-name></span>
       {%- assign scheme_ids = 'house,camo,cotton-candy,circus,neon,tropical,noir' | split: ',' -%}
       {%- assign scheme_names = 'House colors,Camo Fatigues,Cotton Candy,Circus,Neon,Tropical,Noir' | split: ',' -%}
       {%- for id in scheme_ids -%}
@@ -150,7 +149,6 @@
           data-scheme="{{ id }}"
           aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}"
           aria-label="{{ scheme_names[forloop.index0] }}"
-          title="{{ scheme_names[forloop.index0] }}"
         ></button>
       {%- endfor -%}
     </div>
@@ -515,21 +513,6 @@
     background: linear-gradient(135deg, #111 50%, #a8a8a8 50%);
   }
 
-  /* The picked theme's name, just above the dots. */
-  .garden-splash__scheme-name {
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 8px);
-    color: var(--gs-ink, #191f6b);
-    font-family: var(--duet-type, sans-serif);
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    transform: translateX(-50%);
-    pointer-events: none;
-  }
-
   /* The chosen one stands up a little. */
   .garden-splash__swatch[aria-pressed='true'] {
     transform: translateY(-4px) scale(1.18);
@@ -538,6 +521,49 @@
   .garden-splash__swatch:focus-visible {
     outline: 1px dashed var(--gs-ink, #191f6b);
     outline-offset: 3px;
+  }
+
+  /*
+   * Two colors into a combination, the next one gives itself away a little
+   * (assets/garden-splash.js hintNext): it bounces while the pointer is over
+   * the swatches, and on its own after a few moments' pause.
+   */
+  .garden-splash__schemes:hover .garden-splash__swatch.is-next,
+  .garden-splash__swatch.is-next.is-nudging {
+    animation: garden-splash-nudge 2.4s ease-in-out infinite;
+  }
+
+  @keyframes garden-splash-nudge {
+    0%,
+    36%,
+    100% {
+      transform: none;
+    }
+
+    8% {
+      transform: translateY(-8px) scale(1.06);
+    }
+
+    16% {
+      transform: translateY(0) scale(1.06, 0.94);
+    }
+
+    24% {
+      transform: translateY(-3px);
+    }
+
+    30% {
+      transform: translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .garden-splash__schemes:hover .garden-splash__swatch.is-next,
+    .garden-splash__swatch.is-next.is-nudging {
+      animation: none;
+      outline: 1px solid var(--gs-ink, #191f6b);
+      outline-offset: 3px;
+    }
   }
 
   /* Menu button: outline, filled plate, plain text, or a custom image. */
