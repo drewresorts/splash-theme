@@ -404,6 +404,7 @@
   </head>
 
   <body class="gradient{% if hide_store_chrome %} layout-splash-streams{% endif %}{% if settings.garden_motif and settings.garden_cart_bloom %} garden-cart-motif{% endif %}{% if hide_header_footer %} duet-header-overlay{% endif %}{% if show_garden_world %} has-garden-world garden-world-sections--{{ settings.garden_world_sections | default: 'translucent' }}{% endif %}{% if settings.animations_hover_elements != 'none' %} animate--hover-{{ settings.animations_hover_elements }}{% endif %}">
+    {%- render 'duet-cutout' -%}
     {%- if hide_store_chrome -%}
       <script>
         if (window.navigation && typeof window.navigation.addEventListener === 'function') {

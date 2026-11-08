@@ -32,8 +32,9 @@ body:has(.garden-background) #MainContent .gradient,
   display: block;
   width: 100%;
   height: auto;
-  /* A soft shadow on the bed below, so the item reads as hovering above it. */
-  filter: drop-shadow(0 22px 14px rgba(25, 31, 107, 0.22));
+  /* White backdrop dropped out (snippets/duet-cutout.liquid), then a soft shadow
+     on the bed below that follows the item, so it reads as hovering above it. */
+  filter: url('#duet-cutout') drop-shadow(0 22px 14px rgba(25, 31, 107, 0.22));
   transition: transform 0.35s ease;
 }
 

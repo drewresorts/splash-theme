@@ -135,16 +135,36 @@ body .customer tbody tr:nth-child(even) {
   backdrop-filter: blur(16px) saturate(1.15);
 }
 
-/* A product's 3D model floats over the page: no box, fill or shadow behind it (its photos keep theirs). */
-.product-media-container.media-type-model,
-.product-media-container.media-type-model .product__modal-opener,
-.product-media-container.media-type-model .deferred-media,
-.product-media-container.media-type-model .deferred-media__poster,
-.product-media-container.media-type-model model-viewer {
+/* ---------- Product photos and 3D models float over the page ---------- */
+
+/* No box, fill, tint or shadow behind any product picture. */
+.product-media-container,
+.product-media-container .product__modal-opener,
+.product-media-container .deferred-media,
+.product-media-container .deferred-media__poster,
+.product-media-container model-viewer,
+.product__media-list .media,
+.thumbnail-list .thumbnail,
+.product-card-wrapper :is(.card, .card__inner, .card__media, .media),
+.cart-item__image-container,
+.cart-notification-product__image,
+.variant-item__image-container {
   background: none !important;
   box-shadow: none;
 }
 
-.product-media-container.media-type-model::after {
+:is(.product-media-container, .thumbnail-list .thumbnail, .product-card-wrapper .card, .product-card-wrapper .card__inner, .cart-item__image-container, .cart-notification-product__image, .variant-item__image-container)::after {
   content: none;
+}
+
+/* The white backdrop baked into a product photo turns see-through (snippets/duet-cutout.liquid). */
+:is(.product__media-list, .thumbnail-list, .product-media-modal__content, .product-card-wrapper .card__media, .cart-item__media, .cart-notification-product__image, .variant-item__image-container) img,
+.predictive-search__image,
+.duet-shop3d__img,
+.duet-p3d__poster,
+.duet-p3d__photo,
+.duet-p3d__thumb img,
+.product-splash__img,
+.boutique__fallback-img {
+  filter: url('#duet-cutout');
 }
