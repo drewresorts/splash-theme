@@ -1,7 +1,11 @@
 {%- comment -%}
-  The 3D shop: a collection as a clean grid of its products' 3D models,
-  each floating over the page, turning slowly and stopping while the pointer is
-  on it. Clicking one fades the others into the page and flies its model
+  The 3D shop: a collection as its products' 3D models alone, floating over
+  the page in a loose grid, like pucks on an ice rink: drag one, flick it,
+  sweep through them, and they glide, bump into each other and drift back
+  to their places. Pointing at one raises it above the rest, larger, its
+  shadow on the page, turning, with its name and price called out beside
+  it like a label on a diagram (the words are in each card for screen
+  readers and search, out of sight). Clicking one fades the others into the page and flies its model
   into the product page (sections/duet-product-3d.liquid, opened with
   ?view=3d) as that page comes in. A product without a 3D file shows its
   main photo, and opens the same way. Used by templates/collection.3d.json:
@@ -61,6 +65,7 @@
             endif
           -%}
           <div class="duet-shop3d__card" role="listitem" data-turntable-card{% if model_url != blank %} data-model="{{ model_url }}"{% endif %}>
+            <span class="duet-shop3d__shadow" data-turntable-shadow aria-hidden="true"></span>
             <div class="duet-shop3d__stage" data-turntable-stage>
               {%- if image -%}
                 {{
@@ -77,9 +82,9 @@
                 {{ 'product-apparel-1' | placeholder_svg_tag: 'duet-shop3d__img' }}
               {%- endif -%}
             </div>
-            <div class="duet-shop3d__info">
-              <a class="duet-shop3d__link" href="{{ href }}">{{ product.title | escape }}</a>
-              <p class="duet-shop3d__price">
+            <div class="duet-shop3d__info" data-turntable-info>
+              <a class="duet-shop3d__link" href="{{ href }}" data-turntable-title>{{ product.title | escape }}</a>
+              <p class="duet-shop3d__price" data-turntable-price>
                 {%- if product.price_varies -%}
                   {{ 'products.product.price.from_price_html' | t: price: product.price_min | money }}
                 {%- else -%}
@@ -90,13 +95,25 @@
                 {%- endif -%}
               </p>
               {%- unless product.available -%}
-                <span class="duet-shop3d__badge">{{ 'products.product.sold_out' | t }}</span>
+                <span class="duet-shop3d__badge" data-turntable-badge>{{ 'products.product.sold_out' | t }}</span>
               {%- endunless -%}
             </div>
           </div>
         {%- else -%}
           <p class="duet-shop3d__empty">{{ 'sections.collection_template.empty' | t }}</p>
         {%- endfor -%}
+        {%- comment -%} The raised product's label, drawn beside it (assets/duet-3d.js callOut). {%- endcomment -%}
+        <div class="duet-shop3d__callout" data-turntable-callout aria-hidden="true">
+          <svg class="duet-shop3d__callout-line" viewBox="0 0 160 60" preserveAspectRatio="none" focusable="false">
+            <circle cx="3" cy="57" r="2.5"></circle>
+            <path d="M3 57 L40 20 L160 20" pathLength="1"></path>
+          </svg>
+          <div class="duet-shop3d__callout-text">
+            <p class="duet-shop3d__callout-title" data-callout-title></p>
+            <p class="duet-shop3d__callout-price" data-callout-price></p>
+            <p class="duet-shop3d__callout-badge" data-callout-badge hidden></p>
+          </div>
+        </div>
       </duet-turntable>
 
       {%- if paginate.pages > 1 -%}

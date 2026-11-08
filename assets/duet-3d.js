@@ -24,11 +24,16 @@ import * as THREE from './three.module.min.js';
 import { GLTFLoader } from './three-gltf-loader.js';
 
 const SPIN = 0.32; // radians a second, turning on its own
+const TURN = (Math.PI * 2) / 3.2; // raised in the grid: a full turn every 3.2 seconds
 const FLY = 0.7; // seconds to fly from the grid into the product page
 const HANDOFF_KEY = 'duet-3d-handoff';
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (t) => {
+  const k = Math.max(0, Math.min(1, t));
+  return k * k * (3 - 2 * k);
+};
 
 /* ---------------- the stage ---------------- */
 
@@ -134,8 +139,12 @@ class Stage {
     r.setViewport(0, 0, w, h);
     r.setScissor(0, 0, w, h);
     r.clear();
+    // Models may overlap (the grid lets them bump about): each clears only its depth, not what is drawn under it.
+    r.autoClear = false;
     for (const v of this.views) v.step(dt);
-    for (const v of this.views) {
+    // Back to front: one raised above the rest (z) is drawn over them.
+    const order = Array.from(this.views).sort((a, b) => (a.z || 0) - (b.z || 0));
+    for (const v of order) {
       if (!v.object || v.alpha <= 0.002) continue;
       const box = v.rect();
       if (!box || box.width < 2 || box.height < 2 || box.bottom < 0 || box.top > h || box.right < 0 || box.left > w) continue;
@@ -148,6 +157,7 @@ class Stage {
       this.camera.zoom = Math.min(1, this.camera.aspect);
       this.camera.updateProjectionMatrix();
       v.applyAlpha();
+      r.clearDepth();
       r.render(this.scene, this.camera);
     }
   }
@@ -175,6 +185,9 @@ class View {
     this.targetAlpha = 1;
     this.flight = null;
     this.materials = [];
+    this.place = null; // where to draw instead of its element's box (the grid moves its models about: see DuetTurntable)
+    this.boost = 0; // 0 to 1: turning faster, a full turn every few seconds (raised in the grid)
+    this.z = 0;
     this.ready = st.model(url).then((template) => {
       if (!st.views.has(this)) return this;
       // Its own copy, with its own materials, so it can fade on its own.
@@ -203,6 +216,7 @@ class View {
       const k = ease(Math.min(1, f.t / f.time));
       return { left: lerp(f.from.left, to.left, k), top: lerp(f.from.top, to.top, k), width: lerp(f.from.width, to.width, k), height: lerp(f.from.height, to.height, k), get right() { return this.left + this.width; }, get bottom() { return this.top + this.height; } };
     }
+    if (this.place) return this.place();
     return this.el && this.el.isConnected ? this.el.getBoundingClientRect() : null;
   }
 
@@ -214,7 +228,7 @@ class View {
   }
 
   step(dt) {
-    const want = this.hold || !this.turning ? 0 : SPIN;
+    const want = this.hold || !this.turning ? 0 : SPIN + (TURN - SPIN) * this.boost;
     this.speed += (want - this.speed) * (1 - Math.exp(-dt * 4));
     this.angle += this.speed * dt;
     this.tilt *= Math.exp(-dt * 2);
@@ -246,46 +260,360 @@ class View {
 
 /* ---------------- the grid ---------------- */
 
+/*
+ * The grid as an ice rink: each product's model has its place in a loose
+ * grid (its card's box, a little off true), but isn't fixed there. Drag one
+ * and it follows; let go mid-swipe and it glides off; a fast pass of the
+ * pointer pushes what it sweeps through; they bump into each other and
+ * bounce, and all the while each drifts slowly back to its place, the way
+ * the clouds and stars do in the splash's sky view.
+ *
+ * Pointing at one raises it above the rest, a little larger, its shadow on
+ * the page below, turning a full turn every few seconds, with its name and
+ * price called out beside it like a label on a diagram (the words stay in
+ * the card for screen readers and search, out of sight). A click (a tap on
+ * the raised one, on a phone) opens it. Keyboard focus raises and labels
+ * the focused one; Enter opens it.
+ *
+ * Positions are kept in screen pixels as offsets from each card's place,
+ * read afresh every frame, so scrolling and resizing carry everything along.
+ */
+const RINK = {
+  spring: 1.4, // how firmly each is drawn back to its place
+  friction: 1.1, // how quickly a glide dies away (ice: slowly)
+  bounce: 0.8, // how much of a knock carries into the other
+  lift: 0.22, // how much larger a raised one grows
+  push: 900, // how fast the pointer must sweep to push things aside (pixels a second)
+};
+
 class DuetTurntable extends HTMLElement {
   connectedCallback() {
     this.st = stage();
     this.views = [];
-    this.querySelectorAll('[data-turntable-card]').forEach((card) => this.card(card));
+    this.items = [];
+    this.abort = new AbortController();
+    this.callout = this.querySelector('[data-turntable-callout]');
+    this.pointer = { x: -1e4, y: -1e4, vx: 0, vy: 0, t: 0, inside: false, type: 'mouse' };
+    this.drag = null;
+    this.hover = null;
+    this.focus = null;
+    this.active = null; // a phone's tapped one, raised until tapped again (opens) or elsewhere
+    this.querySelectorAll('[data-turntable-card]').forEach((card, i) => this.card(card, i));
+    this.bind();
+    this.last = performance.now();
+    const loop = (now) => {
+      this.raf = requestAnimationFrame(loop);
+      const dt = Math.min(0.05, (now - this.last) / 1000);
+      this.last = now;
+      if (!document.hidden) this.step(dt);
+    };
+    this.raf = requestAnimationFrame(loop);
   }
 
   disconnectedCallback() {
+    cancelAnimationFrame(this.raf);
+    if (this.abort) this.abort.abort();
     for (const v of this.views) if (!v.keep) this.st.remove(v);
     this.views = [];
+    this.items = [];
   }
 
-  card(card) {
+  card(card, i) {
     const url = card.dataset.model;
     const link = card.querySelector('a[href]');
     const place = card.querySelector('[data-turntable-stage]');
-    let view = null;
+    const img = place && place.querySelector('img, svg');
+    const shadow = card.querySelector('[data-turntable-shadow]');
+    // Off true a little, so the grid reads as loosely laid out.
+    const jig = (k) => Math.sin(i * 12.9898 + k * 78.233) * 43758.5453 % 1;
+    const item = { card, link, place, img, shadow, view: null, ox: 0, oy: 0, vx: 0, vy: 0, lift: 0, jx: jig(1) * 0.06, jy: jig(2) * 0.06, box: null };
+    this.items.push(item);
     if (url && place) {
-      view = this.st.add(new View(this.st, place, url));
+      const view = this.st.add(new View(this.st, place, url));
+      item.view = view;
       this.views.push(view);
+      view.place = () => this.boxOf(item);
       view.ready.then(() => view.object && card.classList.add('is-3d')).catch(() => card.classList.add('is-flat'));
-      card.addEventListener('pointerenter', () => (view.hold = true));
-      card.addEventListener('pointerleave', () => (view.hold = false));
-      card.addEventListener('focusin', () => (view.hold = true));
-      card.addEventListener('focusout', () => (view.hold = false));
     }
-    if (!link) return;
-    link.addEventListener('click', (e) => {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      e.preventDefault();
-      this.open(card, view, link.href);
-    });
+    card.addEventListener('focusin', () => (this.focus = item), { signal: this.abort.signal });
+    card.addEventListener('focusout', () => this.focus === item && (this.focus = null), { signal: this.abort.signal });
+    if (link) {
+      // A click on the link itself comes from the keyboard (the pointer is handled on the rink, see bind()).
+      link.addEventListener(
+        'click',
+        (e) => {
+          if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          this.open(item);
+        },
+        { signal: this.abort.signal }
+      );
+    }
+  }
+
+  /* An item's place: its card's stage box, set off by its offset, larger and higher as it is raised. */
+  home(item) {
+    const r = item.place.getBoundingClientRect();
+    return { x: r.left + r.width * (0.5 + item.jx), y: r.top + r.height * (0.5 + item.jy), s: r.width };
+  }
+
+  boxOf(item) {
+    const b = item.box || this.home(item);
+    const size = b.s * (1 + RINK.lift * smoothstep(item.lift));
+    const cx = b.x + item.ox;
+    const cy = b.y + item.oy - b.s * 0.08 * smoothstep(item.lift);
+    return { left: cx - size / 2, top: cy - size / 2, width: size, height: size, right: cx + size / 2, bottom: cy + size / 2 };
+  }
+
+  /* Which item is under (x, y), the nearest within reach of its middle, or null. */
+  hit(x, y) {
+    let best = null;
+    let bd = Infinity;
+    for (const it of this.items) {
+      if (!it.box) continue;
+      const cx = it.box.x + it.ox;
+      const cy = it.box.y + it.oy;
+      const d = Math.hypot(x - cx, y - cy);
+      const reach = it.box.s * 0.42 * (1 + RINK.lift * it.lift);
+      if (d < reach && d < bd) {
+        best = it;
+        bd = d;
+      }
+    }
+    return best;
+  }
+
+  bind() {
+    const on = { signal: this.abort.signal };
+    const P = this.pointer;
+    const move = (e) => {
+      const now = performance.now();
+      const dt = Math.max(0.001, (now - P.t) / 1000);
+      if (P.t) {
+        // The pointer's speed, smoothed a little.
+        P.vx = lerp(P.vx, (e.clientX - P.x) / dt, 0.5);
+        P.vy = lerp(P.vy, (e.clientY - P.y) / dt, 0.5);
+      }
+      P.x = e.clientX;
+      P.y = e.clientY;
+      P.t = now;
+      P.type = e.pointerType;
+      const D = this.drag;
+      if (D && e.pointerId === D.id) {
+        if (!D.moved && Math.hypot(e.clientX - D.sx, e.clientY - D.sy) > 6) D.moved = true;
+        if (D.moved && D.item) {
+          const it = D.item;
+          it.ox = e.clientX - D.gx - it.box.x;
+          it.oy = e.clientY - D.gy - it.box.y;
+          it.vx = P.vx;
+          it.vy = P.vy;
+        }
+      }
+    };
+    window.addEventListener('pointermove', move, on);
+    this.addEventListener('pointerenter', () => (P.inside = true), on);
+    this.addEventListener('pointerleave', () => {
+      P.inside = false;
+      P.x = P.y = -1e4;
+    }, on);
+    this.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.button !== 0 || this.opening) return;
+        move(e);
+        const it = this.hit(e.clientX, e.clientY);
+        this.drag = { id: e.pointerId, item: it, sx: e.clientX, sy: e.clientY, moved: false, gx: 0, gy: 0, t: performance.now() };
+        if (it) {
+          this.drag.gx = e.clientX - (it.box.x + it.ox);
+          this.drag.gy = e.clientY - (it.box.y + it.oy);
+          // A mouse grab is the rink's; a finger may still be scrolling the page (touch-action leaves it pan-y).
+          if (e.pointerType === 'mouse') e.preventDefault();
+        }
+      },
+      on
+    );
+    const up = (e) => {
+      const D = this.drag;
+      if (!D || e.pointerId !== D.id) return;
+      this.drag = null;
+      if (D.moved || !D.item || e.type === 'pointercancel') return;
+      const it = D.item;
+      // A tap: on a phone the first raises it and calls it out, the second opens it.
+      if (e.pointerType !== 'mouse' && this.active !== it) {
+        this.active = it;
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
+        if (it.link) window.open(it.link.href, '_blank', 'noopener');
+        return;
+      }
+      this.open(it);
+    };
+    window.addEventListener('pointerup', up, on);
+    window.addEventListener('pointercancel', up, on);
+    // A tap anywhere else lets a phone's raised one down.
+    document.addEventListener('pointerdown', (e) => !this.contains(e.target) && (this.active = null), on);
+  }
+
+  step(dt) {
+    const still = reduced();
+    const P = this.pointer;
+    for (const it of this.items) it.box = it.place.isConnected ? this.home(it) : null;
+    const items = this.items.filter((it) => it.box);
+    // Who is raised: the dragged one, else the one pointed at, the one with focus, or a phone's tapped one.
+    const pointed = P.inside && P.type === 'mouse' && !this.drag ? this.hit(P.x, P.y) : null;
+    const raised = this.opening ? null : (this.drag && this.drag.moved && this.drag.item) || pointed || this.focus || this.active;
+    this.raised = raised;
+    this.classList.toggle('is-pointing', !!pointed);
+    const fast = Math.hypot(P.vx, P.vy) > RINK.push;
+    for (const it of items) {
+      const dragging = this.drag && this.drag.moved && this.drag.item === it;
+      it.lift += ((it === raised ? 1 : 0) - it.lift) * (1 - Math.exp(-dt * 7));
+      if (still) {
+        it.ox = it.oy = it.vx = it.vy = 0;
+      } else if (!dragging) {
+        // Drawn back toward its place, gliding on ice.
+        it.vx += (-RINK.spring * it.ox - RINK.friction * it.vx) * dt;
+        it.vy += (-RINK.spring * it.oy - RINK.friction * it.vy) * dt;
+        // Swept aside by a fast pass of the pointer.
+        if (fast && P.inside && !this.drag && it !== raised) {
+          const cx = it.box.x + it.ox;
+          const cy = it.box.y + it.oy;
+          const d = Math.hypot(P.x - cx, P.y - cy);
+          const reach = it.box.s * 0.5;
+          if (d < reach) {
+            const k = (1 - d / reach) * 4 * dt;
+            it.vx += P.vx * k;
+            it.vy += P.vy * k;
+          }
+        }
+        it.ox += it.vx * dt;
+        it.oy += it.vy * dt;
+      }
+      // Never so far that it is lost.
+      const max = it.box.s * 1.6;
+      const o = Math.hypot(it.ox, it.oy);
+      if (o > max) {
+        it.ox *= max / o;
+        it.oy *= max / o;
+      }
+    }
+    // Knocks: none overlaps another; each takes some of the other's speed along the line between them.
+    if (!still) {
+      for (let a = 0; a < items.length; a++) {
+        for (let b = a + 1; b < items.length; b++) {
+          const A = items[a];
+          const B = items[b];
+          const ax = A.box.x + A.ox;
+          const ay = A.box.y + A.oy;
+          const bx = B.box.x + B.ox;
+          const by = B.box.y + B.oy;
+          const ra = A.box.s * 0.36 * (1 + RINK.lift * A.lift);
+          const rb = B.box.s * 0.36 * (1 + RINK.lift * B.lift);
+          const dx = bx - ax;
+          const dy = by - ay;
+          const d = Math.hypot(dx, dy);
+          if (d >= ra + rb || d < 1e-3) continue;
+          const nx = dx / d;
+          const ny = dy / d;
+          const over = ra + rb - d;
+          const aFixed = this.drag && this.drag.item === A && this.drag.moved;
+          const bFixed = this.drag && this.drag.item === B && this.drag.moved;
+          const share = aFixed ? 0 : bFixed ? 1 : 0.5;
+          A.ox -= nx * over * share;
+          A.oy -= ny * over * share;
+          B.ox += nx * over * (1 - share);
+          B.oy += ny * over * (1 - share);
+          const rel = (B.vx - A.vx) * nx + (B.vy - A.vy) * ny;
+          if (rel < 0) {
+            const j = -(1 + RINK.bounce) * rel * 0.5;
+            if (!aFixed) {
+              A.vx -= j * nx;
+              A.vy -= j * ny;
+            }
+            if (!bFixed) {
+              B.vx += j * nx;
+              B.vy += j * ny;
+            }
+          }
+        }
+      }
+    }
+    // What goes with each: its turning, its order, its shadow on the page, a photo standing in for a model.
+    for (const it of items) {
+      const k = smoothstep(it.lift);
+      const box = this.boxOf(it);
+      const cx = box.left + box.width / 2;
+      if (it.view) {
+        it.view.boost = still ? 0 : k;
+        it.view.z = k;
+      }
+      if (it.shadow) {
+        const r = it.place.getBoundingClientRect();
+        const sx = cx - (r.left + r.width / 2);
+        const sy = it.box.y + it.oy + it.box.s * 0.4 - (r.top + r.height / 2);
+        it.shadow.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px) scale(${(0.75 + 0.45 * k).toFixed(3)})`;
+        it.shadow.style.opacity = (0.15 + 0.6 * k).toFixed(3);
+      }
+      if (!it.view && it.img) {
+        it.img.style.transform = `translate(${(it.ox + it.box.s * it.jx).toFixed(1)}px, ${(it.oy + it.box.s * it.jy - it.box.s * 0.08 * k).toFixed(1)}px) scale(${(1 + RINK.lift * k).toFixed(3)})`;
+        it.img.style.zIndex = k > 0.05 ? 2 : '';
+      }
+    }
+    this.callOut(raised);
+  }
+
+  /*
+   * The raised one's name and price beside it, like a label on a diagram:
+   * a dot at its edge, a line out and up, the words along the line's end.
+   * To its right, or to its left near the right edge of the screen.
+   */
+  callOut(it) {
+    const C = this.callout;
+    if (!C) return;
+    if (!it || !it.box || it.lift < 0.25) {
+      if (this.calledOut) {
+        C.classList.remove('is-on');
+        this.calledOut = null;
+      }
+      return;
+    }
+    if (this.calledOut !== it) {
+      this.calledOut = it;
+      const info = it.card.querySelector('[data-turntable-info]');
+      const title = info && info.querySelector('[data-turntable-title]');
+      const price = info && info.querySelector('[data-turntable-price]');
+      const badge = info && info.querySelector('[data-turntable-badge]');
+      C.querySelector('[data-callout-title]').textContent = title ? title.textContent.trim() : '';
+      C.querySelector('[data-callout-price]').innerHTML = price ? price.innerHTML : '';
+      const b = C.querySelector('[data-callout-badge]');
+      b.textContent = badge ? badge.textContent.trim() : '';
+      b.hidden = !badge;
+      C.classList.remove('is-on');
+      void C.offsetWidth;
+      C.classList.add('is-on');
+    }
+    const box = this.boxOf(it);
+    const host = this.getBoundingClientRect();
+    const left = box.right + 220 > window.innerWidth;
+    // No room above it within the grid (the top row): the line runs down instead.
+    const below = box.top + box.height * 0.3 - host.top < 90;
+    C.classList.toggle('is-left', left);
+    C.classList.toggle('is-below', below);
+    const ax = (left ? box.left + box.width * 0.18 : box.right - box.width * 0.18) - host.left;
+    const ay = (below ? box.top + box.height * 0.62 : box.top + box.height * 0.3) - host.top;
+    C.style.transform = `translate(${ax.toFixed(1)}px, ${ay.toFixed(1)}px)`;
   }
 
   /* Opens a product: the others fade into the page, its model flies to where the product page shows it. */
-  open(card, view, href) {
-    if (this.opening) return;
+  open(item) {
+    if (this.opening || !item) return;
+    const view = item.view;
+    const href = item.link ? item.link.href : null;
+    if (!href) return;
     this.opening = true;
     this.classList.add('is-opening');
-    card.classList.add('is-chosen');
+    item.card.classList.add('is-chosen');
     for (const v of this.views) if (v !== view) v.targetAlpha = 0;
     const go = () => {
       if (!(window.duetSoftNav && window.duetSoftNav.go(href))) window.location.assign(href);
@@ -305,6 +633,9 @@ class DuetTurntable extends HTMLElement {
       /* private mode: the product page simply fades the model in */
     }
     view.flyTo(() => productMediaBox(), FLY);
+    // From here on it is the flight's, then the product page's: no longer the rink's.
+    view.place = null;
+    view.boost = 0;
     // The page starts changing while it flies; the product page takes it over where it lands.
     window.setTimeout(go, reduced() ? 0 : FLY * 600);
   }

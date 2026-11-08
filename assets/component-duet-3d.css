@@ -73,17 +73,46 @@
 .duet-shop3d__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
-  gap: 4.8rem 2.4rem;
+  gap: 2.4rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* The rink: dragged about with a mouse; on a phone the page still scrolls up and down through it. */
+duet-turntable {
+  position: relative;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+duet-turntable:active {
+  cursor: grabbing;
+}
+
+duet-turntable.is-pointing {
+  cursor: pointer;
+}
+
 .duet-shop3d__card {
   position: relative;
-  display: grid;
-  gap: 1.4rem;
   transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+/* Its shadow on the page, under wherever the model is (moved there by duet-3d.js); darker and wider raised. */
+.duet-shop3d__shadow {
+  position: absolute;
+  top: 45%;
+  left: 20%;
+  width: 60%;
+  height: 10%;
+  background: radial-gradient(closest-side, rgba(25, 31, 107, 0.32), rgba(25, 31, 107, 0.12) 55%, transparent);
+  filter: blur(3px);
+  opacity: 0.15;
+  pointer-events: none;
+  will-change: transform, opacity;
 }
 
 /* Nothing at all behind a model, in the grid or on the product page: it floats over the page. */
@@ -111,61 +140,155 @@ duet-product-3d.is-3d .duet-p3d__poster {
   opacity: 0;
 }
 
+/* The words under each product: out of sight, still there for screen readers, search and the keyboard. */
 .duet-shop3d__info {
-  display: grid;
-  gap: 0.4rem;
-}
-
-.duet-shop3d__link {
-  color: inherit;
-  font-size: 1.3rem;
-  letter-spacing: 0.12em;
-  text-decoration: none;
-  text-transform: uppercase;
-}
-
-/* The whole card opens the product. */
-.duet-shop3d__link::after {
-  content: '';
   position: absolute;
-  inset: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
-.duet-shop3d__card:hover .duet-shop3d__link,
-.duet-shop3d__link:focus-visible {
-  text-decoration: underline;
-  text-underline-offset: 0.3em;
-}
-
-.duet-shop3d__link:focus-visible {
-  outline: none;
-}
-
-.duet-shop3d__card:has(.duet-shop3d__link:focus-visible) .duet-shop3d__stage {
+/* Tabbed to: a dashed ring on the page under it (it is raised and called out, see duet-3d.js). */
+.duet-shop3d__card:has(.duet-shop3d__link:focus-visible) .duet-shop3d__shadow {
   outline: 1px dashed currentColor;
-  outline-offset: 4px;
+  outline-offset: 6px;
 }
 
-.duet-shop3d__price {
+/*
+ * The raised one's label, like a label on a diagram: a dot at the model's
+ * edge, a thin line out and up, the name and price along it. Placed at the
+ * dot by duet-3d.js; to the left near the right edge of the screen.
+ */
+.duet-shop3d__callout {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 25;
+  width: 0;
+  height: 0;
+  color: rgb(var(--color-foreground));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.duet-shop3d__callout.is-on {
+  opacity: 1;
+}
+
+.duet-shop3d__callout-line {
+  position: absolute;
+  top: -57px;
+  left: -3px;
+  width: 160px;
+  height: 60px;
+  overflow: visible;
+}
+
+.duet-shop3d__callout-line circle {
+  fill: currentColor;
+}
+
+.duet-shop3d__callout-line path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.duet-shop3d__callout.is-on .duet-shop3d__callout-line path {
+  animation: duet-callout-draw 0.45s cubic-bezier(0.3, 0.7, 0.2, 1) forwards;
+}
+
+@keyframes duet-callout-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.duet-shop3d__callout-text {
+  position: absolute;
+  bottom: 41px;
+  left: 44px;
+  display: grid;
+  gap: 0.3rem;
+  width: max-content;
+  max-width: 22rem;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.25s ease 0.2s, transform 0.25s ease 0.2s;
+}
+
+.duet-shop3d__callout.is-on .duet-shop3d__callout-text {
+  opacity: 1;
+  transform: none;
+}
+
+.duet-shop3d__callout-title {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.duet-shop3d__callout-price {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
 
-.duet-shop3d__price s {
+.duet-shop3d__callout-price s {
   margin-left: 0.8rem;
   font-weight: 400;
   opacity: 0.55;
 }
 
-.duet-shop3d__badge {
+.duet-shop3d__callout-badge {
   justify-self: start;
+  margin: 0.2rem 0 0;
   padding: 0.3rem 0.8rem;
   background: rgba(var(--color-foreground), 0.08);
   font-size: 1.1rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.duet-shop3d__callout-badge[hidden] {
+  display: none;
+}
+
+/* Upside down, out and down (for the top row, with no room above). */
+.duet-shop3d__callout.is-below .duet-shop3d__callout-line {
+  top: -3px;
+  transform: scaleY(-1);
+}
+
+.duet-shop3d__callout.is-below .duet-shop3d__callout-text {
+  top: 41px;
+  bottom: auto;
+}
+
+.duet-shop3d__callout.is-below.is-left .duet-shop3d__callout-line {
+  transform: scale(-1, -1);
+}
+
+/* Mirrored, out to the left. */
+.duet-shop3d__callout.is-left .duet-shop3d__callout-line {
+  left: -157px;
+  transform: scaleX(-1);
+}
+
+.duet-shop3d__callout.is-left .duet-shop3d__callout-text {
+  right: 44px;
+  left: auto;
+  justify-items: end;
+  text-align: right;
 }
 
 /* Opening one: the others fade into the page, its own words go, its model flies on (duet-3d.js). */
@@ -174,8 +297,9 @@ duet-turntable.is-opening .duet-shop3d__card:not(.is-chosen) {
   transform: scale(0.97);
 }
 
-duet-turntable.is-opening .duet-shop3d__card.is-chosen .duet-shop3d__info {
-  opacity: 0;
+duet-turntable.is-opening .duet-shop3d__callout,
+duet-turntable.is-opening .duet-shop3d__shadow {
+  opacity: 0 !important;
   transition: opacity 0.3s ease;
 }
 
@@ -478,7 +602,7 @@ duet-turntable.is-opening .duet-shop3d__card.is-chosen .duet-shop3d__info {
 
   .duet-shop3d__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 3.2rem 1.2rem;
+    gap: 1.6rem 1.2rem;
   }
 }
 
@@ -496,5 +620,14 @@ duet-product-3d.is-handed .duet-p3d__poster {
   .duet-p3d.is-in .duet-p3d__info > * {
     animation: none;
     opacity: 1;
+  }
+
+  .duet-shop3d__callout .duet-shop3d__callout-line path {
+    animation: none !important;
+    stroke-dashoffset: 0;
+  }
+
+  .duet-shop3d__callout-text {
+    transition: none;
   }
 }
