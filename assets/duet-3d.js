@@ -279,11 +279,17 @@ class View {
  * read afresh every frame, so scrolling and resizing carry everything along.
  */
 const RINK = {
-  spring: 1.4, // how firmly each is drawn back to its place
-  friction: 1.1, // how quickly a glide dies away (ice: slowly)
-  bounce: 0.8, // how much of a knock carries into the other
+  // Heavy, like huge things adrift in space: slow to start, slow to stop, slow home.
+  spring: 0.22, // how firmly each is drawn back to its place (a long, lazy drift home)
+  friction: 0.62, // how quickly a glide dies away
+  bounce: 0.25, // how much of a knock carries into the other (a soft, heavy nudge)
+  tether: 5, // how hard a dragged one is pulled toward the pointer (it trails behind)
+  tow: 3.6, // how much a dragged one resists being swung about
+  drift: 0.7, // top speed adrift, in its own widths a second
+  haul: 1.3, // top speed while dragged, in its own widths a second
+  heft: 3, // how much heavier a dragged one is than the ones it shoves
   lift: 0.22, // how much larger a raised one grows
-  push: 900, // how fast the pointer must sweep to push things aside (pixels a second)
+  push: 1500, // how fast the pointer must sweep to nudge things aside (pixels a second)
 };
 
 class DuetTurntable extends HTMLElement {
@@ -402,11 +408,9 @@ class DuetTurntable extends HTMLElement {
       if (D && e.pointerId === D.id) {
         if (!D.moved && Math.hypot(e.clientX - D.sx, e.clientY - D.sy) > 6) D.moved = true;
         if (D.moved && D.item) {
-          const it = D.item;
-          it.ox = e.clientX - D.gx - it.box.x;
-          it.oy = e.clientY - D.gy - it.box.y;
-          it.vx = P.vx;
-          it.vy = P.vy;
+          // Where the pointer would have it; it is towed there, not put there.
+          D.tx = e.clientX - D.gx - D.item.box.x;
+          D.ty = e.clientY - D.gy - D.item.box.y;
         }
       }
     };
@@ -422,10 +426,12 @@ class DuetTurntable extends HTMLElement {
         if (e.button !== 0 || this.opening) return;
         move(e);
         const it = this.hit(e.clientX, e.clientY);
-        this.drag = { id: e.pointerId, item: it, sx: e.clientX, sy: e.clientY, moved: false, gx: 0, gy: 0, t: performance.now() };
+        this.drag = { id: e.pointerId, item: it, sx: e.clientX, sy: e.clientY, moved: false, gx: 0, gy: 0, tx: 0, ty: 0, t: performance.now() };
         if (it) {
           this.drag.gx = e.clientX - (it.box.x + it.ox);
           this.drag.gy = e.clientY - (it.box.y + it.oy);
+          this.drag.tx = it.ox;
+          this.drag.ty = it.oy;
           // A mouse grab is the rink's; a finger may still be scrolling the page (touch-action leaves it pan-y).
           if (e.pointerType === 'mouse') e.preventDefault();
         }
@@ -468,28 +474,42 @@ class DuetTurntable extends HTMLElement {
     const fast = Math.hypot(P.vx, P.vy) > RINK.push;
     for (const it of items) {
       const dragging = this.drag && this.drag.moved && this.drag.item === it;
-      it.lift += ((it === raised ? 1 : 0) - it.lift) * (1 - Math.exp(-dt * 7));
+      it.lift += ((it === raised ? 1 : 0) - it.lift) * (1 - Math.exp(-dt * 4));
       if (still) {
         it.ox = it.oy = it.vx = it.vy = 0;
-      } else if (!dragging) {
-        // Drawn back toward its place, gliding on ice.
+        continue;
+      }
+      if (dragging) {
+        // Towed toward the pointer: it lags, and gathers speed slowly.
+        const D = this.drag;
+        it.vx += (RINK.tether * (D.tx - it.ox) - RINK.tow * it.vx) * dt;
+        it.vy += (RINK.tether * (D.ty - it.oy) - RINK.tow * it.vy) * dt;
+      } else {
+        // Drawn back toward its place, drifting.
         it.vx += (-RINK.spring * it.ox - RINK.friction * it.vx) * dt;
         it.vy += (-RINK.spring * it.oy - RINK.friction * it.vy) * dt;
-        // Swept aside by a fast pass of the pointer.
+        // Nudged a little by a fast pass of the pointer.
         if (fast && P.inside && !this.drag && it !== raised) {
           const cx = it.box.x + it.ox;
           const cy = it.box.y + it.oy;
           const d = Math.hypot(P.x - cx, P.y - cy);
           const reach = it.box.s * 0.5;
           if (d < reach) {
-            const k = (1 - d / reach) * 4 * dt;
+            const k = (1 - d / reach) * 0.5 * dt;
             it.vx += P.vx * k;
             it.vy += P.vy * k;
           }
         }
-        it.ox += it.vx * dt;
-        it.oy += it.vy * dt;
       }
+      // Too heavy to move fast, however hard it is thrown.
+      const top = it.box.s * (dragging ? RINK.haul : RINK.drift);
+      const v = Math.hypot(it.vx, it.vy);
+      if (v > top) {
+        it.vx *= top / v;
+        it.vy *= top / v;
+      }
+      it.ox += it.vx * dt;
+      it.oy += it.vy * dt;
       // Never so far that it is lost.
       const max = it.box.s * 1.6;
       const o = Math.hypot(it.ox, it.oy);
@@ -517,24 +537,22 @@ class DuetTurntable extends HTMLElement {
           const nx = dx / d;
           const ny = dy / d;
           const over = ra + rb - d;
-          const aFixed = this.drag && this.drag.item === A && this.drag.moved;
-          const bFixed = this.drag && this.drag.item === B && this.drag.moved;
-          const share = aFixed ? 0 : bFixed ? 1 : 0.5;
+          // A dragged one is heavier: it shoves the others more than they shove it.
+          const held = this.drag && this.drag.moved && this.drag.item;
+          const ma = held === A ? RINK.heft : 1;
+          const mb = held === B ? RINK.heft : 1;
+          const share = mb / (ma + mb);
           A.ox -= nx * over * share;
           A.oy -= ny * over * share;
           B.ox += nx * over * (1 - share);
           B.oy += ny * over * (1 - share);
           const rel = (B.vx - A.vx) * nx + (B.vy - A.vy) * ny;
           if (rel < 0) {
-            const j = -(1 + RINK.bounce) * rel * 0.5;
-            if (!aFixed) {
-              A.vx -= j * nx;
-              A.vy -= j * ny;
-            }
-            if (!bFixed) {
-              B.vx += j * nx;
-              B.vy += j * ny;
-            }
+            const j = (-(1 + RINK.bounce) * rel) / (1 / ma + 1 / mb);
+            A.vx -= (j / ma) * nx;
+            A.vy -= (j / ma) * ny;
+            B.vx += (j / mb) * nx;
+            B.vy += (j / mb) * ny;
           }
         }
       }
