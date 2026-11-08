@@ -86,12 +86,20 @@
   transition: opacity 0.45s ease, transform 0.45s ease;
 }
 
-/* A plain white plate with a soft shadow on the floor under the model. */
+/* In the grid: a plain white plate with a soft shadow on the floor under the model. */
 .duet-shop3d__stage,
 .duet-p3d__stage {
   position: relative;
   aspect-ratio: 1;
+}
+
+.duet-shop3d__stage {
   background: radial-gradient(48% 9% at 50% 88%, rgba(25, 31, 107, 0.12), transparent 70%), rgba(255, 255, 255, 0.55);
+}
+
+/* On the product page, nothing at all behind it: the model floats over the page. */
+.duet-p3d__stage {
+  background: none;
 }
 
 .duet-shop3d__img,

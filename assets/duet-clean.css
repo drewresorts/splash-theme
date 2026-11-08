@@ -134,3 +134,17 @@ body .customer tbody tr:nth-child(even) {
   -webkit-backdrop-filter: blur(16px) saturate(1.15);
   backdrop-filter: blur(16px) saturate(1.15);
 }
+
+/* A product's 3D model floats over the page: no box, fill or shadow behind it (its photos keep theirs). */
+.product-media-container.media-type-model,
+.product-media-container.media-type-model .product__modal-opener,
+.product-media-container.media-type-model .deferred-media,
+.product-media-container.media-type-model .deferred-media__poster,
+.product-media-container.media-type-model model-viewer {
+  background: none !important;
+  box-shadow: none;
+}
+
+.product-media-container.media-type-model::after {
+  content: none;
+}
