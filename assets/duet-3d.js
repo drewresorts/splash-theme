@@ -285,8 +285,11 @@ const RINK = {
   bounce: 0.25, // how much of a knock carries into the other (a soft, heavy nudge)
   tether: 5, // how hard a dragged one is pulled toward the pointer (it trails behind)
   tow: 3.6, // how much a dragged one resists being swung about
-  drift: 0.7, // top speed adrift, in its own widths a second
-  haul: 1.3, // top speed while dragged, in its own widths a second
+  drift: 0.3, // top speed adrift, in its own widths a second
+  haul: 0.4, // top speed while dragged, in its own widths a second
+  range: 0.38, // the soft edge of its patch, in its own widths (it slows to a stop about a quarter of the way into the next one's space)
+  wall: 14, // how sharply it slows as it nears that edge
+  body: 0.42, // how wide it is for knocks, in its own widths
   heft: 3, // how much heavier a dragged one is than the ones it shoves
   lift: 0.22, // how much larger a raised one grows
   push: 1500, // how fast the pointer must sweep to nudge things aside (pixels a second)
@@ -408,9 +411,14 @@ class DuetTurntable extends HTMLElement {
       if (D && e.pointerId === D.id) {
         if (!D.moved && Math.hypot(e.clientX - D.sx, e.clientY - D.sy) > 6) D.moved = true;
         if (D.moved && D.item) {
-          // Where the pointer would have it; it is towed there, not put there.
-          D.tx = e.clientX - D.gx - D.item.box.x;
-          D.ty = e.clientY - D.gy - D.item.box.y;
+          // Where the pointer would have it, reined in softly to its patch; it is towed there, not put there.
+          const R = D.item.box.s * RINK.range;
+          const tx = e.clientX - D.gx - D.item.box.x;
+          const ty = e.clientY - D.gy - D.item.box.y;
+          const t = Math.hypot(tx, ty);
+          const k = t > 1e-3 ? (R * Math.tanh(t / R)) / t : 1;
+          D.tx = tx * k;
+          D.ty = ty * k;
         }
       }
     };
@@ -508,14 +516,33 @@ class DuetTurntable extends HTMLElement {
         it.vx *= top / v;
         it.vy *= top / v;
       }
+      // Slower and slower as it nears the edge of its patch, going outward.
+      const R = it.box.s * RINK.range;
+      const o = Math.hypot(it.ox, it.oy);
+      if (o > 1e-3) {
+        const nx = it.ox / o;
+        const ny = it.oy / o;
+        const out = it.vx * nx + it.vy * ny;
+        if (out > 0) {
+          const q = o / R;
+          const keep = Math.exp(-dt * RINK.wall * q * q);
+          it.vx -= out * (1 - keep) * nx;
+          it.vy -= out * (1 - keep) * ny;
+        }
+      }
       it.ox += it.vx * dt;
       it.oy += it.vy * dt;
       // Never so far that it is lost.
-      const max = it.box.s * 1.6;
-      const o = Math.hypot(it.ox, it.oy);
-      if (o > max) {
-        it.ox *= max / o;
-        it.oy *= max / o;
+      const max = R * 1.08;
+      const far = Math.hypot(it.ox, it.oy);
+      if (far > max) {
+        it.ox *= max / far;
+        it.oy *= max / far;
+        const out = (it.vx * it.ox + it.vy * it.oy) / max;
+        if (out > 0) {
+          it.vx -= (out * it.ox) / max;
+          it.vy -= (out * it.oy) / max;
+        }
       }
     }
     // Knocks: none overlaps another; each takes some of the other's speed along the line between them.
@@ -528,8 +555,8 @@ class DuetTurntable extends HTMLElement {
           const ay = A.box.y + A.oy;
           const bx = B.box.x + B.ox;
           const by = B.box.y + B.oy;
-          const ra = A.box.s * 0.36 * (1 + RINK.lift * A.lift);
-          const rb = B.box.s * 0.36 * (1 + RINK.lift * B.lift);
+          const ra = A.box.s * RINK.body * (1 + RINK.lift * A.lift);
+          const rb = B.box.s * RINK.body * (1 + RINK.lift * B.lift);
           const dx = bx - ax;
           const dy = by - ay;
           const d = Math.hypot(dx, dy);
