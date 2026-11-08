@@ -361,6 +361,22 @@
           }
         }
       }
+    },
+    "streaming": {
+      "name": "Live stream",
+      "intro": "Set the origin of your live stream so the storefront can preconnect for faster playback. The full stream URL is configured per page in the Coming soon section.",
+      "origin": {
+        "label": "Stream origin",
+        "info": "Example: https://stream.your-domain.com"
+      }
+    },
+    "splash_streams": {
+      "name": "Splash streams page",
+      "intro": "Logo for the Splash streams page template. Choose an image from your library (upload or select from files).",
+      "logo": {
+        "label": "Center logo",
+        "info": "Use Select image to open your library. This is not a URL field."
+      }
     }
   },
   "sections": {
@@ -923,7 +939,8 @@
           },
           "options__4": {
             "label": "Centré au milieu"
-          }
+          },
+          "info": "Position of the logo in the header layout."
         },
         "menu": {
           "label": "Menu"
@@ -993,6 +1010,33 @@
         },
         "header__utilities": {
           "content": "Utilitaires"
+        },
+        "header__logo": {
+          "content": "Logo"
+        },
+        "logo_image": {
+          "label": "Logo image",
+          "info": "Overrides the theme logo for this header. Leave empty to use Theme settings → Logo."
+        },
+        "logo_width": {
+          "label": "Logo width",
+          "info": "Applies when a logo image is set above. Otherwise the theme logo width is used."
+        },
+        "mobile_logo": {
+          "label": "Mobile logo",
+          "info": "Optional. Shown below 750px when different from the desktop logo."
+        },
+        "mobile_logo_width": {
+          "label": "Mobile logo width",
+          "info": "Applies when a mobile logo image is set."
+        },
+        "logo_link": {
+          "label": "Logo link",
+          "info": "Where the logo goes when clicked. Defaults to the home page."
+        },
+        "logo_alt": {
+          "label": "Logo alt text",
+          "info": "Accessibility label. Leave blank to use the image alt text or shop name."
         }
       }
     },
@@ -1955,6 +1999,10 @@
             },
             "pairing_3": {
               "label": "Jumelage 3"
+            },
+            "content": {
+              "label": "Content",
+              "info": "Choose an icon or add an image for each pairing"
             }
           }
         },
@@ -3156,7 +3204,33 @@
       }
     },
     "main-account": {
-      "name": "Compte"
+      "name": "Compte",
+      "settings": {
+        "header_account": {
+          "content": "Account dashboard"
+        },
+        "orders_per_page": {
+          "label": "Orders per page",
+          "info": "Used for order history pagination (5–50)."
+        },
+        "show_profile_email": {
+          "label": "Show customer email"
+        },
+        "show_continue_shopping": {
+          "label": "Show continue shopping button"
+        },
+        "header_links": {
+          "content": "Support links"
+        },
+        "help_link": {
+          "label": "Help page URL",
+          "info": "Shown in the account navigation when set (e.g. FAQ or help center)."
+        },
+        "returns_link": {
+          "label": "Returns policy URL",
+          "info": "Shown in the account navigation when set."
+        }
+      }
     },
     "main-activate-account": {
       "name": "Activation du compte"
@@ -3395,6 +3469,383 @@
       },
       "presets": {
         "name": "Liste rapide des commandes"
+      }
+    },
+    "product_live_stream": {
+      "name": "Live stream",
+      "settings": {
+        "intro": {
+          "content": "A live video behind the page, with the store menu and a clock."
+        },
+        "menu": {
+          "label": "Menu"
+        },
+        "nav_logo": {
+          "label": "Logo in the menu",
+          "info": "Leave blank to show the store name."
+        },
+        "nav_logo_width": {
+          "label": "Logo width"
+        },
+        "youtube_url": {
+          "label": "YouTube link",
+          "info": "The video that plays behind the page, muted."
+        },
+        "overlay_color": {
+          "label": "Color over the video"
+        },
+        "overlay_opacity": {
+          "label": "Strength of the color over the video"
+        },
+        "accent_shop_color": {
+          "label": "Shop link color"
+        },
+        "show_live_clock": {
+          "label": "Show the live clock"
+        },
+        "size_active_bg": {
+          "label": "Chosen size background"
+        }
+      },
+      "blocks": {
+        "stream": {
+          "name": "Stream",
+          "settings": {
+            "youtube_url": {
+              "label": "YouTube link"
+            }
+          }
+        }
+      }
+    },
+    "collections_live": {
+      "name": "Live stream collections",
+      "settings": {
+        "intro": {
+          "content": "A live video behind the page, with the store menu and a clock."
+        },
+        "menu": {
+          "label": "Menu"
+        },
+        "nav_logo": {
+          "label": "Logo in the menu",
+          "info": "Leave blank to show the store name."
+        },
+        "nav_logo_width": {
+          "label": "Logo width"
+        },
+        "youtube_url": {
+          "label": "YouTube link",
+          "info": "The video that plays behind the page, muted."
+        },
+        "overlay_color": {
+          "label": "Color over the video"
+        },
+        "overlay_opacity": {
+          "label": "Strength of the color over the video"
+        },
+        "accent_shop_color": {
+          "label": "Shop link color"
+        },
+        "show_live_clock": {
+          "label": "Show the live clock"
+        },
+        "show_second_link_decor": {
+          "label": "Decorate the second link"
+        },
+        "vertical_title": {
+          "label": "Side title"
+        },
+        "vertical_title_color": {
+          "label": "Side title color"
+        },
+        "sort": {
+          "label": "Sort collections by"
+        },
+        "columns_desktop": {
+          "label": "Columns on desktop"
+        }
+      },
+      "blocks": {
+        "stream": {
+          "name": "Stream",
+          "settings": {
+            "youtube_url": {
+              "label": "YouTube link"
+            }
+          }
+        }
+      }
+    }
+  },
+  "coming_soon": {
+    "section": {
+      "name": "Coming soon",
+      "headers": {
+        "stream": "Live video background",
+        "copy": "Copy",
+        "launch": "Launch & signup",
+        "style": "Style"
+      },
+      "settings": {
+        "stream_url": {
+          "label": "Stream URL",
+          "info": "Paste an HLS playlist (.m3u8) or an MP4/WebM file URL. HLS is recommended for live cameras."
+        },
+        "poster_image": {
+          "label": "Fallback image",
+          "info": "Shown before the stream loads, on slow networks, and when reduced motion is enabled."
+        },
+        "mute_audio": {
+          "label": "Start with audio muted"
+        },
+        "eyebrow": {
+          "label": "Eyebrow"
+        },
+        "heading": {
+          "label": "Heading"
+        },
+        "subheading": {
+          "label": "Subheading"
+        },
+        "footer_text": {
+          "label": "Footer note"
+        },
+        "launch_date": {
+          "label": "Launch date",
+          "info": "ISO format, e.g. 2026-06-01T12:00:00Z. Leave empty to hide the countdown."
+        },
+        "show_signup": {
+          "label": "Show email signup"
+        },
+        "overlay_color": {
+          "label": "Overlay color"
+        },
+        "overlay_opacity": {
+          "label": "Overlay opacity"
+        },
+        "accent_color": {
+          "label": "Text & accent color"
+        }
+      },
+      "presets": {
+        "default": "Coming soon"
+      }
+    },
+    "blocks": {
+      "social_link": {
+        "name": "Social link",
+        "label": "Label",
+        "url": "URL"
+      }
+    }
+  },
+  "splash_streams_page": {
+    "section": {
+      "settings": {
+        "logo_help": {
+          "content": "Set the center logo in Theme settings → Splash streams page → Center logo (image library, not a URL)."
+        }
+      },
+      "blocks": {
+        "email_signup": {
+          "name": "Email signup",
+          "settings": {
+            "position": {
+              "label": "Position",
+              "options__1": {
+                "label": "Bottom of screen"
+              },
+              "options__2": {
+                "label": "Below logo (center)"
+              }
+            },
+            "heading": {
+              "label": "Heading"
+            },
+            "text": {
+              "label": "Description"
+            },
+            "placeholder": {
+              "label": "Email placeholder"
+            },
+            "button_label": {
+              "label": "Button label"
+            },
+            "success_message": {
+              "label": "Success message"
+            },
+            "lowercase_text": {
+              "label": "Lowercase text (match menu style)"
+            }
+          }
+        }
+      }
+    }
+  },
+  "boutique": {
+    "section": {
+      "name": "3D boutique",
+      "headers": {
+        "content": "Content",
+        "environment": "Environment",
+        "layout": "Layout",
+        "performance": "Performance"
+      },
+      "settings": {
+        "featured_collection": {
+          "label": "Featured collection",
+          "info": "Products from this collection populate the boutique. Leave empty to use the entire catalog. Upload 3D models per product in the product's Media gallery to render them as walk-around objects."
+        },
+        "max_products": {
+          "label": "Maximum products"
+        },
+        "eyebrow": {
+          "label": "Eyebrow"
+        },
+        "heading": {
+          "label": "Heading"
+        },
+        "subheading": {
+          "label": "Subheading"
+        },
+        "cta_label": {
+          "label": "Enter button label"
+        },
+        "floor_color": {
+          "label": "Floor color"
+        },
+        "wall_color": {
+          "label": "Wall color"
+        },
+        "ceiling_color": {
+          "label": "Ceiling color"
+        },
+        "accent_color": {
+          "label": "Accent color"
+        },
+        "floor_texture": {
+          "label": "Floor texture (optional)"
+        },
+        "wall_texture": {
+          "label": "Wall texture (optional)"
+        },
+        "skybox_image": {
+          "label": "Skybox / environment map (optional)",
+          "info": "An equirectangular HDR-style image used as both the visible background and image-based lighting."
+        },
+        "room_radius": {
+          "label": "Room radius"
+        },
+        "pedestal_height": {
+          "label": "Pedestal height"
+        },
+        "quality": {
+          "label": "Quality",
+          "options": {
+            "auto": "Auto",
+            "high": "High",
+            "medium": "Medium",
+            "low": "Low"
+          }
+        },
+        "enable_shadows": {
+          "label": "Enable real-time shadows",
+          "info": "Improves visual fidelity at a measurable performance cost."
+        }
+      },
+      "presets": {
+        "default": "3D boutique"
+      }
+    }
+  },
+  "catalog_splash": {
+    "section": {
+      "name": "Catalog splash grid",
+      "presets": {
+        "default": "Catalog splash grid"
+      },
+      "settings": {
+        "intro": "Full-viewport collections hub: tinted background, left menu, 3-column tile grid, and vertical title. Add tiles; link each to a collection or a custom URL.",
+        "background_image": {
+          "label": "Background image"
+        },
+        "overlay_color": {
+          "label": "Background tint color"
+        },
+        "overlay_opacity": {
+          "label": "Background tint strength"
+        },
+        "accent_shop_color": {
+          "label": "First nav link color"
+        },
+        "logo_mark": {
+          "label": "Top-left mark (text)"
+        },
+        "side_menu": {
+          "label": "Left column menu"
+        },
+        "nav_aria_label": {
+          "label": "Left menu (accessibility label)"
+        },
+        "vertical_title": {
+          "label": "Vertical title (right edge)"
+        },
+        "vertical_title_color": {
+          "label": "Vertical title color"
+        }
+      }
+    },
+    "blocks": {
+      "tile": {
+        "name": "Category tile",
+        "settings": {
+          "label": {
+            "label": "Label"
+          },
+          "image": {
+            "label": "Image"
+          },
+          "collection": {
+            "label": "Collection"
+          },
+          "link": {
+            "label": "Custom link",
+            "info": "Used when no collection is selected."
+          }
+        }
+      }
+    }
+  },
+  "product_splash": {
+    "section": {
+      "name": "Full-bleed product page",
+      "settings": {
+        "intro": "Full-viewport product layout: background image, left navigation, hero product image, and right-side buy box. Assign a menu for the left column (first link uses the red accent).",
+        "background_image": {
+          "label": "Background image"
+        },
+        "overlay_color": {
+          "label": "Background tint color"
+        },
+        "overlay_opacity": {
+          "label": "Background tint strength"
+        },
+        "accent_shop_color": {
+          "label": "First nav link color"
+        },
+        "accent_select_color": {
+          "label": "Selected option color"
+        },
+        "logo_mark": {
+          "label": "Top-left mark (text)"
+        },
+        "side_menu": {
+          "label": "Left column menu"
+        },
+        "nav_aria_label": {
+          "label": "Left menu (accessibility label)"
+        }
       }
     }
   }

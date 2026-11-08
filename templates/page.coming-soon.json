@@ -1,25 +1,53 @@
 {
+  "layout": "password",
   "sections": {
-    "main": {
-      "type": "coming-soon",
-      "blocks": {
-        "instagram": {
-          "type": "social_link",
-          "settings": {
-            "label": "Instagram",
-            "url": "https://instagram.com/"
-          }
-        },
-        "tiktok": {
-          "type": "social_link",
-          "settings": {
-            "label": "TikTok",
-            "url": "https://tiktok.com/"
-          }
-        }
-      },
-      "block_order": ["instagram", "tiktok"]
+    "garden_splash": {
+      "type": "garden-splash",
+      "settings": {
+        "logo_position": "none",
+        "flower_logo": "shopify://shop_images/spellout-black.png",
+        "flower_logo_mobile": "shopify://shop_images/duet_web_menu_star.png",
+        "logo_width": 184,
+        "menu": "",
+        "logo_link": "",
+        "menu_style": "image",
+        "menu_label": "Menu",
+        "menu_close_label": "Close",
+        "menu_image_width": 200,
+        "show_schemes": true,
+        "center_color": "#f04e62",
+        "center_accent_color": "#a62749",
+        "color_1": "#a62749",
+        "color_2": "#66a4c8",
+        "color_3": "#191f6b",
+        "color_4": "#b9e5fb",
+        "color_5": "#f04e62",
+        "color_6": "#b9e5fb",
+        "foliage_color": "#66a4c8",
+        "soil_color": "#ffffff",
+        "bloom_duration": 4,
+        "density": "packed",
+        "graphics_style": "ps1",
+        "weather": true,
+        "season": "auto",
+        "hemisphere": "north",
+        "sky": "auto",
+        "hint_text": ""
+      }
+    },
+    "signup": {
+      "type": "coming-soon-signup",
+      "settings": {
+        "heading": "Be the first to know when we open",
+        "placeholder": "Email",
+        "button_label": "Sign up",
+        "success_text": "Thanks. We will let you know.",
+        "ink_color": "#191f6b"
+      }
     }
   },
-  "order": ["main"]
+  "order": [
+    "garden_splash",
+    "signup"
+  ]
 }

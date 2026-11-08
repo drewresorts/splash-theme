@@ -1,0 +1,264 @@
+{%- comment -%}
+  About page: the brick-and-mortar store. Address, hours and contact
+  details beside a map (a Google Maps embed of the address; no API key
+  needed), with a directions link. Left blank, the address falls back to
+  the store address in Shopify settings. Styles: assets/component-duet-about.css.
+{%- endcomment -%}
+{{ 'component-duet-about.css' | asset_url | stylesheet_tag }}
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+{%- endstyle -%}
+
+{%- assign address = section.settings.address | strip -%}
+{%- if address == blank and shop.address.address1 != blank -%}
+  {%- assign a = shop.address -%}
+  {%- capture address -%}
+{{ a.address1 }}{% if a.address2 != blank %}, {{ a.address2 }}{% endif %}
+{{ a.city }}{% if a.province_code != blank %}, {{ a.province_code }}{% endif %}{% if a.zip != blank %} {{ a.zip }}{% endif %}
+{{ a.country }}
+  {%- endcapture -%}
+{%- endif -%}
+{%- liquid
+  assign query = section.settings.map_query | strip
+  if query == blank
+    assign query = address | newline_to_br | strip_newlines | replace: '<br />', ', ' | replace: '<br>', ', ' | strip
+  endif
+  assign query_param = query | url_encode
+-%}
+
+<section class="duet-about gradient section-{{ section.id }}-padding" id="visit" aria-labelledby="DuetLocation-{{ section.id }}">
+  <div class="duet-about__inner">
+    <div class="duet-about__head">
+      {%- if section.settings.eyebrow != blank -%}
+        <p class="duet-about__eyebrow">{{ section.settings.eyebrow | escape }}</p>
+      {%- endif -%}
+      <h2 id="DuetLocation-{{ section.id }}" class="duet-about__title">{{ section.settings.heading | escape }}</h2>
+      {%- if section.settings.text != blank -%}
+        <div class="duet-about__text">{{ section.settings.text }}</div>
+      {%- endif -%}
+    </div>
+
+    <div class="duet-about__visit">
+      <div class="duet-about__details">
+        {%- if address != blank -%}
+          <div class="duet-about__detail">
+            <p class="duet-about__eyebrow">Address</p>
+            <address>
+              {%- if section.settings.store_name != blank -%}
+                {{ section.settings.store_name | escape }}<br>
+              {%- endif -%}
+              {{ address | escape | newline_to_br }}
+            </address>
+          </div>
+        {%- elsif request.design_mode -%}
+          <p class="duet-about__placeholder">
+            Add the store's address in this section's settings to show it and its map.
+          </p>
+        {%- endif -%}
+
+        {%- if section.settings.hours != blank -%}
+          <div class="duet-about__detail">
+            <p class="duet-about__eyebrow">Hours</p>
+            <div class="duet-about__text">{{ section.settings.hours }}</div>
+          </div>
+        {%- endif -%}
+
+        {%- if section.settings.phone != blank or section.settings.email != blank -%}
+          <div class="duet-about__detail">
+            <p class="duet-about__eyebrow">Contact</p>
+            <div class="duet-about__text">
+              {%- if section.settings.phone != blank -%}
+                <a href="tel:{{ section.settings.phone | remove: ' ' | remove: '(' | remove: ')' | remove: '-' | remove: '.' }}">
+                  {{- section.settings.phone | escape -}}
+                </a>
+                <br>
+              {%- endif -%}
+              {%- if section.settings.email != blank -%}
+                <a href="mailto:{{ section.settings.email | strip }}">{{ section.settings.email | escape }}</a>
+              {%- endif -%}
+            </div>
+          </div>
+        {%- endif -%}
+
+        {%- if section.settings.notes != blank -%}
+          <div class="duet-about__detail">
+            <div class="duet-about__text">{{ section.settings.notes }}</div>
+          </div>
+        {%- endif -%}
+
+        {%- if query != blank -%}
+          <div class="duet-about__buttons">
+            <a
+              class="duet-about__button"
+              href="https://www.google.com/maps/dir/?api=1&destination={{ query_param }}"
+              target="_blank"
+              rel="noopener"
+            >
+              Get directions
+            </a>
+          </div>
+        {%- endif -%}
+      </div>
+
+      <div class="duet-about__media">
+        {%- if section.settings.show_map and query != blank -%}
+          <div class="duet-about__map">
+            <iframe
+              src="https://www.google.com/maps?q={{ query_param }}&z={{ section.settings.zoom }}&output=embed"
+              title="Map: {{ query | escape }}"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+              allowfullscreen
+            ></iframe>
+          </div>
+        {%- elsif section.settings.image != blank -%}
+          {{
+            section.settings.image
+            | image_url: width: 1400
+            | image_tag: class: 'duet-about__storefront', loading: 'lazy', widths: '500, 800, 1100, 1400'
+          }}
+        {%- endif -%}
+        {%- if section.settings.show_map and query != blank and section.settings.image != blank -%}
+          {{
+            section.settings.image
+            | image_url: width: 1400
+            | image_tag: class: 'duet-about__storefront', loading: 'lazy', style: 'margin-top: 2.4rem', widths: '500, 800, 1100, 1400'
+          }}
+        {%- endif -%}
+      </div>
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Store location",
+  "tag": "div",
+  "class": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "eyebrow",
+      "label": "Small label above the heading",
+      "default": "Visit us"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Our store"
+    },
+    {
+      "type": "richtext",
+      "id": "text",
+      "label": "Introduction",
+      "default": "<p>See and try pieces in person. Our team is happy to walk you through any item and its authenticity review.</p>"
+    },
+    {
+      "type": "header",
+      "content": "Details"
+    },
+    {
+      "type": "text",
+      "id": "store_name",
+      "label": "Store name",
+      "default": "Duet"
+    },
+    {
+      "type": "textarea",
+      "id": "address",
+      "label": "Address",
+      "info": "One line per line of the address. Left blank, the store address from Shopify settings is used."
+    },
+    {
+      "type": "richtext",
+      "id": "hours",
+      "label": "Opening hours",
+      "info": "e.g. Monday–Friday 10am–6pm"
+    },
+    {
+      "type": "text",
+      "id": "phone",
+      "label": "Phone"
+    },
+    {
+      "type": "text",
+      "id": "email",
+      "label": "Email"
+    },
+    {
+      "type": "richtext",
+      "id": "notes",
+      "label": "Other details",
+      "info": "Parking, appointments, accessibility and so on."
+    },
+    {
+      "type": "header",
+      "content": "Map"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_map",
+      "label": "Show a map",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "map_query",
+      "label": "Place to show on the map",
+      "info": "Optional. The store's name as it appears on Google Maps, or a different address. Left blank, the address above is used."
+    },
+    {
+      "type": "range",
+      "id": "zoom",
+      "min": 10,
+      "max": 20,
+      "step": 1,
+      "label": "Map zoom",
+      "default": 16
+    },
+    {
+      "type": "image_picker",
+      "id": "image",
+      "label": "Storefront photo",
+      "info": "Optional. Shown under the map, or instead of it when the map is off."
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Space above",
+      "default": 52
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Space below",
+      "default": 72
+    }
+  ],
+  "presets": [
+    {
+      "name": "Store location"
+    }
+  ]
+}
+{% endschema %}

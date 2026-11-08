@@ -1,0 +1,17 @@
+{%- comment -%}
+  The filter that drops the white backdrop out of product photos
+  (used as filter: url('#duet-cutout') in duet-clean.css and elsewhere).
+  Darker pixels (the product itself) stay solid. The lightest ones fade out
+  in proportion to how light they are, so pure white disappears and a soft
+  grey shadow becomes a real see-through shadow. Over white the photo looks
+  exactly as before; a photo's own transparency is kept.
+  Rendered once, near the top of <body>.
+{%- endcomment -%}
+<svg class="duet-cutout" width="0" height="0" aria-hidden="true" focusable="false" style="position: absolute; width: 0; height: 0; overflow: hidden">
+  <filter id="duet-cutout" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0 1" result="solid" />
+    <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  -1.3333 -1.3333 -1.3333 0 3.96" result="cover" />
+    <feComposite in="solid" in2="cover" operator="arithmetic" k1="0" k2="1" k3="1" k4="-1" result="lifted" />
+    <feComposite in="lifted" in2="SourceGraphic" operator="in" />
+  </filter>
+</svg>
