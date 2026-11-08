@@ -13,7 +13,7 @@
       "type": "garden-shop",
       "name": "Garden shop",
       "settings": {
-        "display": "blossoms",
+        "display": "grid",
         "logo": "shopify://shop_images/spellout-black.png",
         "logo_width": 150,
         "logo_link": "",
@@ -29,9 +29,70 @@
         "columns_desktop": 3,
         "columns_mobile": "1"
       }
+    },
+    "duet_product_3d_9ELETq": {
+      "type": "duet-product-3d",
+      "blocks": {
+        "vendor_Cqd7FX": {
+          "type": "vendor",
+          "settings": {}
+        },
+        "title_qTfQAg": {
+          "type": "title",
+          "settings": {}
+        },
+        "price_pVHqCp": {
+          "type": "price",
+          "settings": {
+            "note": "Taxes and shipping worked out at checkout."
+          }
+        },
+        "variant_picker_MiFmYa": {
+          "type": "variant_picker",
+          "settings": {}
+        },
+        "buy_buttons_mRreFR": {
+          "type": "buy_buttons",
+          "settings": {
+            "show_dynamic_checkout": true
+          }
+        },
+        "text_KhKyP8": {
+          "type": "text",
+          "settings": {
+            "text": "<p>Every piece is reviewed for authenticity before it's listed.</p>"
+          }
+        },
+        "description_6K4Gww": {
+          "type": "description",
+          "settings": {}
+        },
+        "tab_pcKAHj": {
+          "type": "tab",
+          "settings": {
+            "heading": "Shipping and returns",
+            "content": "",
+            "page": ""
+          }
+        }
+      },
+      "block_order": [
+        "vendor_Cqd7FX",
+        "title_qTfQAg",
+        "price_pVHqCp",
+        "variant_picker_MiFmYa",
+        "buy_buttons_mRreFR",
+        "text_KhKyP8",
+        "description_6K4Gww",
+        "tab_pcKAHj"
+      ],
+      "disabled": true,
+      "name": "Product in 3D",
+      "settings": {}
     }
   },
   "order": [
-    "garden_shop_gapepN"
+    "garden_shop_gapepN",
+    "duet_product_3d_9ELETq"
   ]
 }
