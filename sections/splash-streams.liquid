@@ -1,5 +1,9 @@
 {%- liquid
   assign logo_image = settings.splash_streams_logo
+  # Only a picture this store holds (one picked in another store, or since deleted, has no src).
+  if logo_image.src == blank
+    assign logo_image = nil
+  endif
   assign menu_logo = section.settings.menu_logo
   assign logo_width = section.settings.logo_width | default: 240
   assign logo_src_width = logo_width | times: 2

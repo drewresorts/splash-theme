@@ -1,5 +1,13 @@
 {%- liquid
-  assign logo_image = section.settings.logo | default: settings.splash_streams_logo
+  # Not the default filter: it can hand back the store logo as plain text, which image_url rejects.
+  assign logo_image = section.settings.logo
+  if logo_image == blank
+    assign logo_image = settings.splash_streams_logo
+  endif
+  # Only a picture this store holds (one picked in another store, or since deleted, has no src).
+  if logo_image.src == blank
+    assign logo_image = nil
+  endif
   assign garden_menu = section.settings.menu
   assign logo_position = section.settings.logo_position | default: 'top'
   assign logo_width = section.settings.logo_width | default: 120
@@ -9,11 +17,11 @@
 
   # Blank uses the Duet wordmark built into garden-splash.js.
   assign flower_logo_url = ''
-  if section.settings.flower_logo != blank
+  if section.settings.flower_logo != blank and section.settings.flower_logo.src != blank
     assign flower_logo_url = section.settings.flower_logo | image_url: width: 900
   endif
   assign flower_logo_mobile_url = ''
-  if section.settings.flower_logo_mobile != blank
+  if section.settings.flower_logo_mobile != blank and section.settings.flower_logo_mobile.src != blank
     assign flower_logo_mobile_url = section.settings.flower_logo_mobile | image_url: width: 900
   endif
 

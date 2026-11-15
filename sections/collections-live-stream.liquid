@@ -9,6 +9,10 @@
   if nav_logo == blank
     assign nav_logo = settings.splash_streams_logo
   endif
+  # Only a picture this store holds (one picked in another store, or since deleted, has no src).
+  if nav_logo.src == blank
+    assign nav_logo = nil
+  endif
   assign logo_width = section.settings.nav_logo_width | default: 48
   assign logo_src_width = logo_width | times: 2
   assign stream_blocks = section.blocks | where: 'type', 'stream'
