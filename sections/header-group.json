@@ -11,6 +11,69 @@
   "name": "t:sections.header.name",
   "type": "header",
   "sections": {
+    "duet_header": {
+      "type": "duet-header",
+      "blocks": {
+        "search": {
+          "type": "search",
+          "disabled": true,
+          "settings": {
+            "show": true,
+            "position": "left_3"
+          }
+        },
+        "menu": {
+          "type": "menu",
+          "settings": {
+            "style": "text",
+            "label": "Menu",
+            "show": true,
+            "position": "right"
+          }
+        },
+        "logo": {
+          "type": "logo",
+          "settings": {
+            "logo": "shopify://shop_images/spellout-black.png",
+            "show": true,
+            "position": "center"
+          }
+        },
+        "account": {
+          "type": "account",
+          "settings": {
+            "show": true,
+            "position": "left"
+          }
+        },
+        "cart": {
+          "type": "cart",
+          "settings": {
+            "show": true,
+            "position": "left_2"
+          }
+        }
+      },
+      "block_order": [
+        "search",
+        "menu",
+        "logo",
+        "account",
+        "cart"
+      ],
+      "settings": {
+        "home_own_header": true,
+        "menu": "main-menu",
+        "background": "transparent",
+        "ink_color": "#191f6b",
+        "bar_color": "#ffffff",
+        "panel_color": "#ffffff",
+        "logo_width": 140,
+        "logo_width_mobile": 140,
+        "game_name": "Pollen Dream",
+        "game_access": "secret"
+      }
+    },
     "header": {
       "type": "header",
       "disabled": true,
@@ -20,10 +83,10 @@
         "mobile_logo_width": 100,
         "logo_link": "",
         "logo_alt": "",
-        "logo_position": "middle-left",
+        "logo_position": "top-center",
         "mobile_logo_position": "center",
         "menu": "main-menu",
-        "menu_type_desktop": "dropdown",
+        "menu_type_desktop": "drawer",
         "sticky_header_type": "on-scroll-up",
         "show_line_separator": true,
         "color_scheme": "scheme-1",
@@ -38,6 +101,7 @@
     }
   },
   "order": [
+    "duet_header",
     "header"
   ]
 }

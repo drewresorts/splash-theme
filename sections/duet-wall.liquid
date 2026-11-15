@@ -1,0 +1,193 @@
+{%- comment -%}
+  The shop wall: the projector page (templates/page.wall.json, layout
+  "wall"). Plays the clips below in order, on a loop, with whatever
+  visitors online have changed from the blog page's hidden remote.
+
+  The remote reads this section (through the Section Rendering API:
+  /pages/<handle>?section_id=wall) for the clip list, the relay address and
+  the wall's own look, so they are set in one place: here.
+{%- endcomment -%}
+{{ 'component-duet-wall.css' | asset_url | stylesheet_tag }}
+
+{%- capture clips -%}
+  [
+  {%- for block in section.blocks -%}
+    {%- liquid
+      assign src = block.settings.src_url | strip
+      assign duration = 0
+      assign poster = ''
+      if block.settings.video != blank
+        assign best_height = 0
+        for source in block.settings.video.sources
+          if source.mime_type == 'video/mp4' and source.height <= 1080 and source.height > best_height
+            assign best_height = source.height
+            assign src = source.url
+          endif
+        endfor
+        if best_height == 0
+          for source in block.settings.video.sources
+            if source.mime_type == 'video/mp4'
+              assign src = source.url
+            endif
+          endfor
+        endif
+        assign duration = block.settings.video.duration | divided_by: 1000.0
+        if block.settings.video.preview_image
+          assign poster = block.settings.video.preview_image | image_url: width: 1280
+        endif
+      endif
+      assign title = block.settings.title | default: block.settings.video.alt | default: 'Clip'
+    -%}
+    {%- unless forloop.first %},{% endunless -%}
+    {"title": {{ title | json }}, "src": {{ src | json }}, "duration": {{ duration | json }}, "poster": {{ poster | json }}}
+  {%- endfor -%}
+  ]
+{%- endcapture -%}
+
+<div class="duet-wall-page" data-wall-section>
+  {%- if section.blocks.size > 0 -%}
+    <duet-wall data-role="wall">
+      <script type="application/json" data-wall-config>
+        {
+          "relay": {{ section.settings.relay_url | strip | json }},
+          "clips": {{ clips | strip }},
+          "defaults": {
+            "theme": {{ section.settings.theme | default: 'house' | json }},
+            "weather": {{ section.settings.weather | default: 'none' | json }},
+            "look": {
+              "ps1": {{ section.settings.look_ps1 | json }},
+              "dither": {{ section.settings.look_dither | json }},
+              "mirror": {{ section.settings.look_mirror | json }},
+              "trails": {{ section.settings.look_trails | json }}
+            }
+          },
+          "sound": {{ section.settings.sound | json }}
+        }
+      </script>
+    </duet-wall>
+    <p class="duet-wall-page__hint" data-wall-hint>Click for full screen</p>
+    <script type="module">
+      import {{ 'duet-wall.js' | asset_url | json }};
+      const hint = document.querySelector('[data-wall-hint]');
+      if (hint) setTimeout(() => hint.classList.add('is-gone'), 8000);
+    </script>
+  {%- else -%}
+    <p class="duet-wall-page__empty">Add clips to the Shop wall section in the theme editor.</p>
+  {%- endif -%}
+</div>
+
+{% schema %}
+{
+  "name": "Shop wall",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "The picture projected in the shop. Open this page full screen on the computer connected to the projector. Visitors who find the hidden remote on the blog page can change it."
+    },
+    {
+      "type": "text",
+      "id": "relay_url",
+      "label": "Relay address",
+      "info": "The wall relay on your server, e.g. https://wall.yourdomain.com. Left blank, the wall just plays and visitors can't change it."
+    },
+    {
+      "type": "header",
+      "content": "The wall's own look"
+    },
+    {
+      "type": "paragraph",
+      "content": "What the wall shows when no visitor has changed it. Visitors' changes wear off after a few minutes and it goes back to this."
+    },
+    {
+      "type": "select",
+      "id": "theme",
+      "label": "Colors",
+      "options": [
+        { "value": "house", "label": "Video's own colors" },
+        { "value": "camo", "label": "Camo Fatigues" },
+        { "value": "cotton-candy", "label": "Cotton Candy" },
+        { "value": "circus", "label": "Circus" },
+        { "value": "neon", "label": "Neon" },
+        { "value": "tropical", "label": "Tropical" },
+        { "value": "noir", "label": "Noir" }
+      ],
+      "default": "house"
+    },
+    {
+      "type": "select",
+      "id": "weather",
+      "label": "Weather",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "petals", "label": "Petals" },
+        { "value": "snow", "label": "Snow" },
+        { "value": "pollen", "label": "Pollen" },
+        { "value": "rain", "label": "Rain" }
+      ],
+      "default": "none"
+    },
+    {
+      "type": "checkbox",
+      "id": "look_ps1",
+      "label": "PS1 pixels",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "look_dither",
+      "label": "Dither",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "look_mirror",
+      "label": "Mirror",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "look_trails",
+      "label": "Trails",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "sound",
+      "label": "Play the clips' sound",
+      "default": false,
+      "info": "Visitors can never change the sound. Click the wall once after opening it to start sound."
+    }
+  ],
+  "blocks": [
+    {
+      "type": "clip",
+      "name": "Clip",
+      "settings": [
+        {
+          "type": "video",
+          "id": "video",
+          "label": "Video"
+        },
+        {
+          "type": "text",
+          "id": "src_url",
+          "label": "Or a direct video link (.mp4)",
+          "info": "Only if the video isn't uploaded to Shopify."
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Name shown in the remote"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Shop wall"
+    }
+  ]
+}
+{% endschema %}

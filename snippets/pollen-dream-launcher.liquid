@@ -1,0 +1,100 @@
+{%- comment -%}
+  Opens Pollen Dream (assets/pollen-dream.js), exploring the home page's
+  garden on foot, from any [data-pollen-dream] button, any link to
+  #pollen-dream (such as a menu link to /#pollen-dream), or the hidden way:
+  picking the flower colors House, Circus, Noir, Neon, Noir in order
+  (garden-splash.js sends "duet:egg").
+  On a page without the splash it opens on the home page. Its name and
+  whether it can be opened at all come from the Duet header section.
+  Coin rewards (Theme settings → Pollen Dream game) are passed to it here.
+  Nothing of it loads until then. Rendered by layout/theme.liquid when
+  Theme settings → Pollen Dream is on.
+{%- endcomment -%}
+<script>
+  (function () {
+    'use strict';
+    if (window.pollenDream) return;
+    var urls = {
+      game: {{ 'pollen-dream.js' | asset_url | json }},
+      css: {{ 'component-pollen-dream.css' | asset_url | json }},
+    };
+    // Coin rewards (Theme settings → Pollen Dream game): the codes base64-encoded, out of plain sight in the page.
+    var rewards = [
+      {%- for i in (1..3) -%}
+        {%- assign coins_key = 'game_reward_' | append: i | append: '_coins' -%}
+        {%- assign code_key = 'game_reward_' | append: i | append: '_code' -%}
+        {%- assign label_key = 'game_reward_' | append: i | append: '_label' -%}
+        {%- assign code = settings[code_key] | strip -%}
+        {%- if code != blank -%}
+          { coins: {{ settings[coins_key] | json }}, code: {{ code | base64_encode | json }}, label: {{ settings[label_key] | json }} },
+        {%- endif -%}
+      {%- endfor -%}
+    ];
+    var busy = false;
+
+    function header() {
+      return document.querySelector('[data-duet-header]');
+    }
+
+    // The page's own flowers, if they are formed into the logo: the game starts inside them.
+    function formedGarden() {
+      var all = document.querySelectorAll('garden-splash');
+      for (var i = 0; i < all.length; i++) {
+        if (all[i].arranged && all[i].hasTargets && all[i].flowers && all[i].flowers.length) return all[i];
+      }
+      return null;
+    }
+
+    function launch(trigger, garden) {
+      var h = header();
+      if (busy || (h && h.dataset.gameAccess === 'off')) return;
+      busy = true;
+      var returnTo = trigger;
+      var sel = trigger && trigger.getAttribute('data-return-focus');
+      if (sel) returnTo = document.querySelector(sel) || trigger;
+      import(urls.game)
+        .then(function (game) {
+          return game.openPollenDream({
+            cssUrl: urls.css,
+            returnFocus: returnTo,
+            title: h ? h.dataset.gameName : '',
+            source: garden || formedGarden(),
+            rewards: rewards,
+          });
+        })
+        .catch(function (e) {
+          console.error('pollen-dream:', e);
+        })
+        .then(function () {
+          busy = false;
+        });
+    }
+
+    function isGameLink(a) {
+      return a && a.tagName === 'A' && a.hash === '#pollen-dream' && a.pathname === location.pathname;
+    }
+
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest) return;
+      var button = e.target.closest('[data-pollen-dream]');
+      var link = e.target.closest('a[href*="#pollen-dream"]');
+      if (!button && !isGameLink(link)) return;
+      e.preventDefault();
+      launch(button || link);
+    });
+
+    function fromHash() {
+      if (location.hash !== '#pollen-dream') return;
+      history.replaceState(null, '', location.pathname + location.search);
+      launch(null);
+    }
+    window.addEventListener('duet:egg', function (e) {
+      launch(null, e.detail && e.detail.garden);
+    });
+    window.addEventListener('hashchange', fromHash);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fromHash, { once: true });
+    else fromHash();
+
+    window.pollenDream = launch;
+  })();
+</script>

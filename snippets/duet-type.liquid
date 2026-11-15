@@ -1,0 +1,24 @@
+{%- comment -%}
+  One plain typeface across the whole store: the body font from Theme
+  settings → Typography (Inter), with headings in the heading font. It
+  takes over from every section's own font, so the store reads as one.
+  The layouts load the font files (font_face); this sets where they go.
+  Rendered by the layouts, after base.css.
+{%- endcomment -%}
+<style>
+  :root {
+    --duet-type: {{ settings.type_body_font.family }}, {{ settings.type_body_font.fallback_families }};
+    --duet-heading: {{ settings.type_header_font.family }}, {{ settings.type_header_font.fallback_families }};
+  }
+
+  body,
+  body *,
+  body *::before,
+  body *::after {
+    font-family: var(--duet-type) !important;
+  }
+
+  body :is(h1, h2, h3, h4, h5, h6, .h0, .h1, .h2, .h3, .h4, .h5) {
+    font-family: var(--duet-heading) !important;
+  }
+</style>

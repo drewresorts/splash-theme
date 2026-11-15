@@ -1,0 +1,43 @@
+{%- comment -%}
+  A band of flowers across the page, from the garden sprite sheet
+  (see assets/garden-kit.css). Positions, sizes and species are scattered
+  deterministically from the seed, so the bed is the same on every visit.
+
+  Accepts:
+  - count: {Number} number of flowers (default 16)
+  - height: {Number} band height in px (default 72)
+  - seed: {Number} varies the arrangement (default 1)
+  - grow: {Boolean} grow from seed when scrolled into view (default true)
+
+  Usage:
+  {% render 'garden-bed', count: 20, height: 80, seed: 3 %}
+{%- endcomment -%}
+{%- liquid
+  assign count = count | default: 16
+  assign height = height | default: 72
+  assign seed = seed | default: 1
+  assign grow_class = ' garden-flower--grow'
+  if grow == false
+    assign grow_class = ''
+  endif
+-%}
+<div class="garden-bed" style="--gb-height: {{ height }}px;" aria-hidden="true">
+  {%- for i in (1..count) -%}
+    {%- liquid
+      # Quadratic hashes of the index, so neighbours don't fall into a pattern.
+      assign sq = i | times: i
+      assign h1 = sq | times: 7919 | plus: seed | times: 104729 | plus: i | modulo: 1000
+      assign h2 = sq | times: 6151 | plus: i | times: 3571 | plus: seed | modulo: 997
+      assign h3 = sq | times: 4513 | plus: seed | times: 2741 | plus: i | modulo: 991
+      assign row = h2 | modulo: 8
+      assign left = h1 | divided_by: 1000.0 | minus: 0.5 | times: 0.8 | plus: i | minus: 0.5 | times: 100.0 | divided_by: count | round: 2
+      assign size = h3 | modulo: 12 | plus: 9 | times: height | divided_by: 16 | round
+      assign rise = h1 | modulo: 9 | minus: 4 | times: height | divided_by: 20 | round
+      assign delay = h3 | modulo: 10 | times: 0.08 | round: 2
+    -%}
+    <span
+      class="garden-flower{{ grow_class }}"
+      style="--gf-row: {{ row }}; --gf-size: {{ size }}px; --gf-delay: {{ delay }}s; left: {{ left }}%; margin-top: {{ rise }}px;"
+    ></span>
+  {%- endfor -%}
+</div>

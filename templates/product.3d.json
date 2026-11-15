@@ -1,0 +1,20 @@
+{
+  "sections": {
+    "main": {
+      "type": "duet-product-3d",
+      "blocks": {
+        "vendor": { "type": "vendor", "settings": {} },
+        "title": { "type": "title", "settings": {} },
+        "price": { "type": "price", "settings": { "note": "Taxes and shipping worked out at checkout." } },
+        "variant_picker": { "type": "variant_picker", "settings": {} },
+        "buy_buttons": { "type": "buy_buttons", "settings": { "show_dynamic_checkout": true } },
+        "authenticity": { "type": "text", "settings": { "text": "<p>Every piece is reviewed for authenticity before it's listed, and backed by our <a href=\"/pages/about#authenticity\" title=\"Our authenticity guarantee\">authenticity guarantee</a>.</p>" } },
+        "description": { "type": "description", "settings": {} },
+        "shipping": { "type": "tab", "settings": { "heading": "Shipping and returns", "content": "<p>Shipped insured and signed for. Returns accepted within 14 days, in the condition it arrived.</p>" } }
+      },
+      "block_order": ["vendor", "title", "price", "variant_picker", "buy_buttons", "authenticity", "description", "shipping"],
+      "settings": {}
+    }
+  },
+  "order": ["main"]
+}

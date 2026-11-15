@@ -1,0 +1,106 @@
+{%- comment -%}
+  A thin band of the splash page's flowers that grows when scrolled into
+  view. Placed above the footer it carries the garden through every page.
+{%- endcomment -%}
+<div class="garden-strip section-{{ section.id }}-padding{% if section.settings.full_width == false %} page-width{% endif %}">
+  {% render 'garden-bed',
+    count: section.settings.flower_count,
+    height: section.settings.height,
+    seed: section.settings.seed,
+    grow: section.settings.grow
+  %}
+</div>
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+{%- endstyle -%}
+
+{% schema %}
+{
+  "name": "Garden strip",
+  "tag": "section",
+  "class": "section section--garden-strip",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "A band of the splash page's 3D flowers, pre-rendered so it loads like a small image. They grow from seed when the band scrolls into view."
+    },
+    {
+      "type": "range",
+      "id": "flower_count",
+      "label": "Flowers",
+      "min": 4,
+      "max": 40,
+      "step": 1,
+      "default": 18
+    },
+    {
+      "type": "range",
+      "id": "height",
+      "label": "Height",
+      "min": 32,
+      "max": 160,
+      "step": 4,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "range",
+      "id": "seed",
+      "label": "Arrangement",
+      "info": "Change to reshuffle the flowers.",
+      "min": 1,
+      "max": 20,
+      "step": 1,
+      "default": 1
+    },
+    {
+      "type": "checkbox",
+      "id": "grow",
+      "label": "Grow when scrolled into view",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "full_width",
+      "label": "Full width",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Top padding",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Bottom padding",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 0
+    }
+  ],
+  "presets": [
+    {
+      "name": "Garden strip"
+    }
+  ]
+}
+{% endschema %}

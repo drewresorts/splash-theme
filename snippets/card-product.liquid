@@ -105,6 +105,13 @@
               {%- endif -%}
             </div>
           </div>
+          {%- if settings.garden_motif and settings.garden_card_bloom -%}
+            <span
+              class="garden-flower garden-card-bloom"
+              style="--gf-row: {{ card_product.id | modulo: 8 }};"
+              aria-hidden="true"
+            ></span>
+          {%- endif -%}
         {%- endif -%}
         <div class="card__content">
           <div class="card__information">

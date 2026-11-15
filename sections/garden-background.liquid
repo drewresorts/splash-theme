@@ -1,0 +1,249 @@
+{%- comment -%}
+  The garden splash's flower bed, fully bloomed and waving slowly behind
+  the page. It is laid out exactly like the splash's bed (same logo shape
+  and density give the same number and size of flowers), but never forms
+  the logo. It is fixed to the screen, so content scrolls over it. The 3D
+  code loads only after everything else on the page has, so products
+  always come first.
+{%- endcomment -%}
+{%- liquid
+  # Blank uses the Duet wordmark built into garden-splash.js.
+  assign flower_logo_url = ''
+  if section.settings.flower_logo != blank
+    assign flower_logo_url = section.settings.flower_logo | image_url: width: 900
+  endif
+  assign flower_logo_mobile_url = ''
+  if section.settings.flower_logo_mobile != blank
+    assign flower_logo_mobile_url = section.settings.flower_logo_mobile | image_url: width: 900
+  endif
+
+  # The flowers form the logo (the same arrangement as the splash and every
+  # other page), or wave as a scattered bed. Blank (never saved) is the logo.
+  assign bed_mode = 'world'
+  if section.settings.arrangement == 'wave'
+    assign bed_mode = 'background'
+  endif
+-%}
+{%- capture palette_json -%}
+  ["{{ section.settings.color_1 }}","{{ section.settings.color_2 }}","{{ section.settings.color_3 }}","{{ section.settings.color_4 }}","{{ section.settings.color_5 }}"]
+{%- endcapture -%}
+
+<garden-splash
+  class="garden-background"
+  data-mode="{{ bed_mode }}"
+  data-palette="{{ palette_json | strip | escape }}"
+  data-foliage-color="{{ section.settings.foliage_color }}"
+  data-center-color="{{ section.settings.color_5 }}"
+  data-center-accent="{{ section.settings.color_1 }}"
+  data-soil-color="{{ section.settings.page_color }}"
+  data-duration="5"
+  data-density="{{ section.settings.density }}"
+  {% if settings.garden_follow_scheme != false %}data-follow-scheme="true"{% endif %}
+  data-wave-speed="{{ section.settings.wave_speed | divided_by: 10.0 }}"
+  data-grow-in="{{ section.settings.grow_in }}"
+  {% if flower_logo_url != blank %}data-flower-logo="{{ flower_logo_url }}"{% endif %}
+  {% if flower_logo_mobile_url != blank %}data-flower-logo-mobile="{{ flower_logo_mobile_url }}"{% endif %}
+  style="--gbg-veil: {{ section.settings.veil | divided_by: 100.0 }}; --gbg-page: {{ section.settings.page_color }};"
+  aria-hidden="true"
+>
+  <canvas class="garden-background__canvas" data-garden-canvas></canvas>
+  <canvas class="garden-background__overlay" data-garden-overlay></canvas>
+</garden-splash>
+
+<script type="module">
+  const load = () => import({{ 'garden-splash.js' | asset_url | json }});
+  if (document.readyState === 'complete') load();
+  else window.addEventListener('load', load, { once: true });
+</script>
+
+{% stylesheet %}
+  .garden-background {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    display: block;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.8s linear;
+  }
+
+  .garden-background.is-ready:not(.is-static) {
+    opacity: 1;
+  }
+
+  .garden-background__canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  .garden-background__overlay {
+    display: none;
+  }
+
+  /* An optional wash of the page color over the flowers, to quiet them. */
+  .garden-background::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gbg-page, #fff);
+    opacity: var(--gbg-veil, 0);
+  }
+
+  /* The whole page is already a garden: no strip above the footer. */
+  body:has(.garden-background) .section--garden-strip {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .garden-background {
+      transition: none;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Garden background",
+  "tag": "section",
+  "class": "section section--garden-background",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "The garden splash's flowers behind the whole page, either formed into the logo or as a bloomed bed waving slowly. Content scrolls over it. Sections on this page should have transparent backgrounds for it to show through."
+    },
+    {
+      "type": "select",
+      "id": "arrangement",
+      "label": "Flowers",
+      "default": "logo",
+      "options": [
+        {
+          "value": "logo",
+          "label": "Formed into the logo"
+        },
+        {
+          "value": "wave",
+          "label": "Scattered, waving"
+        }
+      ],
+      "info": "Formed into the logo: the same arrangement as on the splash, drifting gently. Wave speed and Grow from seed only apply to the waving bed."
+    },
+    {
+      "type": "select",
+      "id": "density",
+      "label": "Density",
+      "default": "lush",
+      "options": [
+        {
+          "value": "airy",
+          "label": "Airy — larger flowers"
+        },
+        {
+          "value": "lush",
+          "label": "Lush"
+        },
+        {
+          "value": "overgrown",
+          "label": "Overgrown — smaller, more flowers"
+        },
+        {
+          "value": "packed",
+          "label": "Packed — most flowers, the logo filled in solid"
+        }
+      ],
+      "info": "Match the garden splash for the same flower size."
+    },
+    {
+      "type": "image_picker",
+      "id": "flower_logo",
+      "label": "Logo shape",
+      "info": "The bed is sized as if the flowers were about to form this logo, as on the splash. Use the same image and density as the garden splash for identical flowers. Leave blank for the Duet wordmark."
+    },
+    {
+      "type": "image_picker",
+      "id": "flower_logo_mobile",
+      "label": "Logo shape on phones",
+      "info": "Optional. Used instead on screens narrower than 750px. Use the same image as the garden splash's phone logo shape."
+    },
+    {
+      "type": "range",
+      "id": "wave_speed",
+      "label": "Wave speed",
+      "min": 2,
+      "max": 30,
+      "step": 1,
+      "default": 10,
+      "info": "10 is the default pace."
+    },
+    {
+      "type": "checkbox",
+      "id": "grow_in",
+      "label": "Grow from seed when the page opens",
+      "default": false,
+      "info": "Off: the bed is fully bloomed from the start."
+    },
+    {
+      "type": "range",
+      "id": "veil",
+      "label": "Fade flowers",
+      "min": 0,
+      "max": 80,
+      "step": 5,
+      "unit": "%",
+      "default": 0,
+      "info": "Washes the page color over the flowers so products stand out more."
+    },
+    {
+      "type": "color",
+      "id": "page_color",
+      "label": "Page color",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "color_1",
+      "label": "Flower color 1",
+      "default": "#A62749"
+    },
+    {
+      "type": "color",
+      "id": "color_2",
+      "label": "Flower color 2",
+      "default": "#66A4C8"
+    },
+    {
+      "type": "color",
+      "id": "color_3",
+      "label": "Flower color 3",
+      "default": "#191F6B"
+    },
+    {
+      "type": "color",
+      "id": "color_4",
+      "label": "Flower color 4",
+      "default": "#B9E5FB"
+    },
+    {
+      "type": "color",
+      "id": "color_5",
+      "label": "Flower color 5",
+      "default": "#F04E62"
+    },
+    {
+      "type": "color",
+      "id": "foliage_color",
+      "label": "Leaves",
+      "default": "#66A4C8"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Garden background"
+    }
+  ]
+}
+{% endschema %}

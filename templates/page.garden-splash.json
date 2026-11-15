@@ -13,7 +13,6 @@
       "type": "garden-splash",
       "settings": {
         "logo": "shopify://shop_images/duet_spellout_white.png",
-        "logo_size": 55,
         "menu": "main-menu",
         "logo_link": "",
         "center_color": "#f04e62",
@@ -28,8 +27,7 @@
         "soil_color": "#FFFFFF",
         "bloom_duration": 10,
         "density": "airy",
-        "hint_text": "touch the garden",
-        "show_replant": false
+        "hint_text": "touch the garden"
       }
     }
   },

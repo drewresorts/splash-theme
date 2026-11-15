@@ -1,6 +1,9 @@
 {{ 'template-collection.css' | asset_url | stylesheet_tag }}
 {{ 'component-card.css' | asset_url | stylesheet_tag }}
 {{ 'component-price.css' | asset_url | stylesheet_tag }}
+{%- if section.settings.product_display == 'floating' -%}
+  {{ 'component-garden-float.css' | asset_url | stylesheet_tag }}
+{%- endif -%}
 
 {% if section.settings.image_shape == 'blob' %}
   {{ 'mask-blobs.css' | asset_url | stylesheet_tag }}
@@ -36,7 +39,7 @@
   }
 {%- endstyle -%}
 
-<div class="section-{{ section.id }}-padding gradient color-{{ section.settings.color_scheme }}">
+<div class="section-{{ section.id }}-padding gradient color-{{ section.settings.color_scheme }}{% if section.settings.product_display == 'floating' %} garden-floating-grid{% endif %}">
   {%- paginate collection.products by section.settings.products_per_page -%}
     {% comment %} Sort is the first tabbable element when filter type is vertical {% endcomment %}
     {%- if section.settings.enable_sorting and section.settings.filter_type == 'vertical' -%}
@@ -165,6 +168,9 @@
                     style="--animation-order: {{ forloop.index }};"
                   {% endif %}
                 >
+                  {%- if section.settings.product_display == 'floating' -%}
+                    {% render 'card-floating', card_product: product, index: forloop.index, lazy_load: lazy_load %}
+                  {%- else -%}
                   {% render 'card-product',
                     card_product: product,
                     media_aspect_ratio: section.settings.image_ratio,
@@ -177,6 +183,7 @@
                     quick_add: section.settings.quick_add,
                     section_id: section.id
                   %}
+                  {%- endif -%}
                 </li>
                 {%- assign skip_card_product_styles = true -%}
               {%- endfor -%}
@@ -210,6 +217,23 @@
       "label": "t:sections.main-collection-product-grid.settings.products_per_page.label"
     },
     {
+      "type": "select",
+      "id": "product_display",
+      "label": "Product display",
+      "default": "cards",
+      "options": [
+        {
+          "value": "cards",
+          "label": "Cards"
+        },
+        {
+          "value": "floating",
+          "label": "Floating images only"
+        }
+      ],
+      "info": "Floating shows each product as just its image, with no text or border, over a transparent page. Pair it with the Garden background section and product photos on transparent backgrounds."
+    },
+    {
       "type": "range",
       "id": "columns_desktop",
       "min": 1,
@@ -233,7 +257,7 @@
           "label": "t:sections.main-collection-product-grid.settings.columns_mobile.options__2.label"
         }
       ]
-    },    
+    },
     {
       "type": "color_scheme",
       "id": "color_scheme",

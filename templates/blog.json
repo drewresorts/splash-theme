@@ -1,3 +1,12 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
 {
   "sections": {
     "main": {
@@ -11,9 +20,20 @@
         "padding_top": 36,
         "padding_bottom": 36
       }
+    },
+    "wall_remote": {
+      "type": "duet-wall-remote",
+      "settings": {
+        "wall_page": "wall",
+        "heading": "The wall",
+        "text": "<p>You found it. This is projected on the wall in our shop right now, and you can change it.</p>",
+        "fine_print": "One change every little while. Changes wear off after a few minutes.",
+        "trigger": "#MainContent h1"
+      }
     }
   },
   "order": [
-    "main"
+    "main",
+    "wall_remote"
   ]
 }

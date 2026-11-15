@@ -1,0 +1,160 @@
+{%- comment -%}
+  The 3D shop: a collection as its products' 3D models alone, floating over
+  the page in a loose grid, like pucks on an ice rink: drag one, flick it,
+  sweep through them, and they glide, bump into each other and drift back
+  to their places. Pointing at one raises it above the rest, larger, its
+  shadow on the page, turning, with its name and price called out beside
+  it like a label on a diagram (the words are in each card for screen
+  readers and search, out of sight). Clicking one fades the others into the page and flies its model
+  into the product page (sections/duet-product-3d.liquid, opened with
+  ?view=3d) as that page comes in. A product without a 3D file shows its
+  main photo, and opens the same way. Used by templates/collection.3d.json:
+  choose that template for a collection to show it this way.
+  Script: assets/duet-3d.js. Styles: assets/component-duet-3d.css.
+{%- endcomment -%}
+{{ 'component-duet-3d.css' | asset_url | stylesheet_tag }}
+<script type="module" src="{{ 'duet-3d.js' | asset_url }}"></script>
+
+{%- paginate collection.products by section.settings.per_page -%}
+  <section class="duet-shop3d" aria-labelledby="DuetShop3d-{{ section.id }}">
+    <div class="duet-shop3d__inner">
+      <div class="duet-shop3d__head">
+        <div>
+          <h1 class="duet-shop3d__title" id="DuetShop3d-{{ section.id }}">{{ collection.title | escape }}</h1>
+          <p class="duet-shop3d__count">
+            {{- 'products.facets.product_count_simple' | t: count: collection.products_count -}}
+          </p>
+          {%- if section.settings.show_description and collection.description != blank -%}
+            <div class="duet-shop3d__description rte">{{ collection.description }}</div>
+          {%- endif -%}
+        </div>
+        {%- if section.settings.show_sort and collection.sort_options.size > 1 -%}
+          <form class="duet-shop3d__sort" method="get">
+            <label for="DuetShop3dSort-{{ section.id }}">{{ 'products.facets.sort_by_label' | t }}</label>
+            <select id="DuetShop3dSort-{{ section.id }}" name="sort_by" onchange="this.form.submit()">
+              {%- assign sort_by = collection.sort_by | default: collection.default_sort_by -%}
+              {%- for option in collection.sort_options -%}
+                <option value="{{ option.value | escape }}"{% if option.value == sort_by %} selected{% endif %}>{{ option.name | escape }}</option>
+              {%- endfor -%}
+            </select>
+            <noscript><button type="submit" class="button">{{ 'products.facets.sort_button' | t }}</button></noscript>
+          </form>
+        {%- endif -%}
+      </div>
+
+      <duet-turntable class="duet-shop3d__grid" role="list">
+        {%- for product in collection.products -%}
+          {%- liquid
+            assign model_url = ''
+            assign model_media = product.media | where: 'media_type', 'model' | first
+            if model_media
+              for source in model_media.sources
+                if source.format == 'glb'
+                  assign model_url = source.url
+                  break
+                endif
+              endfor
+            endif
+            assign image = product.featured_media.preview_image
+            if model_media and model_media.preview_image
+              assign image = model_media.preview_image
+            endif
+            assign href = product.url
+            if section.settings.open_in == '3d'
+              assign href = product.url | append: '?view=3d'
+            endif
+          -%}
+          <div class="duet-shop3d__card" role="listitem" data-turntable-card{% if model_url != blank %} data-model="{{ model_url }}"{% endif %}>
+            <span class="duet-shop3d__shadow" data-turntable-shadow aria-hidden="true"></span>
+            <div class="duet-shop3d__stage" data-turntable-stage>
+              {%- if image -%}
+                {{
+                  image
+                  | image_url: width: 900
+                  | image_tag:
+                    class: 'duet-shop3d__img',
+                    loading: 'lazy',
+                    widths: '300, 450, 600, 900',
+                    sizes: '(min-width: 1360px) 320px, (min-width: 750px) 30vw, 50vw',
+                    alt: product.title
+                }}
+              {%- else -%}
+                {{ 'product-apparel-1' | placeholder_svg_tag: 'duet-shop3d__img' }}
+              {%- endif -%}
+            </div>
+            <div class="duet-shop3d__info" data-turntable-info>
+              <a class="duet-shop3d__link" href="{{ href }}" data-turntable-title>{{ product.title | escape }}</a>
+              <p class="duet-shop3d__price" data-turntable-price>
+                {%- if product.price_varies -%}
+                  {{ 'products.product.price.from_price_html' | t: price: product.price_min | money }}
+                {%- else -%}
+                  {{ product.price | money }}
+                {%- endif -%}
+                {%- if product.compare_at_price > product.price -%}
+                  <s>{{ product.compare_at_price | money }}</s>
+                {%- endif -%}
+              </p>
+              {%- unless product.available -%}
+                <span class="duet-shop3d__badge" data-turntable-badge>{{ 'products.product.sold_out' | t }}</span>
+              {%- endunless -%}
+            </div>
+          </div>
+        {%- else -%}
+          <p class="duet-shop3d__empty">{{ 'sections.collection_template.empty' | t }}</p>
+        {%- endfor -%}
+        {%- comment -%} The raised product's label, drawn beside it (assets/duet-3d.js callOut). {%- endcomment -%}
+        <div class="duet-shop3d__callout" data-turntable-callout aria-hidden="true">
+          <svg class="duet-shop3d__callout-line" viewBox="0 0 160 60" preserveAspectRatio="none" focusable="false">
+            <circle cx="3" cy="57" r="2.5"></circle>
+            <path d="M3 57 L40 20 L160 20" pathLength="1"></path>
+          </svg>
+          <div class="duet-shop3d__callout-text">
+            <p class="duet-shop3d__callout-title" data-callout-title></p>
+            <p class="duet-shop3d__callout-price" data-callout-price></p>
+            <p class="duet-shop3d__callout-badge" data-callout-badge hidden></p>
+          </div>
+        </div>
+      </duet-turntable>
+
+      {%- if paginate.pages > 1 -%}
+        <nav class="duet-shop3d__pages" aria-label="{{ 'general.pagination.label' | t }}">
+          {%- if paginate.previous -%}
+            <a href="{{ paginate.previous.url }}">{{ 'general.pagination.previous' | t }}</a>
+          {%- endif -%}
+          <span>{{ paginate.current_page }} / {{ paginate.pages }}</span>
+          {%- if paginate.next -%}
+            <a href="{{ paginate.next.url }}">{{ 'general.pagination.next' | t }}</a>
+          {%- endif -%}
+        </nav>
+      {%- endif -%}
+    </div>
+  </section>
+{%- endpaginate -%}
+
+{% schema %}
+{
+  "name": "Shop in 3D",
+  "tag": "div",
+  "class": "section",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Each product shows its 3D model (a .glb file in the product's media), turning slowly; products without one show their main photo."
+    },
+    { "type": "range", "id": "per_page", "label": "Products per page", "min": 8, "max": 48, "step": 4, "default": 24 },
+    { "type": "checkbox", "id": "show_description", "label": "Show the collection's description", "default": false },
+    { "type": "checkbox", "id": "show_sort", "label": "Show sorting", "default": true },
+    {
+      "type": "select",
+      "id": "open_in",
+      "label": "Products open in",
+      "default": "3d",
+      "options": [
+        { "value": "3d", "label": "The 3D product page" },
+        { "value": "standard", "label": "Each product's own page" }
+      ],
+      "info": "The 3D product page is the template \"3d\" (Online Store → Themes → Customize → Products)."
+    }
+  ]
+}
+{% endschema %}

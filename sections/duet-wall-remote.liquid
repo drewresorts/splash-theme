@@ -1,0 +1,170 @@
+{%- comment -%}
+  The hidden remote for the shop wall, on the blog page. Nothing shows until
+  a visitor presses and holds the page title: a beam of light grows from it,
+  and the remote opens with a live view of the wall and a few things they
+  can change (assets/duet-wall-remote.js). Its clips, relay and look come
+  from the Shop wall section on the wall page.
+{%- endcomment -%}
+{%- liquid
+  if section.settings.wall_page != blank
+    assign wall_url = section.settings.wall_page.url
+  else
+    assign root = routes.root_url
+    if root == '/'
+      assign root = ''
+    endif
+    assign wall_url = root | append: '/pages/wall'
+  endif
+-%}
+{{ 'component-duet-wall.css' | asset_url | stylesheet_tag }}
+
+<duet-wall-remote
+  class="wall-remote"
+  data-wall-url="{{ wall_url }}"
+  data-wall-module="{{ 'duet-wall.js' | asset_url }}"
+  data-trigger="{{ section.settings.trigger | default: '#MainContent h1' | escape }}"
+  hidden
+>
+  <div
+    class="wall-remote__panel"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="WallRemoteTitle-{{ section.id }}"
+    tabindex="-1"
+    data-panel
+  >
+    <header class="wall-remote__head">
+      <div>
+        <p class="wall-remote__eyebrow">
+          <span class="wall-remote__dot" aria-hidden="true"></span>
+          <span data-status>Connecting to the shop…</span>
+        </p>
+        <h2 id="WallRemoteTitle-{{ section.id }}" class="wall-remote__title">
+          {{ section.settings.heading | default: 'The wall' | escape }}
+        </h2>
+      </div>
+      <button type="button" class="wall-remote__close" data-close aria-label="Close">×</button>
+    </header>
+
+    {%- if section.settings.text != blank -%}
+      <div class="wall-remote__lead">{{ section.settings.text }}</div>
+    {%- endif -%}
+
+    <div class="wall-remote__view" data-view>
+      <p class="wall-remote__view-hint">Tap the picture to make it bloom</p>
+    </div>
+
+    <p class="wall-remote__wait" data-wait aria-live="polite"></p>
+
+    <div class="wall-remote__controls" data-controls>
+      <fieldset class="wall-remote__group" data-group="clip" hidden>
+        <legend>Clip</legend>
+        <div class="wall-remote__options" data-clips></div>
+      </fieldset>
+
+      <fieldset class="wall-remote__group">
+        <legend>Colors</legend>
+        <div class="wall-remote__options">
+          {%- assign ids = 'house,camo,cotton-candy,circus,neon,tropical,noir' | split: ',' -%}
+          {%- assign names = 'Original,Camo Fatigues,Cotton Candy,Circus,Neon,Tropical,Noir' | split: ',' -%}
+          {%- for id in ids -%}
+            <button type="button" class="wall-remote__chip" data-act="theme" data-value="{{ id }}" aria-pressed="false">
+              <span class="wall-remote__swatch" data-scheme="{{ id }}" aria-hidden="true"></span>
+              {{- names[forloop.index0] -}}
+            </button>
+          {%- endfor -%}
+        </div>
+      </fieldset>
+
+      <fieldset class="wall-remote__group">
+        <legend>Look</legend>
+        <div class="wall-remote__options">
+          {%- assign ids = 'ps1,dither,mirror,trails' | split: ',' -%}
+          {%- assign names = 'PS1,Dither,Mirror,Trails' | split: ',' -%}
+          {%- for id in ids -%}
+            <button type="button" class="wall-remote__chip" data-act="look" data-value="{{ id }}" aria-pressed="false">
+              {{- names[forloop.index0] -}}
+            </button>
+          {%- endfor -%}
+        </div>
+      </fieldset>
+
+      <fieldset class="wall-remote__group">
+        <legend>Weather</legend>
+        <div class="wall-remote__options">
+          {%- assign ids = 'none,petals,snow,pollen,rain' | split: ',' -%}
+          {%- assign names = 'Clear,Petals,Snow,Pollen,Rain' | split: ',' -%}
+          {%- for id in ids -%}
+            <button type="button" class="wall-remote__chip" data-act="weather" data-value="{{ id }}" aria-pressed="false">
+              {{- names[forloop.index0] -}}
+            </button>
+          {%- endfor -%}
+        </div>
+      </fieldset>
+
+      <fieldset class="wall-remote__group">
+        <legend>Send</legend>
+        <div class="wall-remote__options">
+          <button type="button" class="wall-remote__chip" data-act="moment" data-value="bee">A bee</button>
+          <button type="button" class="wall-remote__chip" data-act="moment" data-value="gust">A gust of wind</button>
+        </div>
+      </fieldset>
+    </div>
+
+    <p class="wall-remote__fine">
+      {{ section.settings.fine_print | default: 'One change every little while. Changes wear off after a few minutes.' | escape }}
+    </p>
+  </div>
+</duet-wall-remote>
+
+<script src="{{ 'duet-wall-remote.js' | asset_url }}" type="module"></script>
+
+{% schema %}
+{
+  "name": "Shop wall remote",
+  "tag": "div",
+  "class": "section",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Hidden: opens when a visitor presses and holds the page title. Shows the shop wall live and lets them change it."
+    },
+    {
+      "type": "page",
+      "id": "wall_page",
+      "label": "Wall page",
+      "info": "The page using the \"wall\" template. Left blank, /pages/wall is used."
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "The wall"
+    },
+    {
+      "type": "richtext",
+      "id": "text",
+      "label": "Introduction",
+      "default": "<p>You found it. This is projected on the wall in our shop right now, and you can change it.</p>"
+    },
+    {
+      "type": "text",
+      "id": "fine_print",
+      "label": "Small print",
+      "default": "One change every little while. Changes wear off after a few minutes."
+    },
+    {
+      "type": "text",
+      "id": "trigger",
+      "label": "What to hold (advanced)",
+      "default": "#MainContent h1",
+      "info": "A CSS selector for the element visitors press and hold. The page title by default."
+    }
+  ],
+  "presets": [
+    {
+      "name": "Shop wall remote"
+    }
+  ]
+}
+{% endschema %}
