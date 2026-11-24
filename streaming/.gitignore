@@ -1,0 +1,4 @@
+# Filled-in copies hold passwords: keep them on the machine, out of git.
+.env
+cameras/cameras.txt
+cameras/relay.env
