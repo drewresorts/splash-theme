@@ -5,6 +5,24 @@ api: no
 metrics: no
 pprof: no
 
+# Who may do what. Only the cameras' relay and OBS may send video, with the
+# name and password from .env (PUBLISH_USER / PUBLISH_PASS, passed in by
+# docker-compose.yml); everyone else may only watch.
+authMethod: internal
+authInternalUsers:
+  - user: publisher
+    pass: changeme
+    ips: []
+    permissions:
+      - action: publish
+        path:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: read
+        path:
+
 rtsp: yes
 rtspAddress: :8554
 rtmp: yes
@@ -18,23 +36,17 @@ hlsSegmentCount: 7
 hlsSegmentDuration: 1s
 hlsPartDuration: 200ms
 hlsSegmentMaxSize: 50M
-hlsAllowOrigin: '*'
+hlsAllowOrigins: ['*']
 hlsTrustedProxies: []
-hlsEncryption: no
+hlsEncryption: false
 
 webrtc: yes
 webrtcAddress: :8889
-webrtcAllowOrigin: '*'
+webrtcAllowOrigins: ['*']
 webrtcLocalUDPAddress: :8189
 
+# Any name works as a feed: `cam` for OBS, and one per shop camera (shop-front,
+# shop-floor…), each sent by streaming/cameras/relay-cameras.sh. A feed plays at
+# https://STREAM_DOMAIN/NAME/ (paste that into the theme's Stream link).
 paths:
-  cam:
-    source: publisher
-    sourceProtocol: automatic
-    publishUser: "${PUBLISH_USER:-publisher}"
-    publishPass: "${PUBLISH_PASS:-changeme}"
-    runOnDemand: ""
-    runOnReady: ""
-
   all_others:
-    source: publisher

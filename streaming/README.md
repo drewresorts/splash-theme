@@ -122,7 +122,8 @@ Change each line to yours. Move with the arrow keys; save with **Ctrl+O**, then
   a range like `mon-fri` works. Leave empty for always.
 - `WALL_TIMEZONE`: the shop's time zone, for example `America/New_York`,
   `America/Chicago`, `America/Denver` or `America/Los_Angeles`.
-- `PUBLISH_PASS`: a password OBS uses to send a live stream.
+- `PUBLISH_PASS`: a password OBS and the shop cameras use to send video. Letters,
+  numbers and dashes only.
 
 ## 6. Start it
 
@@ -162,13 +163,107 @@ In the Shopify theme editor:
 
 ## Live streaming (optional)
 
+Every feed has a name, and plays on the site at `https://live.yourdomain.com/NAME/`.
+Any name works: `cam` for OBS, and one for each shop camera.
+
+### From OBS
+
 In OBS: **Settings → Stream → Service: Custom**:
 
 - **Server:** `rtmp://live.yourdomain.com/cam?user=publisher&pass=YOUR_PUBLISH_PASS`
 - **Stream key:** leave empty
 
-While you stream, the site can play it from
-`https://live.yourdomain.com/cam/index.m3u8`.
+Use letters, numbers and dashes only in `PUBLISH_PASS`, since it goes inside that address.
+
+### Put a feed on the site
+
+In the theme editor, open the live stream section (**Splash streams**, or the
+live stream sections on product and collection pages). In its **Stream link**,
+paste the feed's address, for example `https://live.yourdomain.com/shop-front/`.
+YouTube links still work there too.
+
+It plays muted, without controls, a second or two behind real time. A Cloudflare
+Stream or Mux player link works the same way, if you use one of those instead.
+
+## Shop cameras
+
+Several cameras around the shop, each its own feed. The cameras plug into a
+computer at the shop (a Mac mini is ideal), which sends them to this server; the
+server does the work of showing them to every visitor, so the shop's internet
+only carries one copy of each camera.
+
+### Which cameras
+
+Pick cameras that say **RTSP** and **PoE** in their specs. RTSP is how the
+computer reads the video; PoE means one network cable carries both power and
+video, so there's no outlet needed where the camera goes.
+
+| Camera | Good for | Notes |
+|---|---|---|
+| **Reolink RLC-510A** or **RLC-520A** (dome) | Most spots, indoors or out | 5MP, PoE, weatherproof. The best value, and the easiest app. |
+| **Reolink RLC-811A** | A wider room, or zooming in on a display | 4K with a 5× zoom lens. |
+| **Amcrest IP5M** series | An alternative to Reolink | Similar price and quality, PoE, RTSP. |
+| **Axis M30** series | Top quality, built to run for years | Costs several times more. |
+| **Reolink E1 Pro** (Wi-Fi, indoor) | A spot no cable can reach | Needs an outlet and good Wi-Fi. |
+
+**Avoid** Ring, Nest, Arlo, Blink, Wyze and battery cameras: they only send video
+to their own apps, so the site can't show them. Avoid "solar" and "battery"
+models of the brands above for the same reason.
+
+In each camera's app, set **video to H.264** (not H.265) and turn on **RTSP**.
+
+### Getting them to the computer, by distance
+
+- **Up to 100 m (328 ft) of cable:** run an outdoor-rated **Cat6** cable from the
+  camera to a **PoE switch** next to the computer, for example the **TP-Link
+  TL-SG1008P** (8 ports, 4 with PoE) or **TL-SG1210P** (8 PoE ports). Plug the
+  switch into the shop's router. This is the most reliable choice.
+- **100 to 200 m:** put a **PoE extender** (such as the **TP-Link TL-POE10E**)
+  midway along the cable. It needs no power of its own.
+- **Across a yard, parking lot or to another building (up to about 5 km, in
+  sight of each other):** a pair of outdoor **wireless bridges**, such as the
+  **Ubiquiti NanoStation 5AC Loco** or **TP-Link CPE510**. One at each end, aimed
+  at each other; the far one feeds a small PoE switch for the cameras there.
+- **Somewhere with no cable or line of sight:** a Wi-Fi camera on a **mesh Wi-Fi
+  point** nearby.
+
+Use the main stream for quality; drop to the camera's sub-stream (a lower
+resolution, set in its app) if the shop's upload is slow. Each 1080p camera needs
+about **2–4 Mbps of upload**.
+
+### Set up the computer
+
+1. Plug the cameras in and set them up in their app. Note each one's **address**
+   (like `192.168.1.21`) and password, and find its **RTSP address**: the list in
+   `cameras/cameras.example.txt` has the common ones. Setting each camera to a
+   **fixed address** in the router (often called "DHCP reservation") stops it
+   changing later.
+2. On the Mac, open **Terminal** and install the two tools:
+   ```sh
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   brew install ffmpeg git
+   git clone --depth 1 https://github.com/drewresorts/splash-theme.git
+   cd splash-theme/streaming/cameras
+   cp cameras.example.txt cameras.txt
+   cp relay.env.example relay.env
+   open -e cameras.txt relay.env
+   ```
+3. In **cameras.txt**, put one line per camera: a short name (it becomes the feed's
+   address) and its RTSP address. In **relay.env**, put the server's
+   `STREAM_DOMAIN` and the same `PUBLISH_PASS` as the server's `.env`. Save both.
+4. Double-click **start-cameras.command** in that folder. A Terminal window says
+   which cameras it's sending; keep it open. A camera that drops comes back by
+   itself.
+5. To start it whenever the Mac turns on: **System Settings → General → Login
+   Items → +** and choose `start-cameras.command`. Also set **System Settings →
+   Energy → Prevent automatic sleeping** (and *Start up automatically after a
+   power failure*, if offered).
+6. Check a camera: open `https://live.yourdomain.com/shop-front/` in your browser.
+   Then paste that address into the theme's **Stream link**.
+
+**If a camera won't show:** the Terminal window says which one keeps dropping.
+Check its RTSP address by opening it in **VLC** (*File → Open Network*). If VLC
+plays it but the site doesn't, set the camera to H.264.
 
 ## Updating later
 

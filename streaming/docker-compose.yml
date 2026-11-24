@@ -1,6 +1,6 @@
 services:
   mediamtx:
-    image: bluenviron/mediamtx:latest
+    image: bluenviron/mediamtx:1
     container_name: webcam-mediamtx
     restart: unless-stopped
     network_mode: host
@@ -8,8 +8,9 @@ services:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
     environment:
       MTX_LOGLEVEL: info
-      MTX_PATHS_CAM_PUBLISHUSER: "${PUBLISH_USER:-publisher}"
-      MTX_PATHS_CAM_PUBLISHPASS: "${PUBLISH_PASS:-changeme}"
+      # The one account that may send video (see mediamtx/mediamtx.yml).
+      MTX_AUTHINTERNALUSERS_0_USER: "${PUBLISH_USER:-publisher}"
+      MTX_AUTHINTERNALUSERS_0_PASS: "${PUBLISH_PASS:-changeme}"
 
   # The shop wall's relay (wall-relay/server.mjs): passes visitors' changes
   # from the blog page's hidden remote to the wall. Settings come from .env.

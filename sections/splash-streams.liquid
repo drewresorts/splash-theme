@@ -988,9 +988,29 @@
     const prefersReducedMotion =
       window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    function ownStreamUrl(raw) {
+      // Your own feed: any https link that isn't YouTube (a MediaMTX feed page, or a Cloudflare Stream or Mux
+      // player link) plays as it is, muted, without controls. See docs/live-streams.md.
+      var s = String(raw || '').trim();
+      if (!/^https:\/\//i.test(s)) return '';
+      try {
+        var u = new URL(s);
+        if (/(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/i.test(u.hostname)) return '';
+        // A MediaMTX feed's raw address (…/index.m3u8 or …/whep) plays from its page instead.
+        u.pathname = u.pathname.replace(/\/(index\.m3u8|whep)$/i, '/');
+        var want = { autoplay: 'true', muted: 'true', controls: 'false', playsinline: 'true' };
+        for (var k in want) if (!u.searchParams.has(k)) u.searchParams.set(k, want[k]);
+        return u.toString();
+      } catch (e) {
+        return '';
+      }
+    }
+
     function parseYouTubeId(inputUrl) {
       const raw = (inputUrl || '').trim();
       if (!raw) return null;
+      const own = ownStreamUrl(raw);
+      if (own) return own;
       try {
         const url = new URL(raw, window.location.origin);
         if (url.hostname === 'youtu.be') {
@@ -1016,6 +1036,7 @@
 
     function buildEmbedUrl(videoId, sourceUrl) {
       const id = String(videoId).trim();
+      if (/^https:\/\//i.test(id)) return id; // your own feed (ownStreamUrl)
       const common = [
         'autoplay=1',
         'mute=1',
@@ -1438,12 +1459,13 @@
   "blocks": [
     {
       "type": "stream",
-      "name": "YouTube stream",
+      "name": "Stream",
       "settings": [
         {
           "type": "text",
           "id": "youtube_url",
-          "label": "YouTube URL",
+          "label": "Stream link",
+          "info": "A YouTube link, or your own feed's https link (a MediaMTX feed page, or a Cloudflare Stream or Mux player link).",
           "default": "https://www.youtube.com/watch?v=erBoOFKTH4E"
         }
       ]

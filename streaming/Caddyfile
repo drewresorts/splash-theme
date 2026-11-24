@@ -1,7 +1,8 @@
 {$STREAM_DOMAIN} {
 	encode zstd gzip
 
-	@hls path /cam/* /cam.m3u8
+	# Every feed (cam, shop-front…): playlists always fresh, video pieces briefly cached.
+	@hls path *.m3u8
 	header @hls {
 		Cache-Control "no-store, no-transform"
 		Access-Control-Allow-Origin "*"
@@ -9,7 +10,8 @@
 		Access-Control-Expose-Headers "Content-Length, Content-Range"
 	}
 
-	header /cam/*.ts {
+	@pieces path *.ts *.mp4
+	header @pieces {
 		Cache-Control "public, max-age=10"
 	}
 

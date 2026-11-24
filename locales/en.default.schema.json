@@ -3497,8 +3497,8 @@
           "label": "Logo width"
         },
         "youtube_url": {
-          "label": "YouTube link",
-          "info": "The video that plays behind the page, muted."
+          "label": "Stream link",
+          "info": "A YouTube link, or your own feed's https link (a MediaMTX feed page, or a Cloudflare Stream or Mux player link). It plays behind the page, muted."
         },
         "overlay_color": {
           "label": "Color over the video"
@@ -3521,7 +3521,7 @@
           "name": "Stream",
           "settings": {
             "youtube_url": {
-              "label": "YouTube link"
+              "label": "Stream link"
             }
           }
         }
@@ -3544,8 +3544,8 @@
           "label": "Logo width"
         },
         "youtube_url": {
-          "label": "YouTube link",
-          "info": "The video that plays behind the page, muted."
+          "label": "Stream link",
+          "info": "A YouTube link, or your own feed's https link (a MediaMTX feed page, or a Cloudflare Stream or Mux player link). It plays behind the page, muted."
         },
         "overlay_color": {
           "label": "Color over the video"
@@ -3580,7 +3580,7 @@
           "name": "Stream",
           "settings": {
             "youtube_url": {
-              "label": "YouTube link"
+              "label": "Stream link"
             }
           }
         }
